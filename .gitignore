@@ -1,0 +1,5 @@
+.venv/
+__pycache__/
+*.pyc
+game/build/
+.playwright-mcp/
