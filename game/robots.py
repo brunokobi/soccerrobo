@@ -33,7 +33,7 @@ ATTR_MIN, ATTR_MAX = 20, 99
 JITTER = 3
 
 # --- bateria ---------------------------------------------------------------
-BAT_RUN = 0.75          # dreno/s (a velocidade maxima) / match_time
+BAT_RUN = 0.62          # dreno/s (a velocidade maxima) / match_time
 BAT_REGEN = 2.0         # recarga/s parado / match_time
 BAT_LOW = 0.30          # abaixo disso a velocidade cai
 BAT_REGEN_BELOW = 0.25  # recarrega quando |vel| < 25% do maximo
@@ -82,25 +82,25 @@ def from_overall(ovr, role, chassis=None, seed=None, flat=False):
 # nome -> (atributo, ancora em g=0.65, inclinacao por unidade de d=g-0.65, lo, hi)
 # "gk_speed" usa a media de vel e ace.
 _SPEC = (
-    ("speed",       "vel", 0.9925, 0.70, None, None),
-    ("accel",       "ace", 9.0, 12.0, 1.0, None),
-    ("stop",        "ace", 10.0, 8.0, 1.0, None),
-    ("kick_pow",    "chu", 1.0, 0.45, 0.3, None),
-    ("shot_err",    "chu", 4.2, -12.0, 0.0, None),
-    ("pass_err",    "ctr", 2.0, -10.0, 0.0, None),
-    ("reach",       "ctr", 3.0, 6.0, 0.0, None),
-    ("catch_speed", "ctr", 520.0, 182.0, 200.0, None),
-    ("fumble",      "ctr", 0.18, -0.35, 0.0, 0.35),
-    ("tackle",      "def", 0.4775, 0.55, 0.0, 1.0),
-    ("shield",      "ctr", 0.81, -0.6, 0.0, None),
-    ("gk_save",     "def", 0.575, 0.70, 0.0, 1.0),
-    ("gk_speed",    "mean", 240.0, 120.0, 60.0, None),
-    ("gk_lead",     "vis", 0.8, 0.6, 0.4, 1.0),
-    ("pass_range",  "vis", 450.0, 350.0, 100.0, None),
-    ("lane_margin", "vis", 35.0, 25.0, 5.0, None),
-    ("shoot_range", "vis", 420.0, 200.0, 100.0, None),
-    ("think_mul",   "qi", 1.0, -0.8, 0.3, None),
-    ("dec_err",     "qi", 0.12, -0.5, 0.0, None),
+    ("speed",       "vel", 0.9925, 0.20, None, None),
+    ("accel",       "ace", 9.0, 3.5, 1.0, None),
+    ("stop",        "ace", 10.0, 3.0, 1.0, None),
+    ("kick_pow",    "chu", 1.0, 0.17, 0.3, None),
+    ("shot_err",    "chu", 4.2, -1.8, 0.0, None),
+    ("pass_err",    "ctr", 2.0, -1.5, 0.0, None),
+    ("reach",       "ctr", 3.0, 0.9, 0.0, None),
+    ("catch_speed", "ctr", 520.0, 27.0, 200.0, None),
+    ("fumble",      "ctr", 0.18, -0.05, 0.0, 0.35),
+    ("tackle",      "def", 0.4775, 0.08, 0.0, 1.0),
+    ("shield",      "ctr", 0.81, -0.09, 0.0, None),
+    ("gk_save",     "def", 0.45, 0.30, 0.0, 1.0),
+    ("gk_speed",    "mean", 240.0, 18.0, 60.0, None),
+    ("gk_lead",     "vis", 0.8, 1.0, 0.4, 1.0),
+    ("pass_range",  "vis", 450.0, 450.0, 100.0, None),
+    ("lane_margin", "vis", 35.0, 10.0, 5.0, None),
+    ("shoot_range", "vis", 420.0, 500.0, 250.0, None),
+    ("think_mul",   "qi", 1.0, -1.5, 0.3, 1.4),
+    ("dec_err",     "qi", 0.06, -0.22, 0.0, None),
     ("bat_drain_mul", "bat", 1.0, -1.2, 0.6, 1.5),
     ("bat_regen_mul", "bat", 1.0, 0.8, 0.2, None),
 )

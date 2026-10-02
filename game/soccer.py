@@ -28,8 +28,9 @@ CATCH_SPEED = 520.0     # acima disso a bola nao e dominada, so rebatida
 CAREER_TIME = 90.0      # segundos reais (1x) = 90 minutos de jogo
 SPEEDS = [1, 2, 4, "max"]
 GK_COLORS = [(250, 200, 40), (70, 205, 130)]
-ACTIVE_TUNING = robots.LEGACY_TUNING   # passo 9 troca para robots.TUNING
-BATTERY_ON = False                     # bateria desligada (ativada a partir do passo 4/9)
+ACTIVE_TUNING = robots.TUNING          # padrao do jogo; o modo legado (robots.LEGACY_TUNING + BATTERY_ON=False) so vale p/ o golden
+BATTERY_ON = True                      # bateria ligada (False so no modo legado)
+HUMAN_AIM_ERR = 30                     # graus de erro de mira humano por 1.0 de (0.65 - chu/100); so chu < 65
 
 # (papel, fracao x a partir do proprio gol, fracao y)
 FORMATION = [
@@ -353,6 +354,10 @@ class Game:
                     self.ai_player(p, dt)
 
         self.integrate(dt)
+        if BATTERY_ON:
+            for t in self.teams:
+                for p in t.players:
+                    self.tick_battery(p, dt)
         self.update_ball(dt)
         if self.state == "play" and self.time_left <= 0:
             self.time_left = 0
@@ -410,7 +415,11 @@ class Game:
             h.charge = min(1.0, h.charge + dt / 0.75) if has_ball else 0.0
         elif h.shoot_prev:
             if h.charge > 0 and has_ball:
-                self.kick(p, self.aim_assist(p, aim), 330 + 520 * h.charge)
+                d = self.aim_assist(p, aim)
+                aim_err = HUMAN_AIM_ERR * max(0.0, 0.65 - p.f.g_chu)   # so abaixo de 65 (zero no legado)
+                if aim_err > 0:
+                    d = d.rotate(random.uniform(-aim_err, aim_err))
+                self.kick(p, d, 330 + 520 * h.charge)
             h.charge = 0.0
         if pas and not h.pass_prev and has_ball:
             self.pass_ball(p, aim)
@@ -431,6 +440,10 @@ class Game:
         if d.length_squared() == 0:
             d = V(p.face)
         d = d.normalize()
+        power *= p.f.kick_pow
+        if BATTERY_ON:
+            power *= 0.85 + 0.15 * robots.bat_mul(p.bat)
+            p.bat = max(0.0, p.bat - (robots.BAT_KICK_BASE + robots.BAT_KICK_POW * power / 850.0))
         b.owner = None
         b.pos = p.pos + d * (PR + BR + 3)
         b.vel = d * power
@@ -460,7 +473,10 @@ class Game:
         dist = p.pos.distance_to(q.pos)
         speed = min(CATCH_SPEED - 20, 230 + dist * 1.1)
         lead = q.pos + q.vel * (dist / speed) * 0.6
-        self.kick(p, lead - p.pos, speed)
+        d = lead - p.pos
+        if p.f.pass_err > 0:                 # erro angular por controle (zero no legado)
+            d = d.rotate(random.uniform(-p.f.pass_err, p.f.pass_err))
+        self.kick(p, d, speed)
         t = p.team
         if t.human and q.role != "GK":
             t.ctrl = q
@@ -492,8 +508,8 @@ class Game:
                     continue
                 if q.pos.distance_to(o.pos) < PR * 2 + 4:
                     q.tackle_cd = 0.55
-                    chance = 0.5 if q.team.human else 0.12 + 0.4 * q.s
-                    if random.random() < chance * (1.2 - 0.4 * o.s):
+                    chance = 0.5 if q.team.human else q.f.tackle
+                    if random.random() < chance * o.f.shield:
                         b.owner = q
                         q.cd = 0.0
                         o.cd = 0.7
@@ -507,11 +523,11 @@ class Game:
         for t in self.teams:
             for p in t.players:
                 d = p.pos.distance_to(b.pos)
-                reach = PR + BR + (12 if p.role == "GK" else 3)
+                reach = PR + BR + (12 if p.role == "GK" else p.f.reach)
                 if d > reach or p.cd > 0:
                     continue
                 if p.role == "GK":
-                    if speed < CATCH_SPEED or random.random() < 0.12 + 0.48 * p.s:
+                    if speed < CATCH_SPEED or random.random() < p.f.gk_save:
                         b.owner = p
                         b.vel = V()
                         p.hold = 0.8
@@ -519,8 +535,13 @@ class Game:
                         self.deflect(p, 0.6, spread=25)
                         p.cd = 0.35
                     return
-                if speed < CATCH_SPEED:
-                    if d < best_d:
+                cs = p.f.catch_speed
+                if speed < cs:
+                    fm = p.f.fumble
+                    if fm > 0 and speed > 250 and random.random() < fm * (speed - 250) / (cs - 250):
+                        self.deflect(p, 0.5)      # bola escapa do dominio
+                        p.cd = 0.2
+                    elif d < best_d:
                         best, best_d = p, d
                 else:
                     self.deflect(p, 0.5)
@@ -568,19 +589,34 @@ class Game:
         self.events.append({"min": self.minute(), "team": team_idx,
                             "name": lo.name if lo else "", "own": bool(lo and lo.team.idx != team_idx)})
         self.ball.owner = None
+        if BATTERY_ON:                      # gol recarrega todos os robos
+            for t in self.teams:
+                for p in t.players:
+                    p.bat = min(1.0, p.bat + robots.BAT_GOAL_BONUS)
         self.state = "goal"
         self.timer = 2.4
 
     # ---------------------------------------------------------- movement
+    def tick_battery(self, p, dt):
+        """Dreno proporcional a velocidade; recarga quando quase parado (so com BATTERY_ON)."""
+        ratio = p.vel.length() / (PLAYER_SPEED * p.spd)
+        if ratio < robots.BAT_REGEN_BELOW:
+            p.bat += robots.BAT_REGEN / self.match_time * p.f.bat_regen_mul * dt
+        else:
+            p.bat -= robots.BAT_RUN / self.match_time * min(1.0, ratio) * p.f.bat_drain_mul * dt
+        p.bat = clamp(p.bat, 0.0, 1.0)
+
     def steer(self, p, d, speed, dt):
         speed *= p.spd
+        if BATTERY_ON:
+            speed *= robots.bat_mul(p.bat)
         if d.length_squared() > 1e-6:
             d = d.normalize()
-            p.vel = p.vel.lerp(d * speed, min(1.0, 9 * dt))
+            p.vel = p.vel.lerp(d * speed, min(1.0, p.f.accel * dt))
             f = p.face.lerp(d, min(1.0, 14 * dt))
             p.face = f.normalize() if f.length_squared() > 1e-4 else d
         else:
-            p.vel = p.vel.lerp(V(), min(1.0, 10 * dt))
+            p.vel = p.vel.lerp(V(), min(1.0, p.f.stop * dt))
 
     def integrate(self, dt):
         players = [p for t in self.teams for p in t.players]
@@ -617,8 +653,8 @@ class Game:
         speed = PLAYER_SPEED * AI_SPEED * min(1.0, to.length() / 40)
         self.steer(p, to, speed, dt)
 
-    def lane_open(self, a, b, opps):
-        return all(seg_dist(o.pos, a, b) > 35 for o in opps)
+    def lane_open(self, a, b, opps, margin=35):
+        return all(seg_dist(o.pos, a, b) > margin for o in opps)
 
     def best_pass_target(self, p):
         t = p.team
@@ -629,23 +665,36 @@ class Game:
                 continue
             adv = (q.pos.x - p.pos.x) * t.dir
             dist = p.pos.distance_to(q.pos)
-            if adv < -20 or dist < 60 or dist > 450:
+            if adv < -20 or dist < 60 or dist > p.f.pass_range:
                 continue
-            if not self.lane_open(p.pos, q.pos, opps):
+            if not self.lane_open(p.pos, q.pos, opps, p.f.lane_margin):
                 continue
             score = adv - dist * 0.2
             if score > best_score:
                 best, best_score = q, score
         return best
 
-    def ai_shoot(self, p):
+    def ai_shoot(self, p, bad_aim=False):
         t = p.team
         gk = self.teams[1 - t.idx].players[0]
         side = -1 if gk.pos.y > CY else 1
+        if bad_aim:                          # decisao ruim: mira no lado do goleiro
+            side = -side
         ty = CY + side * GOAL_HALF * random.uniform(0.35, 0.7)
-        err = 12 * (1 - p.s)
+        err = p.f.shot_err
         d = (V(t.target_x, ty) - p.pos).rotate(random.uniform(-err, err))
-        self.kick(p, d, random.uniform(560, 680) + 140 * p.s)
+        self.kick(p, d, random.uniform(560, 680) + 140 * p.f.g_chu)
+
+    def ai_bad_decision(self, p):
+        """Decisao ruim (dec_err > 0): passe aleatorio, mira no goleiro ou chute de longe."""
+        kind = random.randrange(3)
+        if kind == 0:
+            mates = [q for q in p.team.players if q is not p and q.role != "GK"]
+            self.send_pass(p, random.choice(mates))
+        elif kind == 1:
+            self.ai_shoot(p, bad_aim=True)
+        else:
+            self.ai_shoot(p)
 
     def ai_with_ball(self, p, dt):
         t = p.team
@@ -664,8 +713,10 @@ class Game:
         p.think -= dt
         if p.think > 0:
             return
-        p.think = random.uniform(0.2, 0.4)
-        if to_goal.length() < 420 and random.random() < 0.8:
+        p.think = random.uniform(0.2, 0.4) * p.f.think_mul
+        if p.f.dec_err > 0 and random.random() < p.f.dec_err:
+            return self.ai_bad_decision(p)
+        if to_goal.length() < p.f.shoot_range and random.random() < 0.8:
             self.ai_shoot(p)
         elif pressed and random.random() < 0.65:
             tm = self.best_pass_target(p)
@@ -700,12 +751,12 @@ class Game:
             if b.vel.x * t.dir < -30:
                 tt = (line_x - b.pos.x) / b.vel.x
                 if 0 < tt < 1.5:
-                    ty = b.pos.y + b.vel.y * tt * 0.8
+                    ty = b.pos.y + b.vel.y * tt * p.f.gk_lead
                     shot = b.vel.length() > 200
             ty = clamp(ty, CY - GOAL_HALF * 0.9, CY + GOAL_HALF * 0.9)
             target = V(line_x, ty)
         to = target - p.pos
-        speed = 240 * min(1.0, to.length() / 30) * (1.25 if shot else 1.0)
+        speed = p.f.gk_speed * min(1.0, to.length() / 30) * (1.25 if shot else 1.0)
         self.steer(p, to, speed, dt)
         p.face = V(t.dir, 0)
 
