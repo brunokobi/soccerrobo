@@ -469,8 +469,12 @@ class Career:
             return None
         try:
             c = cls()
-            for k, v in json.loads(text).items():
-                setattr(c, k, v)
+            data = json.loads(text)
+            for k in cls.FIELDS:          # só campos conhecidos (save corrompido não sobrescreve métodos)
+                if k in data:
+                    setattr(c, k, data[k])
+            if c.user is not None and not (isinstance(c.user, int) and 0 <= c.user < len(c.clubs)):
+                return None               # save inconsistente
             return c
         except Exception as ex:  # noqa: BLE001
             print("save load error:", ex)

@@ -13,10 +13,17 @@ virando um **futebol de robôs aspiradores** com campanha em estilo RPG
 (escola -> mundial), laboratório de upgrades e partidas automáticas decididas
 pelas habilidades dos robôs.
 
-## Modos (Amistoso)
-1. **Um jogador** contra a CPU (2 min)
-2. **Dois jogadores** no mesmo teclado
-3. **Carreira de clubes** (estilo Elifoot): você é o técnico. 24 clubes fictícios
+## Visual
+Tema tecnológico/neon: arena com grade e linhas holográficas, robôs-disco com
+anel de LED e barra de bateria, bola com brilho, rastro e faíscas, e HUD e menu
+novos.
+
+## Modos
+No menu: `1 - AMISTOSO`, `2 - AMISTOSO`, `3 - NOVA CARREIRA` e `4 - CONTINUAR CARREIRA`.
+
+1. **Amistoso: um jogador** contra a CPU (2 min)
+2. **Amistoso: dois jogadores** no mesmo teclado
+3. **Nova carreira de clubes** (estilo Elifoot): você é o técnico. 24 clubes fictícios
    em 3 divisões de 8 times (ida e volta, 14 rodadas). Elenco de 15-20 jogadores
    com overall/idade/valor, escalação dos 5 titulares (GOL, DEF, 2 MEI, ATA),
    **mercado de transferências**, vender jogadores, finanças (bilheteria,
@@ -33,14 +40,15 @@ pelas habilidades dos robôs.
 | Mover | WASD / setas | WASD | setas |
 | Chutar (segure = mais forte) | Espaço / Enter | Espaço | Enter |
 | Passar | Shift / X / Z | Shift esq. | Shift dir. |
-| Pausa / menu | P / Esc | | |
+| Pausar | P | | |
+| Voltar ao menu | Esc | | |
 
 O jogador controlado troca sozinho (o mais perto da bola).
 
 ## Roadmap
 | Fase | Conteúdo | Situação |
 |---|---|---|
-| 1 | Robôs com chassis e 8 atributos, bateria, arena tecnológica (neon) | em andamento |
+| 1 | Robôs com chassis e 8 atributos, bateria, arena tecnológica (neon) | quase pronta (falta teste final no navegador e revisão) |
 | 2 | Garagem e laboratório: peças, upgrades, XP, evolução, mercado de peças | planejada |
 | 3 | **Campanha**: história do torneio de robôs (escola -> mundial), rival, capítulos | planejada |
 | 4 | Editor de firmware (regras da IA em blocos) e acabamento | planejada |
@@ -48,7 +56,9 @@ O jogador controlado troca sozinho (o mais perto da bola).
 **Robôs (Fase 1):** 4 chassis (Disco, Tanque, Velocista, Goleiro) e 8 atributos
 (velocidade, aceleração, chute, controle/sucção, defesa, visão, bateria, QI) que
 alteram de verdade o comportamento na partida; a bateria gasta ao correr e
-chutar e recarrega parado.
+chutar e recarrega parado. Atributos e bateria já vêm calibrados e ligados por
+padrão (`game/robots.py`); o modo legado (atributos planos, sem bateria) existe
+só para o teste golden.
 
 ## Rodar
 ```bash
@@ -69,15 +79,20 @@ cd game && pygbag --build .
 export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy
 .venv/bin/python tests/test_robots.py                  # modelo de robôs
 .venv/bin/python tests/sim_harness.py golden --check   # regressão: 80 placares do modo legado
+.venv/bin/python tests/sim_harness.py golden-new --check  # regressão: 80 placares do balanço novo
 .venv/bin/python tests/test_mechanics.py               # efeito dos atributos na partida
+.venv/bin/python tests/test_visual.py                      # cores dos clubes, efeitos, pausa, save
 ```
+Utilitários do harness (`tests/sim_harness.py`): `run <ovrA> <ovrB> <n> [seed0] [legacy]`
+(simula partidas), `draw` (tempo de desenho por quadro) e `shot <arquivo.png>`
+(captura a tela).
 
 ## Estrutura
 - `game/main.py`: entrada do pygbag (precisa do `import pygame` explícito)
-- `game/soccer.py`: partida (física, IA), menu e HUD
+- `game/soccer.py`: partida (física, IA), visual neon, menu e HUD
 - `game/robots.py`: chassis, atributos e fatores usados pelo motor
 - `game/career.py` / `game/career_ui.py`: carreira de clubes (liga, mercado, finanças, save) e suas telas
-- `tests/`: testes e harness de simulação (ficam fora de `game/` para não entrar no pacote do pygbag)
+- `tests/`: testes, harness de simulação e baselines (`baseline_golden*.json`) (ficam fora de `game/` para não entrar no pacote do pygbag)
 
 ## Notas
 - O pygbag exige Python >= 3.9 e só detecta dependências lendo `main.py`.

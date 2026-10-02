@@ -6,6 +6,7 @@ import asyncio
 import math
 import random
 import time
+from collections import OrderedDict, deque
 
 import pygame
 from pygame import Vector2 as V
@@ -30,6 +31,8 @@ SPEEDS = [1, 2, 4, "max"]
 GK_COLORS = [(250, 200, 40), (70, 205, 130)]
 ACTIVE_TUNING = robots.TUNING          # padrao do jogo; o modo legado (robots.LEGACY_TUNING + BATTERY_ON=False) so vale p/ o golden
 BATTERY_ON = True                      # bateria ligada (False so no modo legado)
+FX_MAX = 120                           # teto de particulas
+TEXT_CACHE_MAX = 300
 HUMAN_AIM_ERR = 30                     # graus de erro de mira humano por 1.0 de (0.65 - chu/100); so chu < 65
 
 # (papel, fracao x a partir do proprio gol, fracao y)
@@ -67,6 +70,30 @@ def seg_dist(pt, a, b):
         return pt.distance_to(a)
     t = clamp((pt - a).dot(ab) / l2, 0, 1)
     return pt.distance_to(a + ab * t)
+
+
+def led_color(c, min_lum=125):
+    """Cor do LED/halo do time com luminancia minima (cores escuras somem na arena escura)."""
+    c = tuple(int(x) for x in c[:3])
+    lum = 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]
+    if lum >= min_lum:
+        return c
+    k = (min_lum - lum) / (255.0 - lum)
+    return tuple(int(x + (255 - x) * k) for x in c)
+
+
+def scale_color(c, f):
+    return (int(c[0] * f), int(c[1] * f), int(c[2] * f))
+
+
+# (quantidade, velocidade min/max, vida min/max, cor, tamanho)
+FX_KINDS = {
+    "tackle": (6, 90, 230, 0.25, 0.5, (255, 235, 150), 3),
+    "kick":   (8, 120, 320, 0.2, 0.45, (170, 245, 255), 3),
+    "bump":   (4, 60, 160, 0.2, 0.4, (255, 170, 80), 2),
+    "goal":   (40, 100, 420, 0.6, 1.2, None, 4),
+    "wall":   (4, 50, 150, 0.2, 0.35, (150, 200, 255), 2),
+}
 
 
 class Human:
@@ -149,7 +176,19 @@ class Game:
     def __init__(self, screen):
         self.screen = screen
         self.fonts = {}
-        self.pitch_surf = self.build_pitch()
+        self.text_cache = OrderedDict()
+        self.fx = []                              # particulas: [x, y, vx, vy, vida, vida_max, cor, tam]
+        self.fx_rng = random.Random(20260)        # RNG proprio: nunca toca o random global
+        self.fx_pairs = {}
+        self.fx_last = time.perf_counter()
+        self.trail = deque(maxlen=10)
+        self.sprites = {}
+        self.speed_idx = 0
+        self.pitch_surf = self.build_arena()
+        self.glows = self.build_glows()
+        self.hud_panel = self.build_hud_panel()
+        self.banner_veil = self.build_banner_veil()
+        self.menu_bg = self.build_menu_bg()
         self.state = "menu"
         self.mode = 1
         self.paused = False
@@ -183,18 +222,20 @@ class Game:
         ]
         self.score = [0, 0]
         self.career_match = False
+        self.speed_idx = 0
         self.match_time = self.time_left = MATCH_TIME
         self.events = []
         self.last_owner = None
         self.ball = Ball()
         self.paused = False
+        self.reset_fx()
         self.kickoff(0)
 
     def start_career_match(self, home, away):
         """Partida automática (CPU x CPU) do modo carreira. home/away = match_cfg()."""
         self.mode = 0
         c1 = tuple(away["color"])
-        if sum(abs(a - b) for a, b in zip(home["color"], c1)) < 130:
+        if sum(abs(a - b) for a, b in zip(led_color(home["color"]), led_color(c1))) < 130:
             c1 = (235, 235, 235) if sum(home["color"]) < 600 else (0, 230, 255)
         self.teams = [
             Team(0, home["name"], tuple(home["color"]), GK_COLORS[0], None, home["squad"]),
@@ -208,11 +249,13 @@ class Game:
         self.speed_idx = 0
         self.ball = Ball()
         self.paused = False
+        self.reset_fx()
         self.state = "kickoff"
         self.kickoff(0)
 
     def finish_career_match(self):
         self.career_match = False
+        self.fx.clear()
         self.state = "career"
         self.career_ui.match_done(list(self.score), list(self.events))
 
@@ -448,6 +491,8 @@ class Game:
         b.pos = p.pos + d * (PR + BR + 3)
         b.vel = d * power
         p.cd = 0.35
+        if power >= 600:
+            self.fx_emit("kick", b.pos, d=d)
 
     def pass_ball(self, p, aim):
         best, best_score = None, 1e9
@@ -513,6 +558,7 @@ class Game:
                         b.owner = q
                         q.cd = 0.0
                         o.cd = 0.7
+                        self.fx_emit("tackle", b.pos)
                         break
             return
         if o:
@@ -570,15 +616,19 @@ class Game:
                 return self.goal(0)
         else:
             if b.pos.x < r.left + BR:
+                self.fx_wall(abs(b.vel.x))
                 b.pos.x = r.left + BR
                 b.vel.x = abs(b.vel.x) * 0.6
             elif b.pos.x > r.right - BR:
+                self.fx_wall(abs(b.vel.x))
                 b.pos.x = r.right - BR
                 b.vel.x = -abs(b.vel.x) * 0.6
         if b.pos.y < r.top + BR:
+            self.fx_wall(abs(b.vel.y))
             b.pos.y = r.top + BR
             b.vel.y = abs(b.vel.y) * 0.6
         elif b.pos.y > r.bottom - BR:
+            self.fx_wall(abs(b.vel.y))
             b.pos.y = r.bottom - BR
             b.vel.y = -abs(b.vel.y) * 0.6
 
@@ -593,6 +643,7 @@ class Game:
             for t in self.teams:
                 for p in t.players:
                     p.bat = min(1.0, p.bat + robots.BAT_GOAL_BONUS)
+        self.fx_emit("goal", self.ball.pos, led_color(self.teams[team_idx].color))
         self.state = "goal"
         self.timer = 2.4
 
@@ -632,6 +683,8 @@ class Game:
                     push = diff / l * (PR * 2 - 2 - l) * 0.5
                     a.pos += push
                     c.pos -= push
+                    if self.fx_ok():
+                        self.fx_bump(a, c)
 
     # --------------------------------------------------------------- AI
     def ai_player(self, p, dt):
@@ -760,6 +813,72 @@ class Game:
         self.steer(p, to, speed, dt)
         p.face = V(t.dir, 0)
 
+    # ------------------------------------------------------------------ fx
+    def reset_fx(self):
+        self.fx.clear()
+        self.fx_pairs.clear()
+        self.trail.clear()
+        self.warm_sprites()
+
+    def fx_ok(self):
+        return self.speed_idx != 3 and self.state != "over"
+
+    def fx_emit(self, kind, pos, color=None, d=None):
+        """Dispara faiscas. Usa so o RNG proprio; no-op em MAX e em 'over'. Nao altera a simulacao."""
+        if self.speed_idx == 3 or self.state == "over":
+            return
+        n, v0, v1, l0, l1, base, size = FX_KINDS[kind]
+        col = color or base or (255, 255, 255)
+        room = FX_MAX - len(self.fx)
+        if room <= 0:
+            return
+        rng = self.fx_rng
+        px, py = pos.x, pos.y
+        for _ in range(min(n, room)):
+            if d is not None:                       # leque para tras da direcao do chute
+                a = math.atan2(d.y, d.x) + math.pi + rng.uniform(-0.9, 0.9)
+            else:
+                a = rng.uniform(0, 2 * math.pi)
+            sp = rng.uniform(v0, v1)
+            life = rng.uniform(l0, l1)
+            self.fx.append([px, py, math.cos(a) * sp, math.sin(a) * sp, life, life, col, size])
+
+    def fx_bump(self, a, c):
+        """Colisao robo x robo: 4 faiscas, no maximo 1 por par a cada 0.3 s de jogo."""
+        key = (a.team.idx, a.idx, c.team.idx, c.idx)
+        last = self.fx_pairs.get(key)
+        if last is not None and last - self.time_left < 0.3:
+            return
+        self.fx_pairs[key] = self.time_left
+        self.fx_emit("bump", (a.pos + c.pos) * 0.5)
+
+    def fx_wall(self, impact):
+        if impact > 200 and self.ball.owner is None:
+            self.fx_emit("wall", self.ball.pos)
+
+    def draw_fx(self, scr):
+        now = time.perf_counter()
+        dt = 0.0 if self.paused else min(now - self.fx_last, 0.05)
+        self.fx_last = now
+        if not self.fx:
+            return
+        keep = []
+        for p in self.fx:
+            p[4] -= dt
+            if p[4] <= 0:
+                continue
+            p[0] += p[2] * dt
+            p[1] += p[3] * dt
+            p[2] *= 0.94
+            p[3] *= 0.94
+            keep.append(p)
+            f = p[4] / p[5]
+            col = scale_color(p[6], f)
+            x, y = int(p[0]), int(p[1])
+            pygame.draw.line(scr, col, (x, y), (int(x - p[2] * 0.03), int(y - p[3] * 0.03)), 2)
+            pygame.draw.circle(scr, col, (x, y), max(1, int(p[7] * f)))
+        self.fx = keep
+
     # ------------------------------------------------------------- drawing
     def font(self, size):
         f = self.fonts.get(size)
@@ -767,9 +886,23 @@ class Game:
             f = self.fonts[size] = pygame.font.Font(None, size)
         return f
 
+    def text_img(self, s, size, color):
+        key = (s, size, color)
+        cache = self.text_cache
+        img = cache.get(key)
+        if img is None:
+            img = self.font(size).render(s, True, color)
+            cache[key] = img
+            if len(cache) > TEXT_CACHE_MAX:
+                cache.popitem(last=False)
+        else:
+            cache.move_to_end(key)
+        return img
+
     def text(self, s, size, color, center=None, topleft=None, shadow=True,
              midleft=None, midright=None):
-        img = self.font(size).render(s, True, color)
+        color = tuple(color)
+        img = self.text_img(s, size, color)
         r = img.get_rect()
         if center:
             r.center = center
@@ -780,57 +913,157 @@ class Game:
         else:
             r.topleft = topleft
         if shadow:
-            sh = self.font(size).render(s, True, (0, 0, 0))
-            self.screen.blit(sh, r.move(2, 2))
+            self.screen.blit(self.text_img(s, size, (0, 0, 0)), r.move(2, 2))
         self.screen.blit(img, r)
 
-    def build_pitch(self):
-        s = pygame.Surface((W, H))
-        s.fill((20, 66, 36))
+    def build_arena(self):
+        """Arena tecnologica pre-renderizada: piso escuro em gradiente, grade neon, linhas holograficas."""
+        s = pygame.Surface((W, H)).convert()
+        for y in range(H):
+            t = y / H
+            pygame.draw.line(s, (int(5 + 6 * t), int(8 + 9 * t), int(20 + 14 * t)), (0, y), (W, y))
+        for y in range(PITCH.top, PITCH.bottom):
+            t = (y - PITCH.top) / PITCH.h
+            pygame.draw.line(s, (int(16 - 6 * t), int(30 - 11 * t), int(58 - 18 * t)),
+                             (PITCH.left, y), (PITCH.right, y))
+        layer = pygame.Surface((W, H), pygame.SRCALPHA)
         n = 14
         sw = PITCH.w / n
-        for i in range(n):
-            col = (34, 130, 58) if i % 2 == 0 else (29, 118, 52)
-            pygame.draw.rect(s, col, (PITCH.left + i * sw, PITCH.top, math.ceil(sw), PITCH.h))
-        line = (235, 245, 235)
-        pygame.draw.rect(s, line, PITCH, 3)
-        pygame.draw.line(s, line, (CX, PITCH.top), (CX, PITCH.bottom), 3)
-        pygame.draw.circle(s, line, (CX, CY), 70, 3)
-        pygame.draw.circle(s, line, (CX, CY), 4)
+        for i in range(1, n, 2):
+            pygame.draw.rect(layer, (255, 255, 255, 7), (PITCH.left + i * sw, PITCH.top, math.ceil(sw), PITCH.h))
+        for x in range(PITCH.left, PITCH.right + 1, 40):
+            pygame.draw.line(layer, (0, 200, 255, 30), (x, PITCH.top), (x, PITCH.bottom))
+        for y in range(PITCH.top, PITCH.bottom + 1, 40):
+            pygame.draw.line(layer, (0, 200, 255, 30), (PITCH.left, y), (PITCH.right, y))
+        s.blit(layer, (0, 0))
+        # redes dos gols
         for side in (0, 1):
-            big_x = PITCH.left if side == 0 else PITCH.right - 150
-            small_x = PITCH.left if side == 0 else PITCH.right - 55
-            pygame.draw.rect(s, line, (big_x, CY - 150, 150, 300), 3)
-            pygame.draw.rect(s, line, (small_x, CY - 85, 55, 170), 3)
-            spot_x = PITCH.left + 105 if side == 0 else PITCH.right - 105
-            pygame.draw.circle(s, line, (spot_x, CY), 3)
             gx = PITCH.left - GOAL_DEPTH if side == 0 else PITCH.right
             net = pygame.Rect(gx, CY - GOAL_HALF, GOAL_DEPTH, GOAL_HALF * 2)
-            pygame.draw.rect(s, (14, 40, 26), net)
-            for yy in range(net.top, net.bottom, 12):
-                pygame.draw.line(s, (110, 140, 118), (net.left, yy), (net.right, yy), 1)
-            for xx in range(net.left, net.right, 12):
-                pygame.draw.line(s, (110, 140, 118), (xx, net.top), (xx, net.bottom), 1)
-            pygame.draw.rect(s, line, net, 3)
+            pygame.draw.rect(s, (6, 14, 28), net)
+            for yy in range(net.top, net.bottom, 10):
+                pygame.draw.line(s, (50, 120, 160), (net.left, yy), (net.right, yy), 1)
+            for xx in range(net.left, net.right, 10):
+                pygame.draw.line(s, (50, 120, 160), (xx, net.top), (xx, net.bottom), 1)
+        # linhas holograficas: 3 passes (larga/fraca, media, nucleo)
+        for width, col in ((9, (0, 170, 255, 36)), (5, (0, 215, 255, 100)), (2, (215, 255, 255, 255))):
+            layer.fill((0, 0, 0, 0))
+            pygame.draw.rect(layer, col, PITCH, width)
+            pygame.draw.line(layer, col, (CX, PITCH.top), (CX, PITCH.bottom), width)
+            pygame.draw.circle(layer, col, (CX, CY), 70, width)
+            pygame.draw.circle(layer, col, (CX, CY), 2 + width // 2)
+            for side in (0, 1):
+                big_x = PITCH.left if side == 0 else PITCH.right - 150
+                small_x = PITCH.left if side == 0 else PITCH.right - 55
+                pygame.draw.rect(layer, col, (big_x, CY - 150, 150, 300), width)
+                pygame.draw.rect(layer, col, (small_x, CY - 85, 55, 170), width)
+                spot_x = PITCH.left + 105 if side == 0 else PITCH.right - 105
+                pygame.draw.circle(layer, col, (spot_x, CY), 2 + width // 2)
+                gx = PITCH.left - GOAL_DEPTH if side == 0 else PITCH.right
+                pygame.draw.rect(layer, col, (gx, CY - GOAL_HALF, GOAL_DEPTH, GOAL_HALF * 2), width)
+            s.blit(layer, (0, 0))
+        for side in (0, 1):                         # traves com glow
             line_x = PITCH.left if side == 0 else PITCH.right
             for yy in (CY - GOAL_HALF, CY + GOAL_HALF):
-                pygame.draw.circle(s, (255, 255, 255), (line_x, yy), 6)
+                pygame.draw.circle(s, (0, 90, 150), (line_x, yy), 10)
+                pygame.draw.circle(s, (90, 210, 255), (line_x, yy), 7)
+                pygame.draw.circle(s, (255, 255, 255), (line_x, yy), 4)
         return s
+
+    def build_glows(self):
+        """Sprites de glow (aditivos, fundo preto) para a bola."""
+        size = 56
+        c = size // 2
+        s = pygame.Surface((size, size))
+        for r in range(c, 0, -1):
+            k = (1 - r / c) ** 2
+            pygame.draw.circle(s, (int(70 * k), int(150 * k), int(190 * k)), (c, c), r)
+        return {"ball": s.convert()}
+
+    def build_hud_panel(self):
+        s = pygame.Surface((W, 78), pygame.SRCALPHA)
+        for y in range(76):
+            pygame.draw.line(s, (6, 14, 30, int(215 - 50 * y / 76)), (0, y), (W, y))
+        pygame.draw.line(s, (0, 120, 160, 120), (0, 76), (W, 76), 4)
+        pygame.draw.line(s, (0, 230, 255, 255), (0, 76), (W, 76), 2)
+        return s.convert_alpha()
+
+    def build_banner_veil(self):
+        s = pygame.Surface((W, 150), pygame.SRCALPHA)
+        s.fill((2, 8, 20, 165))
+        pygame.draw.line(s, (0, 230, 255, 255), (0, 0), (W, 0), 2)
+        pygame.draw.line(s, (0, 230, 255, 255), (0, 149), (W, 149), 2)
+        return s.convert_alpha()
+
+    def build_menu_bg(self):
+        """Arena + veu escuro ja compostos (o menu so faz um blit)."""
+        s = self.pitch_surf.copy()
+        veil = pygame.Surface((W, H), pygame.SRCALPHA)
+        veil.fill((2, 6, 16, 165))
+        s.blit(veil, (0, 0))
+        return s.convert()
+
+    # robos ------------------------------------------------------------
+    def build_robot_sprite(self, chassis, led, gk, low):
+        """Aspirador visto de cima: sombra, halo, anel de LED, corpo metalico. Sem rotacao em runtime."""
+        size = 64
+        c = size // 2
+        s = pygame.Surface((size, size), pygame.SRCALPHA)
+        led = scale_color(led, 0.4) if low else led
+        pygame.draw.ellipse(s, (0, 0, 0, 110), (c - PR + 1, c + PR - 9, PR * 2, 18))
+        for r in range(c - 2, PR, -1):                       # halo
+            k = (1 - (r - PR) / (c - 2 - PR)) ** 2
+            pygame.draw.circle(s, led + (int((22 if low else 70) * k),), (c, c), r)
+        ring = 5 if chassis == "Tanque" else 3
+        if chassis == "Velocista":                           # aleta traseira
+            pygame.draw.polygon(s, led, [(c - 7, c - PR + 2), (c + 7, c - PR + 2), (c, c - PR - 7)])
+            pygame.draw.polygon(s, (20, 24, 32), [(c - 7, c - PR + 2), (c + 7, c - PR + 2), (c, c - PR - 7)], 1)
+        pygame.draw.circle(s, led, (c, c), PR)
+        pygame.draw.circle(s, (12, 16, 24), (c, c), PR, 1)
+        body = PR - ring
+        for i in range(body, 0, -1):                         # domo metalico com brilho
+            t = 1 - i / body
+            v = int(46 + 92 * t)
+            pygame.draw.circle(s, (v, v + 4, v + 14), (c - int(t * 3), c - int(t * 3)), i)
+        pygame.draw.circle(s, (20, 24, 34), (c, c), body, 1)
+        pygame.draw.circle(s, (190, 200, 215), (c - 4, c - 4), 2)   # reflexo
+        if chassis == "Tanque":                              # placas de blindagem
+            for sx in (-1, 1):
+                pygame.draw.line(s, (25, 28, 38), (c + sx * 3, c - body + 1), (c + sx * 3, c + body - 1), 2)
+        if gk or chassis == "Goleiro":                       # LEDs extras
+            for k in range(8):
+                a = k * math.pi / 4
+                pygame.draw.circle(s, led, (int(c + math.cos(a) * (PR - 6)), int(c + math.sin(a) * (PR - 6))), 1)
+        return s.convert_alpha()
+
+    def sprite_key(self, t, p):
+        col = t.gk_color if p.role == "GK" else t.color
+        return (p.chassis, led_color(col), p.role == "GK")
+
+    def warm_sprites(self):
+        for t in self.teams:
+            for p in t.players:
+                ch, led, gk = self.sprite_key(t, p)
+                for low in (False, True):
+                    if (ch, led, gk, low) not in self.sprites:
+                        self.sprites[(ch, led, gk, low)] = self.build_robot_sprite(ch, led, gk, low)
 
     def draw(self):
         scr = self.screen
         if self.state == "career":
             return self.career_ui.draw()
-        scr.blit(self.pitch_surf, (0, 0))
         if self.state == "menu":
+            scr.blit(self.menu_bg, (0, 0))
             return self.draw_menu()
+        scr.blit(self.pitch_surf, (0, 0))
 
         b = self.ball
-        pygame.draw.ellipse(scr, (15, 70, 35), (b.pos.x - BR + 2, b.pos.y - BR + 5, BR * 2, BR * 1.4))
+        pygame.draw.ellipse(scr, (3, 8, 18), (b.pos.x - BR + 2, b.pos.y - BR + 5, BR * 2, BR * 1.4))
         for t in self.teams:
             for p in t.players:
                 self.draw_player(t, p)
         self.draw_ball()
+        self.draw_fx(scr)
         self.draw_hud()
 
         if self.paused:
@@ -866,16 +1099,32 @@ class Game:
     def draw_player(self, t, p):
         scr = self.screen
         pos = (int(p.pos.x), int(p.pos.y))
-        pygame.draw.ellipse(scr, (15, 70, 35), (pos[0] - PR, pos[1] + PR - 8, PR * 2, 12))
-        col = t.gk_color if p.role == "GK" else t.color
-        pygame.draw.circle(scr, col, pos, PR)
-        pygame.draw.circle(scr, tuple(int(c * 0.55) for c in col), pos, PR, 3)
-        nose = p.pos + p.face * (PR - 3)
-        pygame.draw.circle(scr, (255, 224, 190), (int(nose.x), int(nose.y)), 4)
-        self.text(str(p.idx + 1), 20, (255, 255, 255), center=pos, shadow=False)
+        ch, led, gk = self.sprite_key(t, p)
+        low = p.bat < 0.25 and int(time.perf_counter() * 5) % 2 == 0
+        spr = self.sprites.get((ch, led, gk, low))
+        if spr is None:
+            spr = self.sprites[(ch, led, gk, low)] = self.build_robot_sprite(ch, led, gk, low)
+        scr.blit(spr, (pos[0] - 32, pos[1] - 32))
+        eye = p.pos + p.face * (PR - 6)                      # olho/sensor na direcao do rosto
+        ex, ey = int(eye.x), int(eye.y)
+        pygame.draw.circle(scr, (10, 14, 20), (ex, ey), 5)
+        pygame.draw.circle(scr, (235, 250, 255), (ex, ey), 3)
+        pygame.draw.circle(scr, led, (ex, ey), 1)
+        bat = p.bat
+        if bat < 0.98 or p.vel.length_squared() > 625:       # barra de bateria 22x4
+            x, y = pos[0] - 12, pos[1] - PR - 11
+            pygame.draw.rect(scr, (6, 10, 18), (x, y, 24, 6))
+            if bat >= 0.5:
+                bc = (70, 230, 110)
+            elif bat >= 0.25:
+                bc = (255, 215, 60)
+            else:
+                bc = (255, 70, 60)
+            if bat >= 0.25 or int(time.perf_counter() * 5) % 2 == 0:
+                pygame.draw.rect(scr, bc, (x + 1, y + 1, int(22 * bat), 4))
         if t.human and p is t.ctrl and self.state != "over":
             pygame.draw.circle(scr, (255, 255, 255), pos, PR + 4, 2)
-            tip = (pos[0], pos[1] - PR - 6)
+            tip = (pos[0], pos[1] - PR - 14)
             pygame.draw.polygon(scr, (255, 230, 60),
                                 [tip, (tip[0] - 7, tip[1] - 11), (tip[0] + 7, tip[1] - 11)])
             if t.human.charge > 0:
@@ -887,21 +1136,32 @@ class Game:
     def draw_ball(self):
         b, scr = self.ball, self.screen
         pos = (int(b.pos.x), int(b.pos.y))
+        tr = self.trail
+        if self.paused:
+            pass
+        elif b.vel.length_squared() > 350 * 350:
+            tr.append(pos)
+        elif tr:
+            tr.popleft()
+        n = len(tr)
+        for i, q in enumerate(tr):
+            f = (i + 1) / (n + 1)
+            pygame.draw.circle(scr, scale_color((120, 230, 255), f * 0.8), q, max(1, int(BR * f * 0.8)))
+        scr.blit(self.glows["ball"], (pos[0] - 28, pos[1] - 28), special_flags=pygame.BLEND_RGB_ADD)
         pygame.draw.circle(scr, (250, 250, 250), pos, BR)
         a = b.roll
         for k in range(3):
             ang = a + k * 2.094
             px, py = pos[0] + math.cos(ang) * 4, pos[1] + math.sin(ang) * 4
             pygame.draw.circle(scr, (30, 30, 30), (int(px), int(py)), 2)
-        pygame.draw.circle(scr, (20, 20, 20), pos, BR, 2)
+        pygame.draw.circle(scr, (20, 30, 40), pos, BR, 2)
 
     def draw_hud(self):
         scr = self.screen
-        pygame.draw.rect(scr, (12, 22, 18), (0, 0, W, 76))
-        pygame.draw.line(scr, (60, 90, 70), (0, 76), (W, 76), 2)
+        scr.blit(self.hud_panel, (0, 0))
         t0, t1 = self.teams
-        self.text(t0.name, 44, t0.color, center=(W // 2 - 270, 36))
-        self.text(t1.name, 44, t1.color, center=(W // 2 + 270, 36))
+        self.text(t0.name, 44, led_color(t0.color), center=(W // 2 - 270, 36))
+        self.text(t1.name, 44, led_color(t1.color), center=(W // 2 + 270, 36))
         self.text("%d  x  %d" % tuple(self.score), 64, (255, 255, 255), center=(W // 2, 30))
         if self.career_match:
             self.text("%d'" % self.minute(), 30, (255, 230, 120), center=(W // 2, 62))
@@ -913,55 +1173,52 @@ class Game:
             hint = "WASD / Setas: mover   |   ESPAÇO (segure): chutar   |   SHIFT / X: passar   |   P: pausa"
         else:
             hint = "J1: WASD + ESPAÇO chuta + SHIFT passa   |   J2: Setas + ENTER chuta + SHIFT DIR passa"
-        self.text(hint, 24, (210, 230, 215), center=(W // 2, H - 22), shadow=False)
+        self.text(hint, 24, (190, 225, 235), center=(W // 2, H - 22), shadow=False)
 
     def draw_speed_buttons(self):
-        self.text("Velocidade (1-4):", 24, (210, 230, 215), midright=(W - 342, H - 22), shadow=False)
+        self.text("Velocidade (1-4):", 24, (190, 225, 235), midright=(W - 342, H - 22), shadow=False)
         for i, (r, lab) in enumerate(zip(self.speed_rects(), ["1x", "2x", "4x", "MAX"])):
             on = i == self.speed_idx
-            pygame.draw.rect(self.screen, (40, 150, 80) if on else (24, 60, 40), r, border_radius=6)
-            pygame.draw.rect(self.screen, (230, 245, 235), r, 2, border_radius=6)
+            pygame.draw.rect(self.screen, (0, 120, 165) if on else (12, 30, 54), r, border_radius=6)
+            pygame.draw.rect(self.screen, (0, 230, 255) if on else (70, 130, 160), r, 2, border_radius=6)
             self.text(lab, 24, (255, 255, 255), center=r.center, shadow=False)
-        self.text("P: pausa", 24, (210, 230, 215), midleft=(24, H - 22), shadow=False)
+        self.text("P: pausa", 24, (190, 225, 235), midleft=(24, H - 22), shadow=False)
 
     def banner(self, title, sub, color=(255, 255, 255)):
-        veil = pygame.Surface((W, 150), pygame.SRCALPHA)
-        veil.fill((0, 0, 0, 150))
-        self.screen.blit(veil, (0, CY - 75))
-        self.text(title, 84, color, center=(W // 2, CY - (15 if sub else 0)))
+        self.screen.blit(self.banner_veil, (0, CY - 75))
+        self.text(title, 84, led_color(color), center=(W // 2, CY - (15 if sub else 0)))
         if sub:
-            self.text(sub, 32, (230, 230, 230), center=(W // 2, CY + 42))
+            self.text(sub, 32, (230, 240, 245), center=(W // 2, CY + 42))
 
     def draw_menu(self):
         scr = self.screen
-        veil = pygame.Surface((W, H), pygame.SRCALPHA)
-        veil.fill((0, 0, 0, 150))
-        scr.blit(veil, (0, 0))
-        self.text("SOCCERPY", 150, (255, 255, 255), center=(W // 2, 190))
-        self.text("futebol arcade feito 100% em Python", 38, (200, 235, 210), center=(W // 2, 275))
-        labels = [("1 - UM JOGADOR", "você contra a CPU"), ("2 - DOIS JOGADORES", "J1 contra J2, mesmo teclado"),
+        cx = W // 2
+        self.text("COPA ASPIRADOR", 130, (0, 120, 170), center=(cx + 3, 193), shadow=False)
+        self.text("COPA ASPIRADOR", 130, (225, 252, 255), center=(cx, 190), shadow=False)
+        self.text("robôs aspiradores jogam bola e ninguém varre a sala", 36, (120, 225, 245), center=(cx, 275))
+        labels = [("1 - AMISTOSO", "você contra a CPU"), ("2 - AMISTOSO", "J1 contra J2, mesmo teclado"),
                   ("3 - NOVA CARREIRA", "gerente: elenco, mercado, ligas")]
         mx, my = pygame.mouse.get_pos()
         for r, (a, c) in zip(self.menu_btns, labels):
             hover = r.collidepoint(mx, my)
-            pygame.draw.rect(scr, (40, 150, 80) if hover else (28, 110, 60), r, border_radius=14)
-            pygame.draw.rect(scr, (230, 245, 235), r, 3, border_radius=14)
+            pygame.draw.rect(scr, (0, 100, 140) if hover else (10, 40, 72), r, border_radius=14)
+            pygame.draw.rect(scr, (0, 230, 255) if hover else (0, 150, 190), r, 3, border_radius=14)
             self.text(a, 34, (255, 255, 255), center=(r.centerx, r.centery - 14))
-            self.text(c, 24, (210, 235, 215), center=(r.centerx, r.centery + 22), shadow=False)
+            self.text(c, 24, (190, 235, 245), center=(r.centerx, r.centery + 22), shadow=False)
         if self.has_save:
             r = self.continue_btn
             hover = r.collidepoint(mx, my)
             pygame.draw.rect(scr, (200, 150, 30) if hover else (160, 115, 20), r, border_radius=14)
             pygame.draw.rect(scr, (255, 240, 200), r, 3, border_radius=14)
-            self.text("4 - CONTINUAR CARREIRA", 34, (255, 255, 255), center=r.center)
+            self.text("4 - CONTINUAR CARREIRA", 31, (255, 255, 255), center=r.center)
         self.text("5 contra 5  |  clique ou aperte 1 / 2 / 3" + ("  / 4" if self.has_save else ""), 28,
-                  (230, 230, 230), center=(W // 2, 570))
+                  (200, 225, 235), center=(cx, 570))
 
 
 async def main():
     pygame.init()
     screen = pygame.display.set_mode((W, H))
-    pygame.display.set_caption("SoccerPy")
+    pygame.display.set_caption("Copa Aspirador")
     clock = pygame.time.Clock()
     game = Game(screen)
     while True:

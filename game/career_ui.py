@@ -4,15 +4,15 @@ import pygame
 import career as C
 
 W, H = 1100, 700
-BG = (16, 28, 22)
-PANEL = (26, 44, 34)
-LINE = (70, 105, 82)
+BG = (8, 14, 24)
+PANEL = (12, 28, 44)
+LINE = (40, 100, 140)
 TEXT = (235, 242, 236)
 DIM = (150, 175, 158)
 GOLD = (255, 214, 90)
 GREEN = (110, 230, 120)
 RED = (240, 100, 90)
-BTN = (28, 110, 60)
+BTN = (0, 120, 170)
 POS_ORDER = {"GK": 0, "DEF": 1, "MID": 2, "ATT": 3}
 TABS = [("home", "INÍCIO"), ("table", "TABELA"), ("squad", "ELENCO"), ("market", "MERCADO")]
 
@@ -208,7 +208,7 @@ class CareerUI:
                 club = c.clubs[idx]
                 r = pygame.Rect(x, 158 + k * 60, 340, 54)
                 hover = r.collidepoint(pygame.mouse.get_pos())
-                self.panel(r, (40, 70, 52) if hover else PANEL)
+                self.panel(r, (20, 60, 90) if hover else PANEL)
                 pygame.draw.rect(self.g.screen, tuple(club["color"]), (r.x + 8, r.y + 8, 12, 38), border_radius=4)
                 self.text(club["name"], 28, TEXT, midleft=(r.x + 34, r.centery - 8))
                 self.text("Força %d   Caixa %s" % (c.rating(club), C.fmt_money(club["money"])),
@@ -232,7 +232,7 @@ class CareerUI:
         self.text("Força do time: %d" % c.rating(club), 24, DIM, midright=(W - 20, 55))
         for i, (tid, label) in enumerate(TABS):
             self.btn((20 + i * 160, 82, 150, 40), label, lambda t=tid: self.set_tab(t),
-                     color=(40, 150, 80) if self.tab == tid else (28, 50, 38), size=26)
+                     color=(50, 160, 220) if self.tab == tid else (16, 44, 70), size=26)
         self.btn((W - 210, 82, 190, 40), "SALVAR E SAIR", self.to_menu, color=(70, 60, 60), size=24)
         getattr(self, "tab_" + self.tab)()
 
@@ -281,7 +281,7 @@ class CareerUI:
         d = self.table_div
         for i in range(3):
             self.btn((20 + i * 170, 135, 160, 38), C.DIV_NAMES[i], lambda i=i: setattr(self, "table_div", i),
-                     color=(40, 150, 80) if d == i else (28, 50, 38), size=26)
+                     color=(50, 160, 220) if d == i else (16, 44, 70), size=26)
         cols = [("J", 560), ("V", 640), ("E", 720), ("D", 800), ("SG", 890), ("PTS", 1000)]
         self.text("#", 24, DIM, center=(50, 196))
         self.text("CLUBE", 24, DIM, topleft=(105, 186))
@@ -330,7 +330,7 @@ class CareerUI:
             r = pygame.Rect(20, y, 700, 24)
             starter = k < 5
             if starter:
-                pygame.draw.rect(self.g.screen, (30, 74, 46), r, border_radius=5)
+                pygame.draw.rect(self.g.screen, (16, 50, 75), r, border_radius=5)
                 pygame.draw.rect(self.g.screen, GREEN, (24, y + 4, 8, 16), border_radius=3)
             if p["id"] == self.sel:
                 pygame.draw.rect(self.g.screen, GOLD, r, 2, border_radius=5)
@@ -397,7 +397,7 @@ class CareerUI:
         for i, (pos, lab) in enumerate([(None, "TODOS"), ("GK", "GOL"), ("DEF", "DEF"),
                                          ("MID", "MEI"), ("ATT", "ATA")]):
             self.btn((20 + i * 110, 135, 100, 36), lab, lambda p=pos: setattr(self, "pos_filter", p),
-                     color=(40, 150, 80) if self.pos_filter == pos else (28, 50, 38), size=24)
+                     color=(50, 160, 220) if self.pos_filter == pos else (16, 44, 70), size=24)
         self.text("Caixa: " + C.fmt_money(club["money"]), 28, GOLD, midright=(W - 24, 153))
         for lab, x, right in (("CLUBE", 40, False), ("JOGADOR", 290, False), ("POS", 590, True),
                               ("OVR", 660, True), ("IDADE", 745, True), ("VS TITULAR", 850, True),
@@ -410,7 +410,7 @@ class CareerUI:
             y = 210 + k * 27
             r = pygame.Rect(20, y, 1060, 26)
             if e is self.msel:
-                pygame.draw.rect(self.g.screen, (40, 70, 52), r, border_radius=5)
+                pygame.draw.rect(self.g.screen, (20, 60, 90), r, border_radius=5)
                 pygame.draw.rect(self.g.screen, GOLD, r, 2, border_radius=5)
             price = c.buy_price(e)
             same = [q["ovr"] for q in starters if q["pos"] == p["pos"]]
@@ -473,7 +473,7 @@ class CareerUI:
             y = 298 + k * 40
             me = c.user in (r["h"], r["a"])
             if me:
-                pygame.draw.rect(self.g.screen, (40, 70, 52), (20, y - 4, 560, 36), border_radius=6)
+                pygame.draw.rect(self.g.screen, (20, 60, 90), (20, y - 4, 560, 36), border_radius=6)
             self.text(c.clubs[r["h"]]["name"], 26, TEXT, midright=(270, y + 14))
             self.text("%d x %d" % (r["hg"], r["ag"]), 28, GOLD, center=(310, y + 14))
             self.text(c.clubs[r["a"]]["name"], 26, TEXT, midleft=(355, y + 14))
