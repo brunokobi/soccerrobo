@@ -15,6 +15,8 @@ CHASSIS = {
     "Tanque":    (-15, -10, 10, 10, 15, 0, 10, 0),
     "Velocista": (20, 15, 5, -5, -15, 0, -10, 0),
     "Goleiro":   (-10, 0, -10, 0, 20, 15, 0, 5),
+    "Orbital":   (-5, 10, 0, 5, -5, 10, 5, 10),
+    "Titã":      (-20, -15, 15, 5, 20, -5, 20, 0),
 }
 
 # bias por papel de escalacao
@@ -139,6 +141,26 @@ LEGACY_TUNING = {
     "flat": True,
     "f": {n: (_LEGACY[n][0], _LEGACY[n][1], lo, hi) for n, _at, _a, _s, lo, hi in _SPEC},
 }
+
+
+ROBOT_SLOPE_MUL = 2.0
+
+
+def scaled_tuning(k):
+    """Devolve cópia profunda de TUNING com inclinação multiplicada por k.
+
+    Âncoras (anchor) e limites (lo, hi) ficam iguais; só a inclinação (slope) muda.
+    """
+    return {
+        "flat": TUNING["flat"],
+        "f": {
+            n: (anchor, slope * k, lo, hi)
+            for n, (anchor, slope, lo, hi) in TUNING["f"].items()
+        },
+    }
+
+
+TUNING_ROBOTS = scaled_tuning(ROBOT_SLOPE_MUL)
 
 
 class Factors:

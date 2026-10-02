@@ -118,15 +118,23 @@ class Ball:
 
 
 class Player:
-    def __init__(self, team, idx, role, fx, fy, name="", ovr=65.0, chassis=None, seed=None):
+    def __init__(self, team, idx, role, fx, fy, name="", ovr=65.0, chassis=None, seed=None,
+                 attrs=None, tuning=None, pid=None, paint=None):
         self.team = team
         self.idx = idx
         self.role = role
         self.name = name
         self.chassis = chassis or robots.ROLE_CHASSIS[role]
-        self.robot = robots.from_overall(ovr, role, self.chassis, seed,
-                                         flat=ACTIVE_TUNING["flat"])
-        self.f = robots.factors(self.robot, ACTIVE_TUNING)
+        self.pid = pid                           # id do robo no modo robos (vai no evento de gol)
+        self.paint = tuple(paint[:3]) if paint else None   # pintura = cor do LED
+        if attrs is not None:                    # modo robos: atributos diretos, tuning do proprio robo
+            self.tuning = tuning or ACTIVE_TUNING
+            self.robot = dict(attrs)
+        else:
+            self.tuning = tuning or ACTIVE_TUNING
+            self.robot = robots.from_overall(ovr, role, self.chassis, seed,
+                                             flat=self.tuning["flat"])
+        self.f = robots.factors(self.robot, self.tuning)
         self.s = robots.mean_attr(self.robot)   # alias legado: media dos atributos / 100
         self.spd = self.f.speed                  # fator de velocidade
         self.bat = 1.0                           # bateria 0..1 (usada a partir do passo 4)
@@ -141,7 +149,7 @@ class Player:
 
 
 class Team:
-    def __init__(self, idx, name, color, gk_color, human=None, squad=None):
+    def __init__(self, idx, name, color, gk_color, human=None, squad=None, tuning=None):
         self.idx = idx
         self.dir = 1 if idx == 0 else -1
         self.name = name
@@ -150,15 +158,21 @@ class Team:
         self.human = human
         self.players = []
         for i, (r, fx, fy) in enumerate(FORMATION):
+            extra = {}
             if not squad:                          # modos 1P/2P: chassis padrao do papel, sem jitter
                 nm, ovr, chassis, seed = "", 65, None, None
+            elif isinstance(squad[i], dict):       # modo robos: {name, attrs, chassis, pid, paint}
+                e = squad[i]
+                nm, ovr, chassis, seed = e.get("name", ""), 65, e.get("chassis"), None
+                extra = dict(attrs=e["attrs"], pid=e.get("pid"), paint=e.get("paint"))
             elif len(squad[i]) >= 4:               # carreira: (nome, ovr, pid, pos)
                 nm, ovr, pid, pos = squad[i][:4]
                 chassis, seed = robots.POS_CHASSIS.get(pos), pid
             else:                                  # legado: (nome, ovr), chassis pelo papel
                 nm, ovr = squad[i]
                 chassis, seed = None, None
-            self.players.append(Player(self, i, r, fx, fy, nm, ovr, chassis, seed))
+            self.players.append(Player(self, i, r, fx, fy, nm, ovr, chassis, seed,
+                                       tuning=tuning, **extra))
         self.ctrl = None
         self.switch_cd = 0.0
         self.chaser = None
@@ -203,6 +217,7 @@ class Game:
         self.events = []
         self.last_owner = None
         self.has_save = Career.has_save()
+        self.match_sink = None                    # (return_state, fn) quando a partida vem de outro modo (robos)
         self.career_ui = CareerUI(self)
         self.new_match(1)
         self.state = "menu"
@@ -222,6 +237,7 @@ class Game:
         ]
         self.score = [0, 0]
         self.career_match = False
+        self.match_sink = None
         self.speed_idx = 0
         self.match_time = self.time_left = MATCH_TIME
         self.events = []
@@ -233,13 +249,25 @@ class Game:
 
     def start_career_match(self, home, away):
         """Partida automática (CPU x CPU) do modo carreira. home/away = match_cfg()."""
+        self.match_sink = None
+        self._begin_match(home, away)
+
+    def start_robot_match(self, home, away, on_done, tuning=robots.TUNING_ROBOTS):
+        """Partida automática do modo robôs. home/away = {"name","color","squad":[5 dicts]}.
+
+        Ao terminar chama on_done(score, events) e volta ao estado "robots".
+        """
+        self._begin_match(home, away, tuning)
+        self.match_sink = ("robots", on_done)
+
+    def _begin_match(self, home, away, tuning=None):
         self.mode = 0
         c1 = tuple(away["color"])
         if sum(abs(a - b) for a, b in zip(led_color(home["color"]), led_color(c1))) < 130:
             c1 = (235, 235, 235) if sum(home["color"]) < 600 else (0, 230, 255)
         self.teams = [
-            Team(0, home["name"], tuple(home["color"]), GK_COLORS[0], None, home["squad"]),
-            Team(1, away["name"], c1, GK_COLORS[1], None, away["squad"]),
+            Team(0, home["name"], tuple(home["color"]), GK_COLORS[0], None, home["squad"], tuning),
+            Team(1, away["name"], c1, GK_COLORS[1], None, away["squad"], tuning),
         ]
         self.score = [0, 0]
         self.career_match = True
@@ -256,6 +284,12 @@ class Game:
     def finish_career_match(self):
         self.career_match = False
         self.fx.clear()
+        sink, self.match_sink = self.match_sink, None
+        if sink:
+            return_state, fn = sink
+            self.state = return_state
+            fn(list(self.score), list(self.events))
+            return
         self.state = "career"
         self.career_ui.match_done(list(self.score), list(self.events))
 
@@ -301,6 +335,13 @@ class Game:
     def handle_event(self, e):
         if self.state == "career":
             return self.career_ui.handle_event(e)
+        if self.state == "robots":
+            ui = getattr(self, "robots_ui", None)
+            if ui is not None:
+                return ui.handle_event(e)
+            if e.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN):   # sem UI ainda: volta ao menu
+                self.state = "menu"
+            return
         if e.type == pygame.KEYDOWN:
             if self.state == "menu":
                 if e.key == pygame.K_1:
@@ -351,6 +392,12 @@ class Game:
             return
         if self.state == "career":
             return self.career_ui.update(dt)
+        if self.state == "robots":
+            ui = getattr(self, "robots_ui", None)
+            if ui is None:
+                self.state = "menu"
+                return
+            return ui.update(dt)
         if self.career_match and self.state != "over":
             # velocidade: n passos por frame (ou o máximo possível em ~12 ms)
             n = SPEEDS[self.speed_idx]
@@ -637,7 +684,8 @@ class Game:
         self.scorer = team_idx
         lo = self.last_owner
         self.events.append({"min": self.minute(), "team": team_idx,
-                            "name": lo.name if lo else "", "own": bool(lo and lo.team.idx != team_idx)})
+                            "name": lo.name if lo else "", "own": bool(lo and lo.team.idx != team_idx),
+                            "pid": getattr(lo, "pid", None)})
         self.ball.owner = None
         if BATTERY_ON:                      # gol recarrega todos os robos
             for t in self.teams:
@@ -1037,8 +1085,15 @@ class Game:
         return s.convert_alpha()
 
     def sprite_key(self, t, p):
-        col = t.gk_color if p.role == "GK" else t.color
+        col = p.paint or (t.gk_color if p.role == "GK" else t.color)
         return (p.chassis, led_color(col), p.role == "GK")
+
+    def get_sprite(self, ch, led, gk, low=False):
+        key = (ch, led, gk, low)
+        spr = self.sprites.get(key)
+        if spr is None:
+            spr = self.sprites[key] = self.build_robot_sprite(ch, led, gk, low)
+        return spr
 
     def warm_sprites(self):
         for t in self.teams:
@@ -1052,6 +1107,11 @@ class Game:
         scr = self.screen
         if self.state == "career":
             return self.career_ui.draw()
+        if self.state == "robots":
+            ui = getattr(self, "robots_ui", None)
+            if ui is not None:
+                return ui.draw()
+            self.state = "menu"
         if self.state == "menu":
             scr.blit(self.menu_bg, (0, 0))
             return self.draw_menu()
@@ -1101,9 +1161,7 @@ class Game:
         pos = (int(p.pos.x), int(p.pos.y))
         ch, led, gk = self.sprite_key(t, p)
         low = p.bat < 0.25 and int(time.perf_counter() * 5) % 2 == 0
-        spr = self.sprites.get((ch, led, gk, low))
-        if spr is None:
-            spr = self.sprites[(ch, led, gk, low)] = self.build_robot_sprite(ch, led, gk, low)
+        spr = self.get_sprite(ch, led, gk, low)
         scr.blit(spr, (pos[0] - 32, pos[1] - 32))
         eye = p.pos + p.face * (PR - 6)                      # olho/sensor na direcao do rosto
         ex, ey = int(eye.x), int(eye.y)
