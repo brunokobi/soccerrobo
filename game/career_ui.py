@@ -140,6 +140,7 @@ class CareerUI:
         if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
             for r, fn, enabled in reversed(self.buttons):
                 if enabled and r.collidepoint(e.pos):
+                    self.buttons = []             # descarta cliques do mesmo frame até o próximo draw
                     fn()
                     break
         elif e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE and self.screen_id in ("pick", "hub"):

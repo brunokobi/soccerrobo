@@ -200,9 +200,14 @@ class Garage:
         return g
 
     def save(self):
-        """Grava em SAVE_KEY; so grava um Garage valido. True se gravou."""
+        """Grava em SAVE_KEY; so grava um Garage valido (e sem perder a liga). True se gravou."""
         try:
-            if Garage.sanitize(self.to_dict()) is None:
+            clean = Garage.sanitize(self.to_dict())
+            if clean is None:
+                return False
+            if self.league is not None and clean.get("league") is None:
+                # a liga em andamento nao sobreviveria ao sanitize: nao grava (preserva o save
+                # anterior em vez de apagar a liga em silencio); a UI mostra "Falha ao salvar."
                 return False
             return bool(_store_set(self.to_json()))
         except Exception as ex:  # noqa: BLE001
@@ -559,6 +564,10 @@ def _load_core():
     raw = _store_get()
     if raw is None:
         return None, SAVE_NONE, None
+    if raw is store.ERROR:                      # existe/talvez exista, mas ilegivel
+        return None, SAVE_BAD, None
+    if isinstance(raw, store.InvalidText):      # bytes invalidos: nunca "consertar" em silencio
+        return None, SAVE_BAD, str(raw)
     try:
         if not isinstance(raw, str) or len(raw) > MAX_SAVE_CHARS:
             return None, SAVE_BAD, raw if isinstance(raw, str) else None

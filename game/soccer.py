@@ -14,6 +14,8 @@ from pygame import Vector2 as V
 import robots
 from career import Career
 from career_ui import CareerUI
+from garage import Garage
+from robots_ui import RobotsUI
 
 W, H = 1100, 700
 PITCH = pygame.Rect(60, 90, 980, 560)
@@ -32,7 +34,7 @@ GK_COLORS = [(250, 200, 40), (70, 205, 130)]
 ACTIVE_TUNING = robots.TUNING          # padrao do jogo; o modo legado (robots.LEGACY_TUNING + BATTERY_ON=False) so vale p/ o golden
 BATTERY_ON = True                      # bateria ligada (False so no modo legado)
 FX_MAX = 120                           # teto de particulas
-TEXT_CACHE_MAX = 300
+TEXT_CACHE_MAX = 600
 HUMAN_AIM_ERR = 30                     # graus de erro de mira humano por 1.0 de (0.65 - chu/100); so chu < 65
 
 # (papel, fracao x a partir do proprio gol, fracao y)
@@ -210,7 +212,7 @@ class Game:
         self.msg = ""
         self.scorer = None
         self.menu_btns = [pygame.Rect(50 + i * 340, 330, 320, 90) for i in range(3)]
-        self.continue_btn = pygame.Rect(W // 2 - 160, 450, 320, 70)
+        self.continue_btn = pygame.Rect(W // 2 - 330, 450, 320, 70)
         self.career_match = False
         self.match_time = MATCH_TIME
         self.speed_idx = 0
@@ -219,10 +221,21 @@ class Game:
         self.has_save = Career.has_save()
         self.match_sink = None                    # (return_state, fn) quando a partida vem de outro modo (robos)
         self.career_ui = CareerUI(self)
+        self.robots_status = "none"               # cache de Garage.load_status() (nao ler o store a cada frame)
+        self.refresh_robots_status()
+        self.robots_ui = RobotsUI(self)
         self.new_match(1)
         self.state = "menu"
 
     # ------------------------------------------------------------------ setup
+    def refresh_robots_status(self):
+        self.robots_status = Garage.load_status()
+
+    def robots_btn(self):
+        """Botao 5 do menu: ao lado do 4 se ha save de carreira, senao centralizado."""
+        x = W // 2 + 10 if self.has_save else W // 2 - 160
+        return pygame.Rect(x, 450, 320, 70)
+
     def new_match(self, mode):
         self.mode = mode
         if mode == 1:
@@ -352,6 +365,8 @@ class Game:
                     self.career_ui.open_new()
                 elif e.key == pygame.K_4:
                     self.career_ui.open_saved()
+                elif e.key == pygame.K_5:
+                    self.robots_ui.open()
             elif self.career_match:
                 if e.key in (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4):
                     self.speed_idx = e.key - pygame.K_1
@@ -378,6 +393,8 @@ class Game:
                         return
                 if self.has_save and self.continue_btn.collidepoint(e.pos):
                     self.career_ui.open_saved()
+                elif self.robots_btn().collidepoint(e.pos):
+                    self.robots_ui.open()
             elif self.career_match:
                 if self.state == "over":
                     self.finish_career_match()
@@ -1088,6 +1105,10 @@ class Game:
         col = p.paint or (t.gk_color if p.role == "GK" else t.color)
         return (p.chassis, led_color(col), p.role == "GK")
 
+    def robot_sprite(self, rb):
+        """Sprite (cacheado) de um robo da garagem, com a cor de pintura dele."""
+        return self.get_sprite(rb["chassis"], led_color(rb["paint"]), rb["role"] == "GK")
+
     def get_sprite(self, ch, led, gk, low=False):
         key = (ch, led, gk, low)
         spr = self.sprites.get(key)
@@ -1269,8 +1290,14 @@ class Game:
             pygame.draw.rect(scr, (200, 150, 30) if hover else (160, 115, 20), r, border_radius=14)
             pygame.draw.rect(scr, (255, 240, 200), r, 3, border_radius=14)
             self.text("4 - CONTINUAR CARREIRA", 31, (255, 255, 255), center=r.center)
-        self.text("5 contra 5  |  clique ou aperte 1 / 2 / 3" + ("  / 4" if self.has_save else ""), 28,
-                  (200, 225, 235), center=(cx, 570))
+        r = self.robots_btn()
+        hover = r.collidepoint(mx, my)
+        pygame.draw.rect(scr, (0, 130, 110) if hover else (6, 80, 76), r, border_radius=14)
+        pygame.draw.rect(scr, (90, 255, 210) if hover else (40, 200, 170), r, 3, border_radius=14)
+        self.text("5 - MODO ROBÔS", 32, (255, 255, 255), center=(r.centerx, r.centery - 12))
+        self.text("continuar" if self.robots_status == "ok" else "equipe de robôs, peças e liga", 22,
+                  (190, 245, 232), center=(r.centerx, r.centery + 18), shadow=False)
+        self.text("clique ou aperte 1 / 2 / 3 / 4 / 5" if self.has_save else "clique ou aperte 1 / 2 / 3 / 5", 28, (200, 225, 235), center=(cx, 570))
 
 
 async def main():

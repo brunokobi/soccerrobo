@@ -156,7 +156,7 @@ def test_robot_match_calls_sink_and_returns_state():
 
 
 def test_robots_state_without_ui_does_not_break():
-    assert getattr(g, "robots_ui", None) is None
+    saved_ui, g.robots_ui = g.robots_ui, None      # sem UI: o estado "robots" volta ao menu
     g.state = "robots"
     g.draw()
     g.state = "robots"
@@ -165,6 +165,7 @@ def test_robots_state_without_ui_does_not_break():
     g.state = "robots"
     g.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_a))
     assert g.state == "menu"
+    g.robots_ui = saved_ui
 
 
 def test_paint_sets_led_and_sprite():

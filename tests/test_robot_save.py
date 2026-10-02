@@ -6,10 +6,11 @@ Sem pygame. NUNCA toca ~/.soccerpy_*.json: o store e trocado por um dict em memo
 """
 import copy
 import json
-import math
 import os
 import random
+import shutil
 import sys
+import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "game"))
@@ -20,7 +21,7 @@ import robot_league as rl  # noqa: E402
 import robots  # noqa: E402
 import store  # noqa: E402
 
-SCRATCH = "/tmp/claude-1000/-home-bruno-soccerpy/e81e7902-f4c6-43ed-939c-6980cc297bca/scratchpad"
+SCRATCH = tempfile.mkdtemp(prefix="soccerpy_save_test_")      # removido ao final (main)
 PASS, FAIL = [], []
 KEY = gm.SAVE_KEY
 BAD = KEY + ".bad"
@@ -723,6 +724,75 @@ def test_store_module_file_roundtrip_and_errors():
     os.remove(p)
 
 
+def test_store_read_distinguishes_absent_from_error():
+    p = os.path.join(SCRATCH, "store_err.json")
+    for f in (p, p + ".tmp"):
+        if os.path.exists(f):
+            os.remove(f)
+    assert store.read("k", p) is None                      # ausente
+    os.makedirs(p)                                         # existe mas nao e arquivo -> erro de leitura
+    try:
+        assert store.read("k", p) is store.ERROR
+    finally:
+        os.rmdir(p)
+    with open(p, "wb") as f:
+        f.write(b"ab\xff\xfecd")
+    t = store.read("k", p)
+    assert isinstance(t, store.InvalidText) and t.startswith("ab") and t.endswith("cd")
+    os.remove(p)
+
+
+@run_with_store
+def test_save_refuses_when_league_would_be_dropped():
+    g = played_game()
+    assert g.league is not None and g.save()
+    prev = MEM[KEY]
+    g.league["results"].append(list(g.league["results"][0]))      # resultado repetido: sanitize rejeita a liga
+    assert g.save() is False
+    assert MEM[KEY] == prev                                       # save anterior preservado
+
+
+def test_unreadable_save_is_bad_not_none():
+    og, os_ = gm._store_get, gm._store_set
+    try:
+        gm._store_get = lambda: store.ERROR
+        assert gm.Garage.load_status() == gm.SAVE_BAD
+        assert gm.Garage.load() is None
+        assert gm.Garage.has_save() is True
+        gm._store_get = lambda: None
+        assert gm.Garage.load_status() == gm.SAVE_NONE
+    finally:
+        gm._store_get, gm._store_set = og, os_
+
+
+def test_file_with_invalid_utf8_is_bad_and_copied():
+    p = os.path.join(SCRATCH, "robots_utf8.json")
+    for f in (p, p + ".bad", p + ".tmp"):
+        if os.path.exists(f):
+            os.remove(f)
+    old = gm.SAVE_PATH
+    gm.SAVE_PATH = p
+    try:
+        # gravacao real (store.read/write originais), nunca em ~
+        store.read, store.write = _REAL[0], _REAL[1]
+        g = played_game()
+        assert g.save()
+        raw = open(p, "rb").read()
+        bad = raw[:100] + b"\xff\xfe" + raw[100:]
+        with open(p, "wb") as f:
+            f.write(bad)
+        assert gm.Garage.load_status() == gm.SAVE_BAD
+        assert gm.Garage.load() is None
+        assert open(p, "rb").read() == bad               # original intacto
+        assert os.path.exists(p + ".bad")
+        assert "\ufffd" in open(p + ".bad", encoding="utf-8").read()
+    finally:
+        gm.SAVE_PATH = old
+        for f in (p, p + ".bad", p + ".tmp"):
+            if os.path.exists(f):
+                os.remove(f)
+
+
 def test_real_file_save_load_bad_in_scratch():
     """store real (arquivo) apontado para o scratchpad: save, load, .bad."""
     p = os.path.join(SCRATCH, "robots_file_test.json")
@@ -874,6 +944,7 @@ def main():
             print("FAIL %s: %r" % (n, e))
             traceback.print_exc()
     print("\n%d ok, %d falhas" % (len(PASS), len(FAIL)))
+    shutil.rmtree(SCRATCH, ignore_errors=True)
     sys.exit(1 if FAIL else 0)
 
 
