@@ -208,6 +208,41 @@ def test_career_match_still_works_and_clears_sink():
     g.state = "menu"
 
 
+def test_robot_match_sink_return_state():
+    g.start_robot_match(robot_cfg("A"), robot_cfg("B"), lambda s, e: None)
+    assert g.match_sink[0] == "robots"
+    got = []
+    fn = lambda s, e: got.append((s, e, g.state))      # noqa: E731
+    g.start_robot_match(robot_cfg("A"), robot_cfg("B"), fn, return_state="campaign")
+    assert g.match_sink == ("campaign", fn)
+    g.score = [3, 1]
+    g.finish_career_match()
+    assert got == [([3, 1], [], "campaign")] or (got[0][0] == [3, 1] and got[0][2] == "campaign")
+    assert g.state == "campaign" and g.match_sink is None
+    g.state = "menu"
+
+
+def test_campaign_state_without_ui_does_not_break():
+    saved_ui = getattr(g, "campaign_ui", None)
+    g.campaign_ui = None                    # simula "sem UI" (o passo 8 criou a CampaignUI)
+    try:
+        g.state = "campaign"
+        g.draw()
+        assert g.state == "menu"
+        g.state = "campaign"
+        g.update(1 / 60)
+        assert g.state == "menu"
+        g.state = "campaign"
+        g.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_a))
+        assert g.state == "menu"
+        g.state = "campaign"
+        g.handle_event(pygame.event.Event(pygame.MOUSEMOTION, pos=(1, 1), rel=(0, 0), buttons=(0, 0, 0)))
+        assert g.state == "campaign"      # so tecla/clique volta ao menu (igual ao "robots")
+    finally:
+        g.campaign_ui = saved_ui
+        g.state = "menu"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

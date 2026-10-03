@@ -1156,6 +1156,84 @@ def test_career_double_click_same_frame_no_duplicate():
 
 
 # -------------------------------------------------------------------------- medição
+def test_subclass_hooks_persist_tabs_and_round_split():
+    gg = fresh(seed=5)
+
+    class Sub(robots_ui.RobotsUI):
+        def __init__(self, game):
+            super().__init__(game)
+            self.calls = 0
+            self.tabs = [("hub", "HISTORIA"), ("garage", "GARAGEM"), ("shop", "LOJA")]
+            self.hdr = self.body = 0
+
+        def persist(self):
+            self.calls += 1
+            return True
+
+        def draw_round_header(self, info):
+            self.hdr += 1
+            super().draw_round_header(info)
+
+        def draw_round_body(self, info):
+            self.body += 1
+            super().draw_round_body(info)
+
+    sub = Sub(g)
+    assert sub.screens == robots_ui.SCREENS and sub.frame_screens == robots_ui.FRAME_SCREENS
+    assert robots_ui.RobotsUI.__dict__.get("save") is None, "save() antigo não deve existir"
+    sub.garage = gg
+    real_set = gm._store_set
+
+    def boom(t):
+        raise AssertionError("garage.save() chamado direto fora de persist()")
+    gm._store_set = boom
+    try:
+        sub.go("hub")
+        sub.new_league()                                    # (a) liga
+        assert sub.calls == 1
+        sub.do_sim()                                        # rodada simulada
+        assert sub.calls >= 2 and sub.screen_id == "round"
+        n = sub.calls
+        assert sub.act((True, "ok")) and sub.calls == n + 1  # bancada/loja/garagem passam por act()
+        assert not sub.act((False, "no")) and sub.calls == n + 1
+        sub.do_new()                                        # há save: 1º clique só pede confirmação
+        assert sub.confirm_new and sub.calls == n + 1
+        sub.do_new()
+        assert sub.calls == n + 2
+        sub.to_menu()
+        assert sub.calls == n + 3
+        # (b) abas customizadas no cabeçalho
+        sub.garage = gg
+        sub.go("hub")
+        g.screen.fill((0, 0, 0))
+        sub.draw_frame()
+        labels = []
+        real_btn = sub.btn
+        sub.btn = lambda rect, label, *a, **k: (labels.append(label), real_btn(rect, label, *a, **k))[1]
+        sub.draw_frame()
+        sub.btn = real_btn
+        assert labels[:3] == ["HISTORIA", "GARAGEM", "LOJA"], labels
+        assert sub.tab_active("hub") and not sub.tab_active("shop")
+        sub.frame_screens = ("shop",)
+        sub.screen_id = "hub"
+        sub.draw()                                          # hub fora de frame_screens: sem cabeçalho
+        sub.frame_screens = robots_ui.FRAME_SCREENS
+        # (c) draw_round chama header e body
+        sub.go("hub")
+        sub.new_league()
+        sub.do_sim()
+        sub.hdr = sub.body = 0
+        sub.draw_round()
+        assert sub.hdr == 1 and sub.body == 1
+        sub.round_info = None
+        sub.draw_round()
+        assert sub.hdr == 1 and sub.body == 1, "sem info: nenhum dos dois"
+    finally:
+        gm._store_set = real_set
+    ui.garage = None
+    reset()
+
+
 def test_draw_ms_budget():
     new_game_open()
     out = {}

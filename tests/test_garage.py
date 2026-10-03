@@ -499,6 +499,59 @@ def test_no_global_rng():
     assert random.random() == expected
 
 
+# ----------------------------------------------------------------- opponent_team (kwargs aditivos)
+def _old_opponent_team(name, color, ovr, seed):
+    """Copia congelada da implementacao anterior (antes dos kwargs names/chassis/jitter/attr_override)."""
+    squad = []
+    for i, role in enumerate(rl.ROLES):
+        ch = robots.ROLE_CHASSIS[role]
+        squad.append({"name": "%s %d" % (name.split()[0][:8], i + 1), "role": role,
+                      "chassis": ch, "pid": None, "paint": None,
+                      "attrs": robots.from_overall(ovr, role, ch, seed=seed * 10 + i)})
+    return {"name": name, "color": tuple(color), "ovr": ovr, "seed": seed, "squad": squad}
+
+
+OPP_CASES = [("Turma 3B", (10, 20, 30), 38, 7), ("Fundao FC", (200, 100, 50), 39, 12345),
+             ("Clube do Xadrez", (1, 2, 3), 36, 1), ("Sakura Vacuum Club", (255, 0, 9), 55, 99)]
+OPP_FROZEN_SHA = "ce6900af4e0d60b4f4f30ddc128c9c71ae299525db57e387cdc0dae9292789d3"   # gerado ANTES da mudanca
+
+
+def test_opponent_team_default_identical():
+    import hashlib
+    got = [rl.opponent_team(*a) for a in OPP_CASES]
+    assert hashlib.sha256(repr(got).encode()).hexdigest() == OPP_FROZEN_SHA
+    for a in OPP_CASES:
+        old = _old_opponent_team(*a)
+        assert rl.opponent_team(*a) == old
+        assert rl.opponent_team(*a, names=None, chassis=None, jitter=True, attr_override=None) == old
+        cfg = rl.match_cfg(old)
+        assert rl.match_cfg({"name": a[0], "color": a[1], "ovr": a[2], "seed": a[3]}) == cfg
+        assert [e["pid"] for e in cfg["squad"]] == [None] * 5 and set(cfg["squad"][0]) == {
+            "name", "attrs", "chassis", "pid", "paint"}
+
+
+def test_opponent_team_new_kwargs():
+    names = ["LX-01", "LX-02", "LX-03", "LX-04", "LX-05"]
+    chs = ["Goleiro", "Tanque", "Disco", "Orbital", "Velocista"]
+    t = rl.opponent_team("Limpex", (255, 255, 255), 63, 5, names=names, chassis=chs)
+    assert [e["name"] for e in t["squad"]] == names and [e["chassis"] for e in t["squad"]] == chs
+    assert rl.opponent_team("Limpex", (1, 2, 3), 63, 5)["squad"][0]["name"] == "Limpex 1"
+    # jitter=False: identico entre seeds, igual a from_overall sem seed
+    a = rl.opponent_team("Limpex", (1, 2, 3), 63, 1, jitter=False)
+    b = rl.opponent_team("Limpex", (1, 2, 3), 63, 999, jitter=False)
+    assert [e["attrs"] for e in a["squad"]] == [e["attrs"] for e in b["squad"]]
+    for e, role in zip(a["squad"], rl.ROLES):
+        assert e["attrs"] == robots.from_overall(63, role, e["chassis"])
+    assert [e["attrs"] for e in a["squad"]] != [e["attrs"] for e in rl.opponent_team("Limpex", (1, 2, 3), 63, 1)["squad"]]
+    # attr_override com clamp 20..99
+    o = rl.opponent_team("Limpex", (1, 2, 3), 63, 1, attr_override={"bat": 150, "vel": 5})
+    assert all(e["attrs"]["bat"] == 99 and e["attrs"]["vel"] == 20 for e in o["squad"])
+    assert o["squad"][0]["attrs"]["def"] == rl.opponent_team("Limpex", (1, 2, 3), 63, 1)["squad"][0]["attrs"]["def"]
+    # match_cfg propaga nomes/chassis do time
+    cfg = rl.match_cfg(t)
+    assert [e["name"] for e in cfg["squad"]] == names and [e["chassis"] for e in cfg["squad"]] == chs
+
+
 def main():
     names = [n for n in globals() if n.startswith("test_")]
     want = sys.argv[1:]

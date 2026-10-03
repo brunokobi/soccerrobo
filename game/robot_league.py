@@ -36,14 +36,24 @@ TEAM_COLORS = (
 
 
 # --- oponentes ----------------------------------------------------------------------
-def opponent_team(name, color, ovr, seed):
-    """Time oponente independente da liga: {name,color,ovr,seed,squad:[5 dicts]}."""
+def opponent_team(name, color, ovr, seed, names=None, chassis=None, jitter=True, attr_override=None):
+    """Time oponente independente da liga: {name,color,ovr,seed,squad:[5 dicts]}.
+
+    Kwargs opcionais (default = comportamento antigo): names = 5 nomes de robo; chassis = 5 chassis;
+    jitter=False = atributos sem jitter (seed None no from_overall); attr_override = {attr: valor}
+    aplicado depois do calculo (clamp ATTR_MIN..ATTR_MAX).
+    """
     squad = []
     for i, role in enumerate(ROLES):
-        ch = robots.ROLE_CHASSIS[role]
-        squad.append({"name": "%s %d" % (name.split()[0][:8], i + 1), "role": role,
-                      "chassis": ch, "pid": None, "paint": None,
-                      "attrs": robots.from_overall(ovr, role, ch, seed=seed * 10 + i)})
+        ch = chassis[i] if chassis else robots.ROLE_CHASSIS[role]
+        nm = names[i] if names else "%s %d" % (name.split()[0][:8], i + 1)
+        attrs = robots.from_overall(ovr, role, ch, seed=(seed * 10 + i) if jitter else None)
+        if attr_override:
+            for a, v in attr_override.items():
+                if a in attrs:
+                    attrs[a] = int(max(robots.ATTR_MIN, min(robots.ATTR_MAX, v)))
+        squad.append({"name": nm, "role": role, "chassis": ch, "pid": None, "paint": None,
+                      "attrs": attrs})
     return {"name": name, "color": tuple(color), "ovr": ovr, "seed": seed, "squad": squad}
 
 
@@ -53,7 +63,7 @@ def match_cfg(team):
                                                    team["ovr"], team["seed"])
     return {"name": t["name"], "color": tuple(t["color"]),
             "squad": [{"name": e["name"], "attrs": dict(e["attrs"]), "chassis": e["chassis"],
-                       "pid": None, "paint": e["paint"]} for e in t["squad"]]}
+                       "pid": e.get("pid"), "paint": e["paint"]} for e in t["squad"]]}
 
 
 # --- calendario ---------------------------------------------------------------------

@@ -63,6 +63,10 @@ class RobotsUI(CareerUI):
         self.team_name = TEAM_NAMES[0]
         self.confirm_new = False
         self.menu_msg = ""
+        # Ganchos para subclasses (ex.: CampaignUI troca a aba LIGA por HISTÓRIA); defaults = constantes
+        self.tabs = list(TABS)
+        self.frame_screens = tuple(FRAME_SCREENS)
+        self.screens = tuple(SCREENS)
         self.reset_ui()
 
     # ------------------------------------------------------------ navegação
@@ -104,7 +108,7 @@ class RobotsUI(CareerUI):
     def to_menu(self):
         """Sai para o menu principal do jogo (salva antes se há garagem aberta)."""
         if self.garage is not None and self.screen_id != "menu":
-            self.save()
+            self.persist()
         self.g.refresh_robots_status()
         self.g.state = "menu"
         self.screen_id = "menu"
@@ -118,7 +122,8 @@ class RobotsUI(CareerUI):
         if screen == "garage" and self.garage is not None and self.garage.robot(self.sel) is None:
             self.sel = self.garage.lineup[0] if self.garage.lineup else None
 
-    def save(self):
+    def persist(self):
+        """Único ponto de gravação do modo (subclasses podem sobrescrever)."""
         if self.garage is not None and self.garage.save():
             self.g.refresh_robots_status()
             return True
@@ -131,7 +136,7 @@ class RobotsUI(CareerUI):
         ok, self.msg = result
         self.cache = None
         if ok:
-            self.save()
+            self.persist()
         return ok
 
     def info(self):
@@ -169,7 +174,7 @@ class RobotsUI(CareerUI):
         self.garage = gg
         self.cache = None
         self.go("hub")
-        self.save()
+        self.persist()
         self.status = "ok"
         self.confirm_new = False
 
@@ -200,7 +205,7 @@ class RobotsUI(CareerUI):
             elif self.place_mode:
                 self.place_mode = False
                 self.msg = ""
-            elif sid in FRAME_SCREENS:
+            elif sid in self.frame_screens:
                 self.to_menu()
             elif sid == "bench":
                 self.bench_back()
@@ -215,7 +220,7 @@ class RobotsUI(CareerUI):
     def draw(self):
         self.g.screen.fill(BG)
         self.buttons = []
-        if self.screen_id in FRAME_SCREENS or self.screen_id == "bench":
+        if self.screen_id in self.frame_screens or self.screen_id == "bench":
             self.draw_frame()
         getattr(self, "draw_" + self.screen_id)()
 
@@ -270,11 +275,14 @@ class RobotsUI(CareerUI):
         self.text("Sucata: %d" % gg.scrap, 34, GOLD, midright=(W - 20, 26), shadow=True)
         self.text("Força do time: %d" % int(round(self.info()["rating"])), 24, DIM,
                   midright=(W - 20, 55))
-        for i, (tid, label) in enumerate(TABS):
+        for i, (tid, label) in enumerate(self.tabs):
             self.btn((20 + i * 160, 82, 150, 40), label, lambda t=tid: self.go(t),
-                     color=(50, 160, 220) if (self.screen_id == tid or (
-                         tid == "garage" and self.screen_id == "bench")) else (16, 44, 70), size=26)
+                     color=(50, 160, 220) if self.tab_active(tid) else (16, 44, 70), size=26)
         self.btn((W - 210, 82, 190, 40), "SALVAR E SAIR", self.to_menu, color=(70, 60, 60), size=24)
+
+    def tab_active(self, tid):
+        """A aba tid está ativa na tela atual? (a bancada destaca GARAGEM)"""
+        return self.screen_id == tid or (tid == "garage" and self.screen_id == "bench")
 
     # ================================================================ LOJA
     def set_shop_tab(self, t):
@@ -473,7 +481,7 @@ class RobotsUI(CareerUI):
         RL.new_league(gg, gg.tier(), self.rng)
         self.pending = None
         self.msg = ""
-        self.save()
+        self.persist()
 
     def user_strength(self):
         return self.info()["rating"]
@@ -548,7 +556,7 @@ class RobotsUI(CareerUI):
                       for e in events],
             "equipped": eq, "rating": self.info()["rating"], "base": base,
         }
-        self.save()
+        self.persist()
         self.screen_id = "round"
         self.place_mode = False
         self.editing = False
@@ -570,7 +578,7 @@ class RobotsUI(CareerUI):
             res["rows"] = [(r["idx"] == RL.USER, r["name"], r["color"], r["pts"], r["p"], r["gd"]) for r in rows]
             self.end_info = res
             self.cache = None
-            self.save()
+            self.persist()
         if self.end_info is None:
             return self.go("hub")
         self.screen_id = "league_end"
@@ -670,6 +678,12 @@ class RobotsUI(CareerUI):
             self.text("Sem resultado para mostrar.", 28, DIM, center=(W // 2, 300))
             self.btn((W // 2 - 130, 650, 260, 42), "CONTINUAR", lambda: self.go("hub"), size=30)
             return
+        self.draw_round_header(info)
+        self.draw_round_body(info)
+
+    def draw_round_header(self, info):
+        """Título, placar e resultado (trecho específico da liga)."""
+        scr = self.g.screen
         th, ta = info["teams"]
         self.text("RODADA %d/%d%s" % (info["round"], RL.ROUNDS, "  (simulada)" if info["sim"] else ""),
                   40, TEXT, center=(W // 2, 34), shadow=True)
@@ -682,6 +696,12 @@ class RobotsUI(CareerUI):
         rew = info["rew"]
         res = {"w": ("VITÓRIA", GREEN), "d": ("EMPATE", GOLD), "l": ("DERROTA", RED)}[rew["result"]]
         self.text(res[0], 22, res[1], center=(W // 2, 148))
+
+    def draw_round_body(self, info):
+        """Gols, recompensas, XP e botão CONTINUAR."""
+        scr = self.g.screen
+        th, ta = info["teams"]
+        rew = info["rew"]
         # gols
         self.panel((20, 172, 520, 222))
         self.text("GOLS", 22, GOLD, topleft=(38, 180))

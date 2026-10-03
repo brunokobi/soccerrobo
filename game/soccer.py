@@ -12,6 +12,8 @@ import pygame
 from pygame import Vector2 as V
 
 import robots
+from campaign import Campaign
+from campaign_ui import CampaignUI
 from career import Career
 from career_ui import CareerUI
 from garage import Garage
@@ -224,12 +226,22 @@ class Game:
         self.robots_status = "none"               # cache de Garage.load_status() (nao ler o store a cada frame)
         self.refresh_robots_status()
         self.robots_ui = RobotsUI(self)
+        self.campaign_status = "none"             # cache de Campaign.load_status() (nunca lido por frame)
+        self.refresh_campaign_status()
+        self.campaign_ui = CampaignUI(self)
         self.new_match(1)
         self.state = "menu"
 
     # ------------------------------------------------------------------ setup
     def refresh_robots_status(self):
         self.robots_status = Garage.load_status()
+
+    def refresh_campaign_status(self):
+        self.campaign_status = Campaign.load_status()
+
+    def campaign_btn(self):
+        """Botao 6 do menu: terceira linha, larga (nao altera os botoes 1-5)."""
+        return pygame.Rect(W // 2 - 330, 535, 660, 70)
 
     def robots_btn(self):
         """Botao 5 do menu: ao lado do 4 se ha save de carreira, senao centralizado."""
@@ -265,13 +277,13 @@ class Game:
         self.match_sink = None
         self._begin_match(home, away)
 
-    def start_robot_match(self, home, away, on_done, tuning=robots.TUNING_ROBOTS):
+    def start_robot_match(self, home, away, on_done, tuning=robots.TUNING_ROBOTS, return_state="robots"):
         """Partida automática do modo robôs. home/away = {"name","color","squad":[5 dicts]}.
 
-        Ao terminar chama on_done(score, events) e volta ao estado "robots".
+        Ao terminar chama on_done(score, events) e volta ao estado return_state ("robots" por padrao).
         """
         self._begin_match(home, away, tuning)
-        self.match_sink = ("robots", on_done)
+        self.match_sink = (return_state, on_done)
 
     def _begin_match(self, home, away, tuning=None):
         self.mode = 0
@@ -355,6 +367,13 @@ class Game:
             if e.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN):   # sem UI ainda: volta ao menu
                 self.state = "menu"
             return
+        if self.state == "campaign":
+            ui = getattr(self, "campaign_ui", None)
+            if ui is not None:
+                return ui.handle_event(e)
+            if e.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN):   # sem UI: volta ao menu
+                self.state = "menu"
+            return
         if e.type == pygame.KEYDOWN:
             if self.state == "menu":
                 if e.key == pygame.K_1:
@@ -367,6 +386,8 @@ class Game:
                     self.career_ui.open_saved()
                 elif e.key == pygame.K_5:
                     self.robots_ui.open()
+                elif e.key == pygame.K_6:
+                    self.campaign_ui.open()
             elif self.career_match:
                 if e.key in (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4):
                     self.speed_idx = e.key - pygame.K_1
@@ -395,6 +416,8 @@ class Game:
                     self.career_ui.open_saved()
                 elif self.robots_btn().collidepoint(e.pos):
                     self.robots_ui.open()
+                elif self.campaign_btn().collidepoint(e.pos):
+                    self.campaign_ui.open()
             elif self.career_match:
                 if self.state == "over":
                     self.finish_career_match()
@@ -411,6 +434,12 @@ class Game:
             return self.career_ui.update(dt)
         if self.state == "robots":
             ui = getattr(self, "robots_ui", None)
+            if ui is None:
+                self.state = "menu"
+                return
+            return ui.update(dt)
+        if self.state == "campaign":
+            ui = getattr(self, "campaign_ui", None)
             if ui is None:
                 self.state = "menu"
                 return
@@ -1133,6 +1162,11 @@ class Game:
             if ui is not None:
                 return ui.draw()
             self.state = "menu"
+        if self.state == "campaign":
+            ui = getattr(self, "campaign_ui", None)
+            if ui is not None:
+                return ui.draw()
+            self.state = "menu"
         if self.state == "menu":
             scr.blit(self.menu_bg, (0, 0))
             return self.draw_menu()
@@ -1297,7 +1331,15 @@ class Game:
         self.text("5 - MODO ROBÔS", 32, (255, 255, 255), center=(r.centerx, r.centery - 12))
         self.text("continuar" if self.robots_status == "ok" else "equipe de robôs, peças e liga", 22,
                   (190, 245, 232), center=(r.centerx, r.centery + 18), shadow=False)
-        self.text("clique ou aperte 1 / 2 / 3 / 4 / 5" if self.has_save else "clique ou aperte 1 / 2 / 3 / 5", 28, (200, 225, 235), center=(cx, 570))
+        r = self.campaign_btn()
+        hover = r.collidepoint(mx, my)
+        pygame.draw.rect(scr, (110, 70, 160) if hover else (56, 36, 100), r, border_radius=14)
+        pygame.draw.rect(scr, (210, 170, 255) if hover else (150, 110, 220), r, 3, border_radius=14)
+        self.text("6 - CAMPANHA", 32, (255, 255, 255), center=(r.centerx, r.centery - 12))
+        self.text("continuar" if self.campaign_status == "ok" else "a história de Téo e do Zé Poeira", 22,
+                  (225, 210, 250), center=(r.centerx, r.centery + 18), shadow=False)
+        self.text("clique ou aperte 1 / 2 / 3 / 4 / 5 / 6" if self.has_save else "clique ou aperte 1 / 2 / 3 / 5 / 6",
+                  28, (200, 225, 235), center=(cx, 640))
 
 
 async def main():
