@@ -116,6 +116,28 @@ def new_campaign_open():
     assert ui.screen_id == "map" and ui.campaign is not None
 
 
+class drafted:
+    """Marca capitulos REAIS como draft (copia profunda de story.CHAPTERS; restaurada ao sair): os testes
+    de comportamento "draft" nao dependem do conteudo real em producao."""
+
+    def __init__(self, *ids):
+        self.ids = ids
+
+    def __enter__(self):
+        import copy
+        self.orig = story.CHAPTERS
+        chs = copy.deepcopy(story.CHAPTERS)
+        for c in chs:
+            if c["id"] in self.ids:
+                c["draft"], c["nodes"], c["reward"] = True, [], None
+        story.CHAPTERS = chs
+        return self
+
+    def __exit__(self, *a):
+        story.CHAPTERS = self.orig
+        return False
+
+
 def force_to(camp, target_ch):
     """Joga a campanha (API pura) ate o capitulo target_ch (vitorias forcadas)."""
     for _ in range(400):
@@ -344,15 +366,16 @@ def test_map_start_mid_and_draft():
     assert ui.chapter_state(story.CHAPTERS[0]) == "done"
     assert ui.chapter_state(story.CHAPTERS[1]) == "current"
     shot("map_cap1")
-    force_to(ui.campaign, "2")
-    ui.go("map")
-    frame()
-    assert ui.chapter_state(story.CHAPTERS[1]) == "done"
-    assert ui.chapter_state(story.CHAPTERS[2]) == "current" and story.CHAPTERS[2].get("draft")
-    assert ui.map_act["kind"] == "end" and ui.map_act["draft"]
-    assert ("em breve", 18, (255, 214, 90)) in g.text_cache
-    shot("map_cap1_done")
-    ui.to_menu()
+    with drafted("2", "3", "4", "5"):                    # cap. draft sintetico (conteudo real ja existe)
+        force_to(ui.campaign, "2")
+        ui.go("map")
+        frame()
+        assert ui.chapter_state(story.CHAPTERS[1]) == "done"
+        assert ui.chapter_state(story.CHAPTERS[2]) == "current" and story.CHAPTERS[2].get("draft")
+        assert ui.map_act["kind"] == "end" and ui.map_act["draft"]
+        assert ("em breve", 18, (255, 214, 90)) in g.text_cache
+        shot("map_cap1_done")
+        ui.to_menu()
 
 
 def test_map_pulse_uses_counter_and_is_deterministic():
@@ -472,12 +495,13 @@ def test_stub_screens_and_back():
     frame()
     ui.back_to_map()
     camp.advance_chapter()
-    ui.go("map")
-    ui.do_story()
-    assert ui.screen_id == "ending"
-    frame()
-    shot("stub_ending")
-    ui.back_to_map()
+    with drafted("2", "3", "4", "5"):                  # tela "ending" (draft) com capitulo sintetico
+        ui.go("map")
+        ui.do_story()
+        assert ui.screen_id == "ending"
+        frame()
+        shot("stub_ending")
+        ui.back_to_map()
     ui.to_menu()
 
 
@@ -805,7 +829,26 @@ def states():
             "dialog_pause", "dialog_confirm", "tourney", "chapter_end", "ending"] + P10_STATES
 
 
+_HELD = []
+
+
+def release_draft():
+    while _HELD:
+        _HELD.pop().__exit__()
+
+
+def hold_draft():
+    """Mantem capitulos draft sinteticos ativos durante um estado (ate o proximo reset/setup)."""
+    release_draft()
+    d = drafted("2", "3", "4", "5")
+    d.__enter__()
+    _HELD.append(d)
+
+
 def setup_state(name):
+    release_draft()
+    if name in ("map_draft", "ending", "ending_draft", "ending_done"):
+        hold_draft()
     if name in P10_STATES:
         return setup_p10(name)
     if name.startswith("menu"):
@@ -903,6 +946,7 @@ def test_60_frames_every_screen_zero_surface_and_cache():
         assert len(g.text_cache) <= soccer.TEXT_CACHE_MAX
         assert not FORBIDDEN
         ui.to_menu()
+    release_draft()
     # menu principal (com campanha salva) tambem
     reset(save=cm.new_campaign(__import__("random").Random(1)).to_json())
     pygame.Surface = Counting
@@ -935,6 +979,7 @@ def test_draw_time_budget():
             g.draw()
         out[name] = (time.perf_counter() - t) / 100 * 1000
         ui.to_menu()
+    release_draft()
     print("draw_ms:", {k: round(v, 2) for k, v in out.items()})
     for k, v in out.items():
         if v >= 3.0:
@@ -1051,12 +1096,50 @@ def test_flow_prologue_cap1_all_simulated_by_clicks():
     assert any(r["name"] == "Gambiarra" for r in cp.garage.robots)
     assert "Tanque" in cp.garage.unlocked and cp.garage.stats["played"] == 6
     ui.map_act = cp.next_action()
-    assert ui.map_act == {"kind": "end", "draft": True}
+    assert ui.map_act["kind"] == "scene" and ui.map_act["id"] == "c2_intro", ui.map_act["kind"]
+    with drafted("2", "3", "4", "5"):
+        assert cp.next_action() == {"kind": "end", "draft": True}
     saved = cm.Campaign.load()
-    # capitulo 2 ainda e esqueleto (draft): Campaign.save recusa estado em capitulo draft e preserva o save
-    # anterior (chapter_end do Cap.1); quando o Cap.2 existir, o save sera "2".
     assert saved.ch in ("1", "2") and "c1_end" in saved.done
     assert not FORBIDDEN and set(CAMP) == {"save"}
+    ui.to_menu()
+
+
+def test_flow_full_campaign_by_clicks_reaches_ending():
+    """Autoplay por cliques P->1->2->3->4->5 + epilogo: cobre TODAS as cenas jogaveis e termina na tela
+    "ending" com a campanha concluida (cena e1_epilogo jogada, 1 titulo, 3 recrutas)."""
+    fresh_campaign(5)
+    seen = set()
+    for _ in range(6000):
+        frame()
+        seen.add(ui.screen_id)
+        if ui.screen_id == "ending":
+            break
+        sid = ui.screen_id
+        if sid == "map":
+            click_rect(MAP_CONT)
+        elif sid == "dialog":
+            dialog_step()
+        elif sid == "tourney":
+            SIMQ.append((2, 0))
+            click_rect(BTN_SIM)
+        elif sid == "round":
+            click_rect(ROUND_CONT)
+        elif sid == "chapter_end":
+            click_rect(CE_CONT)
+        else:
+            raise AssertionError("tela inesperada " + sid)
+    else:
+        raise AssertionError("autoplay nao chegou ao ending")
+    cp = ui.campaign
+    assert ui.end_view["draft"] is False and cp.next_action() == {"kind": "end", "draft": False}
+    assert cp.garage.stats["titles"] == 1 and "e1_epilogo" in cp.done and "c5_antidoping" in cp.done
+    assert {"Gambiarra", "Pixelado", "Majestade"} <= {r["name"] for r in cp.garage.robots}
+    allsc = {k for k in cp.done if k in story.SCENES}
+    assert len(allsc) >= 40, len(allsc)
+    assert not FORBIDDEN
+    saved = cm.Campaign.load()
+    assert saved is not None and saved.ch == "5" and "e1_epilogo" in saved.done
     ui.to_menu()
 
 
@@ -1349,6 +1432,12 @@ def test_chapter_end_report_and_full_squad_warning():
 
 def test_ending_draft_and_completed():
     fresh_campaign()
+    with drafted("2", "3", "4", "5"):
+        _ending_draft_body()
+    ui.to_menu()
+
+
+def _ending_draft_body():
     force_to(ui.campaign, "2")
     ui.go("map")
     ui.do_story()
@@ -1435,6 +1524,156 @@ def setup_p10(name):
         finally:
             cm.shootout = REAL_SHOOT
         assert ui.screen_id == "round", name
+
+
+def test_shop_texts_talk_about_matches_not_league():
+    fresh_campaign()
+    ui.go("shop")
+    g.text_cache.clear()
+    for _ in range(3):
+        frame()
+    assert text_cache_has("Reposta a cada partida")
+    ui.garage.shop["stock"] = []
+    frame()
+    assert text_cache_has("reposta a cada partida")
+    for k in g.text_cache:
+        low = k[0].lower()
+        assert "liga" not in low and "rodada" not in low, k[0]
+    ui.go("garage")
+    g.text_cache.clear()
+    frame()
+    for k in g.text_cache:
+        assert "liga" not in k[0].lower() and "rodada" not in k[0].lower(), k[0]
+    ui.to_menu()
+
+
+def test_garage_shows_recommended_force_line_and_training_button():
+    fresh_campaign()
+    ui.go("garage")
+    g.text_cache.clear()
+    frame()
+    ch = ui.campaign.chapter()
+    line = [k[0] for k in g.text_cache if k[0].startswith("Capítulo ") and "Força recomendada" in k[0]]
+    assert len(line) == 1, line
+    assert line[0].startswith("Capítulo %s:" % ch["id"]) and "Sua Força %d" % int(round(ui.info()["rating"])) in line[0]
+    assert ui.g.font(20).size(line[0])[0] <= 700
+    assert click_label_rect(lambda r: r == pygame.Rect(510, 82, 150, 40))        # TREINO na garagem
+    assert ui.screen_id == "training"
+    assert click_label_rect(lambda r: r == pygame.Rect(250, 610, 600, 42))       # VOLTAR
+    assert ui.screen_id == "garage"
+    assert not FORBIDDEN
+    ui.to_menu()
+
+
+def test_replaced_reserve_warning_stays_on_map_until_ok():
+    fresh_campaign()
+    drive_until(at_match("t_c1", "F"))
+    gg = ui.campaign.garage
+    while len(gg.robots) < gm.MAX_SQUAD:
+        gg.robots.append(gg.make_robot("Extra%d" % len(gg.robots), "MID", "Disco", 40))
+    drive_until(lambda: ui.screen_id == "chapter_end" and ui.campaign.ch == "1")
+    assert ui.ce_view["warnings"]
+    click_rect(CE_CONT)
+    assert ui.screen_id == "map"
+    assert any("Elenco cheio" in n for n in ui.notices)
+    g.text_cache.clear()
+    frame()
+    assert text_cache_has("Elenco cheio")
+    ui.go("garage")
+    ui.go("map")
+    assert any("Elenco cheio" in n for n in ui.notices)              # sobrevive a navegacao
+    assert click_label_rect(lambda r: r.size == (120, 34) and r.topleft == (704, 634))     # OK
+    assert ui.notices == []
+    ui.to_menu()
+
+
+def test_failed_persist_shows_notice_on_map():
+    fresh_campaign()
+    real_set = cm._store_set
+    cm._store_set = lambda t: False
+    try:
+        assert ui.persist() is False
+        assert any("Não foi possível salvar" in n for n in ui.notices)
+        ui.notices = []
+        ui.warned = set()
+        real_ch = ui.campaign.chapter
+        ui.campaign.chapter = lambda: dict(real_ch(), draft=True)
+        assert ui.persist() is False
+        assert any("Progresso salvo no início do capítulo" in n for n in ui.notices)
+        assert ui.msg == "Progresso salvo no início do capítulo."
+        n = len(ui.notices)
+        ui.persist()
+        assert len(ui.notices) == n                                  # sem duplicar
+        ui.go("map")
+        g.text_cache.clear()
+        frame()
+        assert text_cache_has("Progresso salvo")
+        click_rect((704, 634, 120, 34))
+        assert ui.notices == []
+        ui.persist()
+        assert ui.notices == []                                      # ja avisado: nao repete
+        del ui.campaign.chapter
+    finally:
+        cm._store_set = real_set
+    ui.to_menu()
+
+
+def test_esc_and_double_click_on_campaign_tabs():
+    fresh_campaign()
+    ui.go("shop")
+    ui.confirm_sell = 99
+    key(pygame.K_ESCAPE)
+    assert ui.screen_id == "shop" and ui.confirm_sell is None
+    key(pygame.K_ESCAPE)
+    assert ui.screen_id == "map"
+    ui.go("garage")
+    ui.place_mode = True
+    key(pygame.K_ESCAPE)
+    assert ui.screen_id == "garage" and not ui.place_mode
+    ui.open_bench()
+    assert ui.screen_id == "bench"
+    key(pygame.K_ESCAPE)
+    assert ui.screen_id == "garage"
+    frame()
+    for _ in range(2):                                               # clique duplo no mesmo quadro
+        click((20 + 2 * 160 + 5, 87))
+    assert ui.screen_id == "shop"
+    key(pygame.K_ESCAPE)
+    key(pygame.K_ESCAPE)
+    assert g.state == "menu" and not FORBIDDEN
+
+
+def test_campaign_garage_never_replaced_and_only_campaign_key_written():
+    fresh_campaign()
+    cp = ui.campaign
+    mine = cp.garage
+    other = gm.new_game(random.Random(5)) if hasattr(gm, "new_game") else gm.Garage()
+    ui.garage = other                                                # setter ignorado
+    assert ui.garage is mine and ui.campaign.garage is mine
+    g.robots_ui.garage = other
+    assert ui.garage is mine
+    real_save = gm.Garage.save
+    gm.Garage.save = _forbid("Garage.save")
+    try:
+        before = CAMP.get("save")
+        mine.scrap += 500
+        ui.go("shop")
+        frame()
+        pc = next(iter(mine.shop["stock"]), None)
+        if pc is not None:
+            ui.pick_shop(pc["id"])
+            ui.do_buy_part()
+        ui.go("garage")
+        ui.do_auto()
+        ui.open_bench()
+        frame()
+        ui.persist()
+        assert CAMP.get("save") and CAMP["save"] != before
+    finally:
+        gm.Garage.save = real_save
+    assert not FORBIDDEN
+    assert g.robots_ui.garage is not mine
+    ui.to_menu()
 
 
 if __name__ == "__main__":

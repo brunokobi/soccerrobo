@@ -371,7 +371,7 @@ def test_tournaments():
 def test_rewards():
     recruits = 0
     for rid, r in st.REWARDS.items():
-        assert set(r) <= {"scrap", "piece", "recruits", "unlock", "xp_hero", "xp_team", "equip_hero_piece"}
+        assert set(r) <= {"scrap", "piece", "recruits", "unlock", "xp_hero", "xp_team", "equip_hero_piece", "title"}
         for k in ("scrap", "xp_hero", "xp_team"):
             assert isinstance(r.get(k, 0), int) and 0 <= r.get(k, 0) <= 1000
         for k in ("piece", "equip_hero_piece"):
@@ -418,11 +418,13 @@ def test_chapters_structure():
                 assert ref in st.TOURNAMENTS and st.TOURNAMENTS[ref]["chapter"] == c["id"]
         last = c["nodes"][-1]
         assert last[0] in ("chapter_end", "end"), c["id"]
-        assert kinds.count("chapter_end") + kinds.count("end") == 1
-        if last[0] == "chapter_end":
-            assert last[1] == c["id"]
+        # capitulo normal: 1 chapter_end no fim; o ULTIMO da campanha: chapter_end seguido de end
+        assert kinds.count("chapter_end") == 1 and kinds.count("end") <= 1, c["id"]
         if last[0] == "end":
             assert c is st.CHAPTERS[-1], "so o ultimo capitulo pode terminar com end"
+            assert c["nodes"][-2] == ("chapter_end", c["id"]), "end deve vir logo apos o chapter_end"
+        else:
+            assert last == ("chapter_end", c["id"])
     # o ultimo capitulo nao-draft so pode terminar com "end" se for o ultimo de todos
     nd = chapters()
     if nd[-1] is st.CHAPTERS[-1]:
@@ -452,8 +454,8 @@ def test_budget_sanity():
     n = len(st.SCENES)
     lines = sum(len([i for k, i in items(s) if k == "line"]) for s in st.SCENES.values())
     chars = sum(len(ln[2]) for s in st.SCENES.values() for ln in all_lines(s))
-    assert 12 <= n <= 60, n
-    assert 100 <= lines <= 600, lines
+    assert 12 <= n <= 80, n
+    assert 100 <= lines <= 800, lines
     assert st.STORY_VERSION == 1
     print("  (cenas=%d falas-principais=%d falas-total=%d caracteres=%d)" % (
         n, lines, sum(len(all_lines(s)) for s in st.SCENES.values()), chars))

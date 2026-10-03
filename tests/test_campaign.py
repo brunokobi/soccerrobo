@@ -31,6 +31,28 @@ for _m, _n in ((gm, "_store_set"), (gm, "_store_set_bad"), (career, "_store_set"
         setattr(_m, _n, _boom)
 
 
+class drafted:
+    """Context manager: marca capitulos REAIS como draft (copia profunda de story.CHAPTERS, restaurada ao
+    sair). Os testes de comportamento de capitulo draft nao dependem do conteudo real em draft."""
+
+    def __init__(self, *ids):
+        self.ids = ids
+
+    def __enter__(self):
+        import copy as _copy
+        self.orig = story.CHAPTERS
+        chs = _copy.deepcopy(story.CHAPTERS)
+        for c in chs:
+            if c["id"] in self.ids:
+                c["draft"], c["nodes"], c["reward"] = True, [], None
+        story.CHAPTERS = chs
+        return self
+
+    def __exit__(self, *a):
+        story.CHAPTERS = self.orig
+        return False
+
+
 def new(seed=1):
     return cm.new_campaign(random.Random(seed))
 
@@ -179,8 +201,9 @@ def test_chapter1_walk_and_conditions():
     assert rep["scrap"] == 120 and rep["recruits"] == ["Gambiarra"] and "Tanque" in rep["unlocked"]
     assert "Tanque" in c.garage.unlocked and c.garage.tier_done == 0
     assert c.advance_chapter() == "2"
-    assert c.next_action() == {"kind": "end", "draft": True}
-    assert c.advance_chapter() is None
+    with drafted("2"):                                      # cap. draft sintetico: fim "draft"
+        assert c.next_action() == {"kind": "end", "draft": True}
+        assert c.advance_chapter() is None                  # nao esta no chapter_end
 
 
 def test_shootout():
@@ -526,6 +549,140 @@ def test_autoplay_sim_many_seeds_terminates():
         counts.append(n)
     assert max(counts) <= 40
     print("     partidas por campanha (sim): media %.1f, max %d" % (sum(counts) / len(counts), max(counts)))
+
+
+def full_run(seed, policy, save_each_chapter=False):
+    """Joga a campanha INTEIRA (P->1->2->3->4->5->epilogo) pela API pura. policy: "sim" (simulate_current),
+    "win" (sempre vence 2x0) ou "pity" (perde a final ate o pity zerar o chefe, vence o resto).
+    Devolve (campanha, n_partidas, [saves round-trip por capitulo])."""
+    rng = random.Random(seed)
+    c = new(500 + seed)
+    n, ends, rounds = 0, 0, []
+    for _ in range(4000):
+        a = c.next_action()
+        k = a["kind"]
+        if k == "scene":
+            has_choice = any(isinstance(i, dict) for i in c.scene_lines(a["id"]))
+            c.finish_scene(a["id"], rng.randrange(2) if has_choice else None)
+        elif k == "match":
+            n += 1
+            if policy == "sim":
+                c.simulate_current()
+            elif policy == "win" or a["stage"] != "F":
+                c.record_match(2, 0)
+            else:                                           # final: perde ate o pity chegar ao maximo
+                if c.pity < story.PITY_MAX:
+                    c.record_match(0, 1)
+                else:
+                    c.record_match(1, 0)
+        elif k == "chapter_end":
+            rep = c.next_action()["report"]
+            assert rep["applied"] is False                  # idempotente: a segunda leitura nao reaplica
+            if save_each_chapter:
+                rounds.append(check_roundtrip(c))
+            nxt = c.advance_chapter()
+            assert nxt is not None
+            if nxt == cm.END_ID:
+                assert c.chapter()["nodes"][c.node][0] == "end"
+        elif k == "end":
+            ends += 1
+            assert a == {"kind": "end", "draft": False}
+            break
+        else:
+            raise AssertionError(k)
+        if save_each_chapter and k == "match" and c.tour and c.tour["stage"] == "SF":
+            rounds.append(check_roundtrip(c))              # meio de cada capitulo (antes da semifinal)
+    else:
+        raise AssertionError("laco infinito")
+    assert ends == 1
+    return c, n, rounds
+
+
+def check_roundtrip(c):
+    d = c.to_dict()
+    c2 = cm.Campaign.from_dict(copy_json(d))
+    assert c2 is not None and c2.to_dict() == d, "save/load nao preservou o estado"
+    assert c2.next_action()["kind"] == c.next_action()["kind"]
+    return c.ch
+
+
+def copy_json(d):
+    import json
+    return json.loads(json.dumps(d))
+
+
+def check_final_state(c):
+    g = c.garage
+    assert c.next_action() == {"kind": "end", "draft": False}
+    assert all(not ch.get("draft") for ch in story.CHAPTERS)
+    assert g.stats["titles"] == 1, g.stats
+    names = {r["name"] for r in g.robots}
+    assert {"Gambiarra", "Pixelado", "Majestade"} <= names and len(g.robots) == gm.MAX_SQUAD
+    assert sum(len(story.REWARDS[x].get("recruits", ())) for x in story.REWARDS) == 3
+    for ch in story.CHAPTERS:                               # todas as recompensas aplicadas, uma vez
+        assert ("reward:%s" % ch["reward"]) in c.done and c.done.count("reward:%s" % ch["reward"]) == 1
+    # rewards idempotentes: reaplicar nao muda nada
+    before = c.to_dict()
+    for ch in story.CHAPTERS:
+        assert c.apply_chapter_rewards(ch["id"])["applied"] is False
+    assert c.to_dict() == before and g.stats["titles"] == 1
+    assert {"Tanque", "Velocista", "Goleiro", "Titã"} <= set(g.unlocked)
+    hero = g.robot(c.hero)                                   # "Chip do Vovo" (Lendaria) equipado no heroi
+    pb = g.pieces_by_id()
+    assert any(pb[pid]["model"] == "Chip de CPU" and pb[pid]["rar"] == 3
+               for pid in hero["slots"].values() if pid is not None)
+
+
+def test_full_campaign_autoplay_all_policies():
+    """Autoplay COMPLETO P->1->2->3->4->5 (varias seeds; sim aleatorio, sempre vence, perde a final
+    ate o pity): termina em kind=="end" (draft False) sem erro."""
+    tot = {}
+    for policy, seeds in (("sim", range(12)), ("win", range(3)), ("pity", range(3))):
+        for seed in seeds:
+            c, n, _ = full_run(seed, policy)
+            check_final_state(c)
+            assert c.ch == "5" and c.chapter()["nodes"][c.node] == ("end", "e1_epilogo")
+            tot.setdefault(policy, []).append(n)
+    for p, v in tot.items():
+        print("     autoplay %s: partidas media %.1f max %d" % (p, sum(v) / len(v), max(v)))
+    # sempre vence: 1 treino + 5+5+5+5 + 6 = 1 + 20 + 6 = 27 partidas
+    assert set(tot["win"]) == {27}, tot["win"]
+
+
+def test_full_campaign_save_load_every_chapter():
+    for seed in range(3):
+        c, n, rounds = full_run(seed, "sim", save_each_chapter=True)
+        check_final_state(c)
+        assert {"1", "2", "3", "4", "5"} <= set(rounds), rounds
+
+
+def test_advance_chapter_last_chapter_enters_end_node():
+    c, _, _ = full_run(1, "win")
+    # fim: node no ("end"), cena ja jogada -> {"kind":"end","draft":False}; advance_chapter nao esta no chapter_end
+    assert c.advance_chapter() is None
+    # reconstroi o estado "chapter_end" do ultimo capitulo e confere o valor documentado
+    c2 = new(7)
+    c2.ch = "5"
+    c2.node = [k for k, _ in story.CHAPTERS[-1]["nodes"]].index("chapter_end")
+    assert c2.advance_chapter() == cm.END_ID == "END"
+    assert story.CHAPTERS[-1]["nodes"][c2.node] == ("end", "e1_epilogo")
+    a = c2.next_action()
+    assert a["kind"] == "scene" and a["id"] == "e1_epilogo"
+    c2.finish_scene("e1_epilogo")
+    assert c2.next_action() == {"kind": "end", "draft": False}
+    assert c2.advance_chapter() is None                      # ja no "end": nao avanca mais
+    # ultimo capitulo SEM no "end" (sintetico): nao avanca, devolve None como antes
+    import copy
+    orig = story.CHAPTERS
+    chs = copy.deepcopy(orig)
+    chs[-1]["nodes"] = chs[-1]["nodes"][:-1]
+    story.CHAPTERS = chs
+    try:
+        c3 = new(8)
+        c3.ch, c3.node = "5", len(chs[-1]["nodes"]) - 1
+        assert c3.advance_chapter() is None and c3.node == len(chs[-1]["nodes"]) - 1
+    finally:
+        story.CHAPTERS = orig
 
 
 def test_deterministic_given_seed():

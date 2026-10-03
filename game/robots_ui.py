@@ -52,6 +52,9 @@ def attr_color(v):
 class RobotsUI(CareerUI):
     """Herda só os helpers de desenho de CareerUI (text/fit/wrap/panel/hit/btn);
     construtor, eventos e desenho são próprios."""
+    # textos da loja (subclasses, como a Campanha, trocam por atributo)
+    SHOP_EMPTY_TEXT = "Sem peças nesse slot. A loja é reposta a cada rodada da liga."
+    SHOP_STOCK_FMT = "Estoque: %d peça(s). Reposto a cada rodada da liga."
 
     def __init__(self, game):  # noqa: super().__init__ intencionalmente não chamado
         self.g = game
@@ -407,7 +410,7 @@ class RobotsUI(CareerUI):
             self.hit(r, lambda i=pc["id"]: self.pick_shop(i))
         if not lst:
             self.text("Nenhuma peça livre para vender." if sell else
-                      "Sem peças nesse slot. A loja é reposta a cada rodada da liga.", 24, DIM, topleft=(30, 262))
+                      self.SHOP_EMPTY_TEXT, 24, DIM, topleft=(30, 262))
         pc = gg.piece(self.shop_sel) if (sell and self.shop_sel is not None) else next(
             (p for p in gg.shop["stock"] if p["id"] == self.shop_sel), None)
         if sell:
@@ -424,7 +427,7 @@ class RobotsUI(CareerUI):
             ok = pc is not None and gg.scrap >= P.buy_price(pc)
             self.btn((860, 650, 220, 44), "COMPRAR" if pc is None else "COMPRAR %d" % P.buy_price(pc),
                      self.do_buy_part, enabled=ok, size=26)
-            self.text("Estoque: %d peça(s). Reposto a cada rodada da liga." % len(gg.shop["stock"]), 20, DIM,
+            self.text(self.SHOP_STOCK_FMT % len(gg.shop["stock"]), 20, DIM,
                       topleft=(24, 626))
         for k, line in enumerate(self.wrap(self.msg, 22, 820)[:1]):
             self.text(line, 22, GOLD, topleft=(24, 656 + k * 24))

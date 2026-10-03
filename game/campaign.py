@@ -73,6 +73,9 @@ STAT_KEYS = ("ev", "matches", "sims", "trained")
 
 
 # --- funcoes puras ------------------------------------------------------------------
+END_ID = "END"      # valor devolvido por advance_chapter() ao entrar no epilogo (no "end")
+
+
 def shootout(rating_h, rating_a, rng):
     """Penaltis: (pen_h, pen_a), nunca empata. 5 cobrancas cada + morte subita; chance de converter
     sobe com a diferenca de rating. Determinístico dado o rng."""
@@ -351,8 +354,10 @@ class Campaign:
         return {"kind": "scene", "id": sid, "key": self._scene_key(sid), "scene": story.SCENES[sid]}
 
     def advance_chapter(self):
-        """Do no chapter_end para o proximo capitulo. Devolve o id novo ou None (nao esta no
-        chapter_end ou nao ha proximo)."""
+        """Do no chapter_end para o proximo capitulo. Devolve o id novo; END_ID ("END") se era o
+        ultimo capitulo e ha um no ("end", cena) logo apos o chapter_end (o no avanca para ele e
+        next_action passa a devolver a cena do epilogo e depois {"kind":"end"}); None se nao esta no
+        chapter_end ou nao ha proximo nem no "end"."""
         nodes = self.chapter()["nodes"]
         if self.node >= len(nodes) or nodes[self.node][0] != "chapter_end":
             return None
@@ -360,6 +365,9 @@ class Campaign:
         ids = [c["id"] for c in story.CHAPTERS]
         i = ids.index(self.ch)
         if i + 1 >= len(ids):
+            if self.node + 1 < len(nodes) and nodes[self.node + 1][0] == "end":
+                self.node += 1
+                return END_ID
             return None
         self.ch, self.node, self.tour, self.pity = ids[i + 1], 0, None, 0
         return self.ch

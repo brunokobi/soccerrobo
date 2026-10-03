@@ -276,6 +276,28 @@ def test_bad_cases_return_none():
         assert MEM["main"] == text and MEM["bad"] == text and MEM["writes"] == 0, name
 
 
+class drafted:
+    """Context manager: marca capitulos REAIS como draft (copia profunda de story.CHAPTERS, restaurada ao
+    sair). Os testes de comportamento de capitulo draft nao dependem do conteudo real em draft."""
+
+    def __init__(self, *ids):
+        self.ids = ids
+
+    def __enter__(self):
+        import copy as _copy
+        self.orig = story.CHAPTERS
+        chs = _copy.deepcopy(story.CHAPTERS)
+        for c in chs:
+            if c["id"] in self.ids:
+                c["draft"], c["nodes"], c["reward"] = True, [], None
+        story.CHAPTERS = chs
+        return self
+
+    def __exit__(self, *a):
+        story.CHAPTERS = self.orig
+        return False
+
+
 def test_repair_cases_rewind():
     ch1 = mid_tour()
     cases = {
@@ -310,7 +332,11 @@ def test_repair_cases_rewind():
     for name, fn in cases.items():
         d = copy.deepcopy(ch1.to_dict())
         fn(d)
-        c = cm.Campaign.from_dict(d)
+        if name == "ch_draft":                          # capitulo draft sintetico (nao depende do conteudo real)
+            with drafted("2", "3", "4", "5"):
+                c = cm.Campaign.from_dict(d)
+        else:
+            c = cm.Campaign.from_dict(d)
         assert c is not None, name
         assert c.repaired and c.warnings, name
         assert c.node == 0 and c.tour is None and c.pity == 0, (name, c.node, c.tour, c.pity)
@@ -333,8 +359,13 @@ def test_ch_invalid_goes_to_first_unrewarded_chapter():
     c = chapter_end_cap1()
     d = c.to_dict()
     d["c"]["ch"] = "2"
-    r = cm.Campaign.from_dict(d)
-    assert r.ch == "1" and r.repaired      # todos os jogaveis fechados -> ultimo jogavel
+    with drafted("2", "3", "4", "5"):
+        r = cm.Campaign.from_dict(d)
+        assert r.ch == "1" and r.repaired  # todos os jogaveis fechados -> ultimo jogavel
+        assert cm.Campaign.sanitize(d) is not None
+        c2 = cm.Campaign.from_dict(c.to_dict())
+    c3 = cm.Campaign.from_dict(c.to_dict())
+    assert c3 is not None and c3.ch == "1"  # sem o patch, o estado real do cap. 1 e valido
 
 
 def test_hero_missing_uses_first_starter():

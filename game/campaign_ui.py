@@ -117,6 +117,9 @@ def force_text(lo, hi):
 
 
 class CampaignUI(RobotsUI):
+    SHOP_EMPTY_TEXT = "Sem peças nesse slot. A loja é reposta a cada partida."
+    SHOP_STOCK_FMT = "Estoque: %d peça(s). Reposta a cada partida."
+
     def __init__(self, game):
         self.campaign = None            # antes do super: a propriedade `garage` o consulta
         super().__init__(game)
@@ -124,7 +127,8 @@ class CampaignUI(RobotsUI):
         self.frame_screens = FRAME_SCREENS + FRAME_EXTRA
         self.screens = SCREENS
         self.map_act = None             # proxima acao (cache; recalculada ao entrar no mapa)
-        self.notices = []               # avisos de reparo por rewind (mostrados no mapa)
+        self.notices = []               # avisos persistentes no mapa (reparo, recruta, save) ate o OK
+        self.warned = set()             # chaves de avisos de save ja mostrados nesta campanha
         self.pulse = 0.0
         self.dlg = None                 # estado da cena em andamento (tela "dialog")
         self.toast = ""                 # aviso curto (ex.: cena pulada com escolha 1)
@@ -153,6 +157,7 @@ class CampaignUI(RobotsUI):
         self.campaign = None
         self.map_act = None
         self.notices = []
+        self.warned = set()
         self.dlg = None
         self.toast = ""
         self.tview = self.train = self.ce_view = self.end_view = None
@@ -202,8 +207,24 @@ class CampaignUI(RobotsUI):
         if self.campaign.save():
             self.g.refresh_campaign_status()
             return True
-        self.msg = "Falha ao salvar."
+        draft = bool(self.campaign.chapter().get("draft"))
+        if draft:
+            self.msg = "Progresso salvo no início do capítulo."
+            self.add_notice("Progresso salvo no início do capítulo (este capítulo ainda está em produção).",
+                            "draft")
+        else:
+            self.msg = "Falha ao salvar."
+            self.add_notice("Não foi possível salvar agora: vale o último ponto salvo.", "fail")
         return False
+
+    def add_notice(self, text, key=None):
+        """Aviso persistente no mapa (ate o OK). `key` evita repetir o mesmo aviso de save."""
+        if key is not None:
+            if key in self.warned:
+                return
+            self.warned.add(key)
+        if text and text not in self.notices:
+            self.notices.append(text)
 
     # ------------------------------------------------------------ menu da campanha
     def do_continue(self):
@@ -216,6 +237,7 @@ class CampaignUI(RobotsUI):
         self.sel = None
         self.cache = None
         self.notices = list(c.warnings) if c.repaired else []
+        self.warned = set()
         self.go("map")
 
     def do_new(self):
@@ -228,10 +250,23 @@ class CampaignUI(RobotsUI):
         self.campaign = C.new_campaign(self.rng)
         self.cache = None
         self.notices = []
+        self.warned = set()
         self.go("map")
         ok = self.persist()
         self.status = "ok" if ok else C.Campaign.load_status()
         self.confirm_new = False
+
+    # ------------------------------------------------------------ garagem da campanha
+    def draw_garage(self):
+        super().draw_garage()
+        ch = self.campaign.chapter()
+        mine = int(round(self.info()["rating"]))
+        low = int(round(ch["F_start"]))
+        line = "Capítulo %s: Força recomendada %s | Sua Força %d" % (ch["id"], force_text(
+            ch["F_start"], ch["F_end"]), mine)
+        self.text(self.fit(line, 20, 700), 20, GREEN if mine >= low else GOLD, midleft=(24, 131))
+        self.btn((510, 82, 150, 40), "TREINO", lambda: self.open_training("garage"), size=26,
+                 color=(60, 80, 130))
 
     # ------------------------------------------------------------ mapa
     def do_story(self):
@@ -254,6 +289,9 @@ class CampaignUI(RobotsUI):
             sid = self.screen_id
             if sid == "menu" or sid == "map":
                 return self.to_menu()
+            if sid == "shop" and self.confirm_sell is not None:
+                self.confirm_sell = None            # 1o Esc cancela a confirmacao de venda
+                return
             if sid in STUB_SCREENS or (sid in ("garage", "shop") and not self.place_mode):
                 return self.go("map")
         return super().handle_event(e)
@@ -384,7 +422,9 @@ class CampaignUI(RobotsUI):
         self.btn((880, 532, 180, 40), "TREINO", lambda: self.open_training("map"), size=26,
                  color=(60, 80, 130))
         if self.notices:
-            for k, line in enumerate(self.wrap(self.notices[0], 20, 330)[:2]):
+            more = len(self.notices) - 1
+            shown = self.notices[0] + (" (+%d aviso%s)" % (more, "s" if more > 1 else "") if more else "")
+            for k, line in enumerate(self.wrap(shown, 20, 330)[:2]):
                 self.text(line, 20, GOLD, topleft=(704, 586 + k * 20))
             self.btn((704, 634, 120, 34), "OK", self.clear_notices, size=22, color=(60, 60, 70))
         elif self.msg:
@@ -818,7 +858,7 @@ class CampaignUI(RobotsUI):
     def round_continue(self):
         info = self.round_info
         if info is not None and info.get("training"):
-            return self.go("map") if self.train_back != "tourney" else self.dlg_next()
+            return self.back_from_training()
         self.dlg_next()
 
     def outcome_text(self, info):
@@ -1014,7 +1054,7 @@ class CampaignUI(RobotsUI):
     def back_from_training(self):
         if self.train_back == "tourney":
             return self.dlg_next()
-        self.go("map")
+        self.go("garage" if self.train_back == "garage" else "map")
 
     def draw_training(self):
         tr = self.train
@@ -1068,9 +1108,12 @@ class CampaignUI(RobotsUI):
         self.ce_view = v
 
     def do_chapter_continue(self):
+        warns = list(self.ce_view["warnings"]) if self.ce_view else []
         self.campaign.advance_chapter()
-        self.persist()
         self.go("map")
+        for w in warns:                          # ex.: recruta substituiu um reserva: fica no mapa ate o OK
+            self.add_notice(w)
+        self.persist()
 
     def draw_chapter_end(self):
         v = self.ce_view
