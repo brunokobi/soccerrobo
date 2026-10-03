@@ -189,7 +189,7 @@ def test_chapter1_walk_and_conditions():
     assert r["outcome"] == "next"
     a, seen = play_scenes(c)
     assert seen == ["c1_sf_pos", "c1_final_pre"] and a["stage"] == "F" and a["boss"]
-    assert a["opp"]["name"] == "Os Impecáveis" and a["O"] == 46
+    assert a["opp"]["name"] == "Os Impecáveis" and a["O"] == story.TEAMS["impecaveis"]["ovr"]
     # chefe perfeito: sem jitter => os 5 robos com o mesmo "ovr" medio por papel/chassis
     assert all(e["paint"] == (235, 248, 255) for e in a["away"]["squad"])
     r = win(c, 2, 1)
@@ -227,7 +227,18 @@ def test_shootout():
 
 def test_sim_match_bias():
     rng1, rng2 = random.Random(9), random.Random(9)
-    assert cm.sim_match(50, 46, rng1) == cm.RL.quick_sim(48, 46, rng2)
+    assert cm.sim_match(50, 46, rng1) == cm.RL.quick_sim(50 - cm.sim_bias(46), 46, rng2)
+    # bias(O): linear em O, com limites; contra ovr alto satura, contra ovr baixo cai
+    assert cm.sim_bias(cm.SIM_O_REF) == cm.SIM_BIAS0 or cm.sim_bias(cm.SIM_O_REF) == cm.SIM_BIAS_MAX
+    assert cm.sim_bias(10) == cm.SIM_BIAS_MIN and cm.sim_bias(90) == cm.SIM_BIAS_MAX
+    bs = [cm.sim_bias(o) for o in range(30, 70)]
+    assert all(b2 >= b1 for b1, b2 in zip(bs, bs[1:])) and bs[0] < bs[-1]
+    assert cm.sim_bias(36) < cm.sim_bias(44)
+    # o simulador usa bias(O): mesmo (F, O) com ovr diferente muda a taxa de vitoria
+    def winrate(F, O):
+        r = random.Random(3)
+        return sum(m > o for m, o in (cm.sim_match(F, O, r) for _ in range(2000)))
+    assert winrate(50, 38) > winrate(50, 46)
     n, w, l = 3000, 0, 0
     rng = random.Random(1)
     for _ in range(n):
@@ -241,7 +252,8 @@ def test_pity():
     c = new(3)
     to_final(c)
     base = c._opp_ovr(story.TOURNAMENTS["t_c1"], "F")
-    assert base == 46 and c.pity == 0
+    boss = story.TEAMS["impecaveis"]["ovr"]
+    assert base == boss and c.pity == 0
     seen = []
     for i in range(5):
         r = c.record_match(0, 1)
@@ -249,10 +261,10 @@ def test_pity():
         seen.append(c.pity)
         a, _ = play_scenes(c)
         assert a["stage"] == "F"
-        assert a["O"] == 46 - min(i + 1, 3), (a["O"], i)
+        assert a["O"] == boss - min(i + 1, 3), (a["O"], i)
     assert seen == [1, 2, 3, 3, 3]
     assert c.pity_delta() == -3
-    assert a["opp"]["ovr"] == 43
+    assert a["opp"]["ovr"] == boss - 3
     r = win(c, 1, 0)
     assert r["outcome"] == "champion" and c.pity == 0
 
@@ -266,7 +278,7 @@ def test_pity_not_applied_to_regular_or_sf():
     c.record_match(0, 1)                                    # derrota na SF: nao mexe no pity
     assert c.pity == 0
     a, _ = play_scenes(c)
-    assert a["stage"] == "SF" and a["O"] == 42
+    assert a["stage"] == "SF" and a["O"] == story.TEAMS["teatro"]["ovr"]
 
 
 def test_rewards_once():
@@ -446,7 +458,8 @@ def test_training_does_not_advance():
     a, _ = play_scenes(c)
     snap = (c.ch, c.node, dict(c.tour) if c.tour else None, c.pity)
     t = c.training_cfg()
-    assert t["training"] and len(t["away"]["squad"]) == 5 and t["O"] == 37
+    assert t["training"] and len(t["away"]["squad"]) == 5 and t["O"] == c.training_ovr()
+    assert t["O"] == max(cm.TRAIN_MIN_OVR, round(story.CHAPTERS[0]["F_start"]) - cm.TRAIN_DELTA)
     assert t["econ_tier"] == 0
     g = c.garage
     s0 = g.scrap
@@ -457,7 +470,8 @@ def test_training_does_not_advance():
     assert c.next_action()["kind"] == "match"
     # capitulo 2+: tier do treino = tier do capitulo - 1
     c.ch = "3"
-    assert c.training_econ_tier() == 1 and c.training_ovr() == 54 - 7
+    assert c.training_econ_tier() == 1 and c.training_ovr() == max(
+        cm.TRAIN_MIN_OVR, int(round(story.CHAPTERS[3]["F_start"])) - cm.TRAIN_DELTA)
 
 
 def test_events_pids_give_goal_xp():

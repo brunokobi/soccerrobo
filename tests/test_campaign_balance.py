@@ -2,9 +2,11 @@
 """Balanco da campanha "A Garagem do Vo" por SIMULACAO DE CAMPANHA (sem pygame, sem motor, sem disco).
 
 Rodar da raiz: .venv/bin/python tests/test_campaign_balance.py [teste ...]   (N=300 por politica)
-Usa Campaign.simulate_current (Poisson com SIM_BIAS), seeds fixas e a API pura do garage. Cobre todo
-capitulo NAO draft de story.CHAPTERS (hoje P e 1; os Caps. 2-5 entram sozinhos quando deixarem de ser
-draft). "Aproveitamento" = (V + E/2) / jogos pelo placar dos 90 min (pitaculos de penaltis nao contam).
+Usa Campaign.simulate_current (Poisson com o vies dependente do ovr, campaign.sim_bias(O), calibrado contra
+o motor real por tests/calib_campaign.py), seeds fixas e a API pura do garage. Cobre todo capitulo NAO
+draft de story.CHAPTERS (P e 1-5). "Aproveitamento" = (V + E/2) / jogos pelo placar dos 90 min (penaltis
+nao contam). "regular" = jogos do grupo + quartas; "SF" = semifinal; "chefe" = final (inclui as
+retentativas com pity, por isso fica ~2-4 pontos acima da primeira tentativa).
 
 Politicas
 ---------
@@ -15,7 +17,8 @@ PASSIVA  nunca gasta sucata nem mexe no elenco: so XP (+ recrutas que ficam no b
 GRINDER  como a gulosa, mas faz GRIND_N treinos (Poisson, adversario de treino) ao abrir cada capitulo.
 
 Alvos numericos sao SOFT (imprimem [ALVO OK] / [ALVO NAO ATINGIDO]); asserts duros so de seguranca:
-termina, sem excecao, sem laco infinito, pity funciona (passiva conclui, <=12 tentativas por chefe),
+termina, sem excecao, sem laco infinito, pity funciona (passiva conclui; alvo soft <=12 tentativas por
+chefe, limite duro PASSIVE_MAX_TRIES),
 Forca cresce entre capitulos, aproveitamento do chefe nem >90% nem <15%.
 Variavel de ambiente CAMPAIGN_BAL_N sobrescreve N (padrao 300).
 """
@@ -38,6 +41,7 @@ N = int(os.environ.get("CAMPAIGN_BAL_N", "300"))
 GRIND_N = 15                 # treinos por capitulo da politica GRINDER
 MAX_MATCHES = 400            # guarda anti laco infinito (partidas da campanha)
 MAX_STEPS = 4000
+PASSIVE_MAX_TRIES = 25       # limite duro de tentativas por chefe na passiva (medido: 19 com as seeds fixas)
 
 
 def _boom(*a, **k):
@@ -134,7 +138,7 @@ def run_campaign(policy, seed):
     rec = {"ch": {}, "matches": 0, "boss_tries": {}, "done": False, "c": c}
 
     def ch_rec(cid):
-        return rec["ch"].setdefault(cid, {"reg": [0, 0, 0], "boss": [0, 0, 0], "clean": True,
+        return rec["ch"].setdefault(cid, {"reg": [0, 0, 0], "boss": [0, 0, 0], "sf": [0, 0, 0], "clean": True,
                                           "F0": None, "F0_raw": None, "attempts": 0})
 
     def open_chapter():
@@ -163,7 +167,7 @@ def run_campaign(policy, seed):
             out = c.simulate_current()
             rec["matches"] += 1
             assert rec["matches"] <= MAX_MATCHES, "laco infinito de partidas"
-            slot = cr["boss" if boss else "reg"]
+            slot = cr["boss" if boss else ("sf" if a["stage"] == "SF" else "reg")]
             slot["wdl".index(out["result"])] += 1
             if boss:
                 rec["boss_tries"][c.ch] = rec["boss_tries"].get(c.ch, 0) + 1
@@ -221,18 +225,19 @@ def soft(name, value, lo, hi):
 def table(policy):
     recs = campaigns(policy)
     print("\n== politica %s (%d campanhas) ==" % (policy.upper(), len(recs)))
-    print("  %-4s %-9s %-9s %-10s %-9s %-9s %-9s" % ("cap", "regular%", "chefe%", "P(1a vez)%", "F inicio", "F tabela", "F cru"))
+    print("  %-4s %-9s %-9s %-9s %-10s %-9s %-9s %-9s" % ("cap", "regular%", "SF%", "chefe%", "P(1a vez)%", "F inicio", "F tabela", "F cru"))
     rows = {}
     for ch in playable():
         cid = ch["id"]
-        reg, bos = pct(agg(recs, cid, "reg")), pct(agg(recs, cid, "boss"))
+        reg, bos, sfp = pct(agg(recs, cid, "reg")), pct(agg(recs, cid, "boss")), pct(agg(recs, cid, "sf"))
         has_boss = any(sum(r["ch"][cid]["boss"]) for r in recs if cid in r["ch"])
         pc = 100.0 * sum(1 for r in recs if r["ch"].get(cid, {}).get("clean")) / len(recs)
         f0 = sum(r["ch"][cid]["F0"] for r in recs) / len(recs)
         fr = sum(r["ch"][cid]["F0_raw"] for r in recs) / len(recs)
-        rows[cid] = {"reg": reg, "boss": bos, "pc": pc if has_boss else None, "F0": f0, "has_boss": has_boss}
-        print("  %-4s %-9s %-9s %-10s %-9.1f %-9.1f %-9.1f" % (
-            cid, "-" if reg is None else "%.1f" % reg, "-" if bos is None else "%.1f" % bos,
+        rows[cid] = {"reg": reg, "boss": bos, "sf": sfp, "pc": pc if has_boss else None, "F0": f0, "has_boss": has_boss}
+        print("  %-4s %-9s %-9s %-9s %-10s %-9.1f %-9.1f %-9.1f" % (
+            cid, "-" if reg is None else "%.1f" % reg, "-" if sfp is None else "%.1f" % sfp,
+            "-" if bos is None else "%.1f" % bos,
             "-" if not has_boss else "%.1f" % pc, f0, ch["F_start"], fr))
     tot = sorted(r["matches"] for r in recs)
     print("  partidas/campanha: media %.1f  p95 %d  max %d" % (sum(tot) / len(tot), tot[int(0.95 * (len(tot) - 1))], tot[-1]))
@@ -248,9 +253,12 @@ def test_greedy_campaign():
     print("  -- alvos soft (gulosa) --")
     for ch in chs:
         cid, r = ch["id"], rows[ch["id"]]
-        soft("cap %s: aproveitamento regular" % cid, r["reg"], 55, 75)
+        if r["has_boss"]:                                   # o Prologo so tem o treino
+            soft("cap %s: aproveitamento regular (grupo/QF)" % cid, r["reg"], 58, 68)
+        if r["sf"] is not None:
+            soft("cap %s: aproveitamento da semifinal" % cid, r["sf"], 52, 62)
         if r["has_boss"]:
-            soft("cap %s: aproveitamento do chefe" % cid, r["boss"], 40, 60)
+            soft("cap %s: aproveitamento do chefe" % cid, r["boss"], 44, 56)
             soft("cap %s: P(completar de primeira)" % cid, r["pc"], 20, 60)
         soft("cap %s: Forca inicio vs tabela (+-3)" % cid, r["F0"] - ch["F_start"], -3, 3)
     tot = sorted(r["matches"] for r in recs)
@@ -272,9 +280,10 @@ def test_passive_pity_terminates():
     worst = max((t for r in recs for t in r["boss_tries"].values()), default=0)
     print("  max tentativas por chefe: %d (limite 12)" % worst)
     soft("max tentativas por chefe", float(worst), 0, 12)
-    # duro: so garante terminacao (pity + sorte). O alvo de <=12 e soft: os Caps. 4-5 estao acima da
-    # Forca passiva (ver ACHADO DO PASSO 6; recalibracao no passo 16).
-    assert worst <= 40, "chefe exigiu %d tentativas (pity nao resolveu)" % worst
+    # duro: so garante terminacao (pity + sorte). O alvo de <=12 e soft: a passiva (so XP, sem gastar
+    # sucata) fica ~8-10 pontos de Forca abaixo da gulosa nos Caps. 4-5 (passo 16: nao ha como baixar
+    # isso sem trivializar a gulosa).
+    assert worst <= PASSIVE_MAX_TRIES, "chefe exigiu %d tentativas (pity nao resolveu)" % worst
     assert max(r["matches"] for r in recs) <= 150
     for r in recs:                                          # a passiva nunca gastou sucata
         assert r["c"].garage.stats["played"] == r["matches"]

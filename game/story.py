@@ -92,104 +92,104 @@ TEAMS = {
     "fundao": {"name": "Fundão FC", "color": (150, 110, 70), "ovr": 39,
                "names": ["Soneca", "Cochilo", "Bocejo", "Preguiça", "Ronco"], "chassis": list(_CH),
                "paint": (160, 120, 80), "perfect": False},
-    "gremio": {"name": "Grêmio", "color": (60, 160, 100), "ovr": 40,
+    "gremio": {"name": "Grêmio", "color": (60, 160, 100), "ovr": 39,
                "names": ["Ata", "Pauta", "Voto", "Moção", "Estatuto"], "chassis": list(_CH),
                "paint": (70, 170, 110), "perfect": False},
-    "teatro": {"name": "Clube de Teatro", "color": (210, 70, 130), "ovr": 42,
+    "teatro": {"name": "Clube de Teatro", "color": (210, 70, 130), "ovr": 40,
                "names": ["Hamlet", "Julieta", "Cena", "Bis", "Ensaio"], "chassis": list(_CH),
                "paint": (220, 90, 150), "perfect": False},
     # Robos da Limpex-patrocinada de Vivi: perfeitos (sem jitter), brancos com marca ciano
-    "impecaveis": {"name": "Os Impecáveis", "color": (0, 220, 255), "ovr": 46,
+    "impecaveis": {"name": "Os Impecáveis", "color": (0, 220, 255), "ovr": 41,
                    "names": ["LX-01", "LX-02", "LX-03", "LX-04", "LX-05"], "chassis": list(_CH),
                    "paint": (235, 248, 255), "perfect": True},
     # ---- Cap. 2 (Taca Vale do Po)
-    "padaria": {"name": "Padaria Pão Quente", "color": (230, 180, 90), "ovr": 43,
+    "padaria": {"name": "Padaria Pão Quente", "color": (230, 180, 90), "ovr": 40,
                 "names": ["Baguete", "Brioche", "Sonho", "Rosca", "Broa"],
                 "chassis": ["Goleiro", "Tanque", "Disco", "Disco", "Velocista"],
                 "paint": (235, 195, 120), "perfect": False},
-    "churrasco": {"name": "Tios do Churrasco", "color": (210, 80, 50), "ovr": 43,
+    "churrasco": {"name": "Tios do Churrasco", "color": (210, 80, 50), "ovr": 40,
                   "names": ["Picanha", "Espeto", "Brasa", "Farofa", "Costela"],
                   "chassis": ["Tanque", "Tanque", "Disco", "Disco", "Velocista"],
                   "paint": (200, 85, 55), "perfect": False},
-    "academia": {"name": "Academia Sem Esforço", "color": (90, 190, 200), "ovr": 45,
+    "academia": {"name": "Academia Sem Esforço", "color": (90, 190, 200), "ovr": 41,
                  "names": ["Halter", "Supino", "Whey", "Barra", "Esteira"],
                  "chassis": ["Goleiro", "Tanque", "Disco", "Orbital", "Velocista"],
                  "paint": (110, 200, 205), "perfect": False},
     # revanche da Vivi: robos perfeitos, brancos com marca ciano (numeracao propria)
-    "impec2": {"name": "Impecáveis Mk II", "color": (0, 220, 255), "ovr": 46,
+    "impec2": {"name": "Impecáveis Mk II", "color": (0, 220, 255), "ovr": 43,
                "names": ["LX-06", "LX-07", "LX-08", "LX-09", "LX-10"],
                "chassis": ["Goleiro", "Tanque", "Disco", "Orbital", "Velocista"],
                "paint": (235, 248, 255), "perfect": True},
-    "faxina": {"name": "Esquadrão Faxina", "color": (130, 150, 140), "ovr": 50,
+    "faxina": {"name": "Esquadrão Faxina", "color": (130, 150, 140), "ovr": 47,
                "names": ["Rodo", "Vassoura", "Esfregão", "Balde", "Flanela"],
                "chassis": ["Goleiro", "Tanque", "Disco", "Orbital", "Velocista"],
                "paint": (120, 140, 130), "perfect": False},
     # ---- Cap. 3 (Estadual Limpex Cup)
-    "bombeiros": {"name": "Bombeiros Voluntários", "color": (230, 60, 50), "ovr": 46,
+    "bombeiros": {"name": "Bombeiros Voluntários", "color": (230, 60, 50), "ovr": 43,
                   "names": ["Mangueira", "Sirene", "Hidrante", "Machado", "Escada"],
                   "chassis": ["Goleiro", "Tanque", "Tanque", "Disco", "Velocista"],
                   "paint": (225, 55, 50), "perfect": False},
-    "coral": {"name": "Coral Desafinado", "color": (170, 110, 220), "ovr": 48,
+    "coral": {"name": "Coral Desafinado", "color": (170, 110, 220), "ovr": 43,
               "names": ["Soprano", "Tenor", "Baixo", "Contralto", "Maestro"],
               "chassis": ["Goleiro", "Tanque", "Disco", "Orbital", "Velocista"],
               "paint": (170, 110, 220), "perfect": False},
-    "detetives": {"name": "Detetives do Quarteirão", "color": (140, 110, 80), "ovr": 48,
+    "detetives": {"name": "Detetives do Quarteirão", "color": (140, 110, 80), "ovr": 44,
                   "names": ["Lupa", "Pista", "Álibi", "Digital", "Mistério"],
                   "chassis": ["Goleiro", "Disco", "Disco", "Orbital", "Velocista"],
                   "paint": (150, 120, 85), "perfect": False},
-    "sindicato": {"name": "Sindicato dos Zeladores", "color": (90, 120, 160), "ovr": 51,
+    "sindicato": {"name": "Sindicato dos Zeladores", "color": (90, 120, 160), "ovr": 46,
                   "names": ["Chaveiro", "Zelador", "Porteiro", "Síndico", "Manobra"],
                   "chassis": ["Goleiro", "Tanque", "Disco", "Orbital", "Velocista"],
                   "paint": (100, 130, 170), "perfect": False},
     # chefe do Cap. 3: serie L-9 (perfeitos, brancos com ciano)
-    "imaculados": {"name": "Imaculados L-9", "color": (0, 230, 255), "ovr": 54,
+    "imaculados": {"name": "Imaculados L-9", "color": (0, 230, 255), "ovr": 51,
                    "names": ["LX9-01", "LX9-02", "LX9-03", "LX9-04", "LX9-05"],
                    "chassis": ["Goleiro", "Tanque", "Disco", "Orbital", "Velocista"],
                    "paint": (245, 252, 255), "perfect": True},
     # ---- Cap. 4 (Copa Brasil)
-    "escoteiros": {"name": "Escoteiros Eletrônicos", "color": (90, 160, 80), "ovr": 50,
+    "escoteiros": {"name": "Escoteiros Eletrônicos", "color": (90, 160, 80), "ovr": 44,
                    "names": ["Nó", "Bússola", "Lanterna", "Barraca", "Mapa"],
                    "chassis": ["Goleiro", "Tanque", "Disco", "Orbital", "Velocista"],
                    "paint": (100, 170, 90), "perfect": False},
-    "cartorio": {"name": "Cartório Veloz", "color": (170, 150, 110), "ovr": 50,
+    "cartorio": {"name": "Cartório Veloz", "color": (170, 150, 110), "ovr": 45,
                  "names": ["Selo", "Firma", "Carimbo", "Protocolo", "Fila"],
                  "chassis": ["Goleiro", "Tanque", "Tanque", "Orbital", "Velocista"],
                  "paint": (180, 160, 120), "perfect": False},
-    "taxistas": {"name": "Cooperativa dos Taxistas", "color": (240, 200, 40), "ovr": 51,
+    "taxistas": {"name": "Cooperativa dos Taxistas", "color": (240, 200, 40), "ovr": 46,
                  "names": ["Bandeira", "Buzina", "Rota", "Corrida", "Troco"],
                  "chassis": ["Goleiro", "Tanque", "Disco", "Orbital", "Velocista"],
                  "paint": (245, 205, 50), "perfect": False},
-    "reserva": {"name": "Platinum Reserva", "color": (190, 200, 215), "ovr": 53,
+    "reserva": {"name": "Platinum Reserva", "color": (190, 200, 215), "ovr": 50,
                 "names": ["PR-01", "PR-02", "PR-03", "PR-04", "PR-05"],
                 "chassis": ["Goleiro", "Tanque", "Disco", "Orbital", "Velocista"],
                 "paint": (225, 232, 245), "perfect": True},
-    "platinum": {"name": "Divisão Platinum", "color": (210, 225, 245), "ovr": 56,
+    "platinum": {"name": "Divisão Platinum", "color": (210, 225, 245), "ovr": 54,
                  "names": ["PT-01", "PT-02", "PT-03", "PT-04", "PT-05"],
                  "chassis": ["Goleiro", "Tanque", "Disco", "Orbital", "Velocista"],
                  "paint": (240, 245, 255), "perfect": True},
     # ---- Cap. 5 (Mundial de Aspiradores)
-    "sakura": {"name": "Sakura Vacuum Club", "color": (255, 170, 190), "ovr": 55,
+    "sakura": {"name": "Sakura Vacuum Club", "color": (255, 170, 190), "ovr": 47,
                "names": ["Mochi", "Hana", "Neko", "Ramen", "Origami"],
                "chassis": ["Goleiro", "Tanque", "Disco", "Orbital", "Velocista"],
                "paint": (255, 175, 195), "perfect": False},
-    "staub": {"name": "Staubsauger Sporting", "color": (200, 170, 60), "ovr": 57,
+    "staub": {"name": "Staubsauger Sporting", "color": (200, 170, 60), "ovr": 48,
               "names": ["Wurst", "Brezel", "Kuckuck", "Pünktlich", "Zeppelin"],
               "chassis": ["Goleiro", "Tanque", "Disco", "Orbital", "Velocista"],
               "paint": (210, 180, 70), "perfect": False},
-    "aspirateurs": {"name": "Les Aspirateurs", "color": (90, 120, 220), "ovr": 57,
+    "aspirateurs": {"name": "Les Aspirateurs", "color": (90, 120, 220), "ovr": 49,
                     "names": ["Baguette", "Croissant", "Brie", "Béret", "Moustache"],
                     "chassis": ["Goleiro", "Tanque", "Disco", "Orbital", "Velocista"],
                     "paint": (100, 130, 225), "perfect": False},
-    "dustbunnies": {"name": "Dust Bunnies USA", "color": (230, 90, 90), "ovr": 58,
+    "dustbunnies": {"name": "Dust Bunnies USA", "color": (230, 90, 90), "ovr": 50,
                     "names": ["Tex", "Donut", "Cowboy", "Popcorn", "Jumbo"],
                     "chassis": ["Goleiro", "Tanque", "Disco", "Orbital", "Velocista"],
                     "paint": (235, 100, 100), "perfect": False},
-    "kenji_team": {"name": "Dojo do Kenji", "color": (255, 120, 160), "ovr": 59,
+    "kenji_team": {"name": "Dojo do Kenji", "color": (255, 120, 160), "ovr": 53,
                    "names": ["Katana", "Bonsai", "Tofu", "Samurai", "Haiku"],
                    "chassis": ["Goleiro", "Tanque", "Disco", "Orbital", "Velocista"],
                    "paint": (245, 245, 250), "perfect": False},
     # chefe final: Hiperlimpos X-9 de Augusto (perfeitos, SEM attr_override)
-    "x9": {"name": "Hiperlimpos X-9", "color": (0, 240, 255), "ovr": 63,
+    "x9": {"name": "Hiperlimpos X-9", "color": (0, 240, 255), "ovr": 58,
            "names": ["X9-01", "X9-02", "X9-03", "X9-04", "X9-05"],
            "chassis": ["Goleiro", "Tanque", "Disco", "Orbital", "Velocista"],
            "paint": (250, 255, 255), "perfect": True},
@@ -199,10 +199,12 @@ TEAMS = {
 # format "single": 1 partida (treino; resultado nao bloqueia). format "cup": grupo de 4 (jogador + 3
 #   adversarios "group", 3 jogos, top 2 avanca) + semifinal "sf" + final "final" (+ quartas "qf" no
 #   Mundial). O chefe ("boss") e sempre o adversario da final. Estagios: G1 G2 G3 [QF] SF F.
-# Calibragem (ver PLANO): Forca esperada do jogador F (CHAPTERS F_start>F_end). ovr do chefe =
-#   F_end - boss_delta (chefe final: 0, demais: +1); regulares ficam ~regular_delta=(5..7) abaixo
-#   de F_start; a semifinal e "forte" (~+4 abaixo). Eliminacao no grupo reinicia o torneio com
-#   semente nova; derrota na SF/F so repete aquela partida (pity no chefe).
+# Calibragem (passo 16, contra o MOTOR REAL; tabela em tests/calib_campaign.py): F_start/F_end = Forca
+#   da politica gulosa no inicio do capitulo / na final (os estagios interpolam, ver F_rec). Os ovr dos
+#   adversarios ficam bem abaixo da Forca porque o motor e mais duro que o Poisson: regulares ~F-11..-13
+#   (motor 58-66%), semifinal ~F-9 (~54%), chefe = F_end - boss_delta (~46-48%), chefe final do Mundial
+#   ~F_end - 8 (~45%). Eliminacao no grupo reinicia o torneio com semente nova; derrota na SF/F so
+#   repete aquela partida (pity no chefe).
 # hooks: cenas amarradas ao torneio (jogadas uma vez, controladas por `done`):
 #   "before": {estagio: cena} antes da partida; "after": {estagio: cena} apos VENCER o estagio;
 #   "win": cena ao vencer a final; "lose": cena apos perder SF/final; "elim": cena apos eliminacao
@@ -217,7 +219,7 @@ TOURNAMENTS = {
     "t_c1": {
         "chapter": "1", "local": "Quadra do Colégio Santa Faísca", "bg": "quadra", "format": "cup",
         "group": ["turma3b", "fundao", "gremio"], "qf": None, "sf": "teatro", "final": "impecaveis",
-        "boss": "impecaveis", "boss_delta": 1, "regular_delta": (5, 7),
+        "boss": "impecaveis", "boss_delta": 6.8, "regular_delta": (6, 7),
         "hooks": {"before": {"G2": "c1_g2_fundao_pre", "F": "c1_final_pre"},
                   "after": {"SF": "c1_sf_pos"},
                   "win": "c1_final_win", "lose": "c1_final_lose", "elim": "c1_repescagem"},
@@ -225,7 +227,7 @@ TOURNAMENTS = {
     "t_c2": {
         "chapter": "2", "local": "Ginásio Municipal", "bg": "ginasio", "format": "cup",
         "group": ["padaria", "churrasco", "academia"], "qf": None, "sf": "impec2", "final": "faxina",
-        "boss": "faxina", "boss_delta": 1, "regular_delta": (5, 7),
+        "boss": "faxina", "boss_delta": 6.0, "regular_delta": (10, 11),
         "hooks": {"before": {"G2": "c2_g_gag", "SF": "c2_sf_vivi_pre", "F": "c2_final_pre"},
                   "after": {"SF": "c2_sf_vivi_pos"},
                   "win": "c2_final_win", "lose": "c2_final_lose", "elim": "c2_repescagem"},
@@ -235,7 +237,7 @@ TOURNAMENTS = {
     "t_c3": {
         "chapter": "3", "local": "Arena Estadual", "bg": "arena", "format": "cup",
         "group": ["bombeiros", "coral", "detetives"], "qf": None, "sf": "sindicato", "final": "imaculados",
-        "boss": "imaculados", "boss_delta": 1, "regular_delta": (5, 7),
+        "boss": "imaculados", "boss_delta": 6.6, "regular_delta": (11, 12),
         "hooks": {"before": {"G2": "c3_g_gag", "F": "c3_final_pre"},
                   "after": {"G3": "c3_logs", "SF": "c3_sf_pos"},
                   "win": "c3_final_win", "lose": "c3_final_lose", "elim": "c3_repescagem"},
@@ -244,7 +246,7 @@ TOURNAMENTS = {
     "t_c4": {
         "chapter": "4", "local": "Estádio Nacional", "bg": "estadio", "format": "cup",
         "group": ["escoteiros", "cartorio", "taxistas"], "qf": None, "sf": "reserva", "final": "platinum",
-        "boss": "platinum", "boss_delta": 1, "regular_delta": (5, 7),
+        "boss": "platinum", "boss_delta": 6.7, "regular_delta": (13, 15),
         "hooks": {"before": {"G2": "c4_g_vistoria", "SF": "c4_sf_pre", "F": "c4_final_pre"},
                   "after": {"G3": "c4_vivi_break", "SF": "c4_sf_pos"},
                   "win": "c4_final_win", "lose": "c4_final_lose", "elim": "c4_repescagem"},
@@ -254,7 +256,7 @@ TOURNAMENTS = {
     "t_c5": {
         "chapter": "5", "local": "Arena Global de Neo-Tóquio", "bg": "mundial", "format": "cup",
         "group": ["sakura", "staub", "aspirateurs"], "qf": "dustbunnies", "sf": "kenji_team", "final": "x9",
-        "boss": "x9", "boss_delta": -0.5, "regular_delta": (4, 7),
+        "boss": "x9", "boss_delta": 7.8, "regular_delta": (15, 17),
         "hooks": {"before": {"G1": "c5_g1_gag", "G2": "c5_g2_gag", "G3": "c5_g3_gag", "QF": "c5_qf_pre",
                              "SF": "c5_sf_kenji", "F": "c5_final_pre"},
                   "after": {"QF": "c5_qf_pos"},
@@ -1104,7 +1106,7 @@ REWARDS = {
 }
 
 # --- capitulos ----------------------------------------------------------------------------------
-# F_start/F_end = Forca esperada do jogador "normal" (tabela do plano). econ_tier = tier passado a
+# F_start/F_end = Forca da politica gulosa (calibrada no passo 16; o plano original tinha 44,6>47 ... 61,2>62,5). econ_tier = tier passado a
 # garage.match_rewards/refresh_shop durante o capitulo (= tier_done + 1 do Garage). tier_done_on_close
 # = clamp(cap-1, -1, 3) gravado em garage.tier_done ao fechar.
 CHAPTERS = [
@@ -1113,23 +1115,23 @@ CHAPTERS = [
      "nodes": [("scene", "p1_garagem"), ("scene", "p2_oficina"), ("scene", "p3_peneira_pre"),
                ("tournament", "t_p_treino"), ("scene", "p4_peneira_pos"), ("chapter_end", "P")]},
     {"id": "1", "title": "Capítulo 1", "subtitle": "Copa Interclasses", "local": "Colégio Santa Faísca",
-     "F_start": 44.6, "F_end": 47.0, "econ_tier": 0, "tier_done_on_close": 0, "reward": "rw_1",
+     "F_start": 44.9, "F_end": 47.8, "econ_tier": 0, "tier_done_on_close": 0, "reward": "rw_1",
      "nodes": [("scene", "c1_intro"), ("tournament", "t_c1"), ("scene", "c1_end"),
                ("chapter_end", "1")]},
     {"id": "2", "title": "Capítulo 2", "subtitle": "Taça Vale do Pó", "local": "Ginásio Municipal",
-     "F_start": 49.7, "F_end": 51.2, "econ_tier": 1, "tier_done_on_close": 1, "reward": "rw_2",
+     "F_start": 50.9, "F_end": 53.0, "econ_tier": 1, "tier_done_on_close": 1, "reward": "rw_2",
      "nodes": [("scene", "c2_intro"), ("tournament", "t_c2"), ("scene", "c2_end"),
                ("chapter_end", "2")]},
     {"id": "3", "title": "Capítulo 3", "subtitle": "Estadual Limpex Cup", "local": "Arena Estadual",
-     "F_start": 53.5, "F_end": 55.0, "econ_tier": 2, "tier_done_on_close": 2, "reward": "rw_3",
+     "F_start": 55.4, "F_end": 57.6, "econ_tier": 2, "tier_done_on_close": 2, "reward": "rw_3",
      "nodes": [("scene", "c3_intro"), ("tournament", "t_c3"), ("scene", "c3_end"),
                ("chapter_end", "3")]},
     {"id": "4", "title": "Capítulo 4", "subtitle": "Copa Brasil", "local": "Estádio Nacional",
-     "F_start": 55.8, "F_end": 57.2, "econ_tier": 3, "tier_done_on_close": 3, "reward": "rw_4",
+     "F_start": 58.8, "F_end": 60.7, "econ_tier": 3, "tier_done_on_close": 3, "reward": "rw_4",
      "nodes": [("scene", "c4_intro"), ("tournament", "t_c4"), ("scene", "c4_end"),
                ("chapter_end", "4")]},
     {"id": "5", "title": "Capítulo 5", "subtitle": "Mundial de Aspiradores", "local": "Arena Global de Neo-Tóquio",
-     "F_start": 61.2, "F_end": 62.5, "econ_tier": 3, "tier_done_on_close": 3, "reward": "rw_5",
+     "F_start": 63.6, "F_end": 65.8, "econ_tier": 3, "tier_done_on_close": 3, "reward": "rw_5",
      "nodes": [("scene", "c5_intro"), ("tournament", "t_c5"), ("scene", "c5_antidoping"),
                ("chapter_end", "5"), ("end", "e1_epilogo")]},
 ]

@@ -42,11 +42,21 @@ import robots
 import store
 import story
 
-SIM_BIAS = 2                 # o Poisson e ~2 pontos mais facil que o motor
+# Vies do SIMULAR: o Poisson e MAIS FACIL que o motor, e a diferenca cresce com o ovr O do adversario
+# (passo 16; tests/calib_campaign.py: --grid = grade F x O n=200 e a tabela por checkpoint n=300, regressao
+# L1): contra O<=38 o motor e ate mais facil (vies ~ -2..+2 pontos de Forca), de O~40 em diante o vies
+# sobe ~1,5 por ponto de ovr (5 em O=40, 8 em O>=42). Resultado: |SIM - motor| medio 2,5 pontos de V+E/2
+# nos 33 checkpoints (max 6,0; ruido do motor com n=300: +-4,6).
+# bias(O) = clamp(BIAS0 + SLOPE*(O - O_REF), MIN, MAX); usado em sim_match (SIMULAR e treino simulado).
+SIM_BIAS0 = 5.0              # vies (pontos de Forca) em O = SIM_O_REF
+SIM_BIAS_SLOPE = 1.5         # variacao do vies por ponto de ovr do adversario
+SIM_O_REF = 40
+SIM_BIAS_MIN, SIM_BIAS_MAX = -2.0, 8.0
 PITY_STEP = story.PITY_STEP
 PITY_MAX = story.PITY_MAX
 DONE = "DONE"
-TRAIN_DELTA = 7              # adversario de treino: Forca de inicio do capitulo - 7
+TRAIN_DELTA = 12             # adversario de treino: Forca de inicio do capitulo - 12 (piso TRAIN_MIN_OVR)
+TRAIN_MIN_OVR = 36
 HERO_NAME, HERO_BASE, OTHER_BASE = "Zé Poeira", 38, 45
 HERO_PAINT = (0, 200, 220)
 START_SCRAP_CAMPAIGN = 100
@@ -98,9 +108,14 @@ def shootout(rating_h, rating_a, rng):
     return h, a
 
 
+def sim_bias(O):
+    """Vies (em pontos de Forca) que faz o Poisson imitar o motor contra um adversario de ovr O."""
+    return G.clamp(SIM_BIAS0 + SIM_BIAS_SLOPE * (O - SIM_O_REF), SIM_BIAS_MIN, SIM_BIAS_MAX)
+
+
 def sim_match(user_F, O, rng):
-    """Simula (my, opp) por Poisson com o vies do motor: quick_sim(F - SIM_BIAS, O)."""
-    return RL.quick_sim(user_F - SIM_BIAS, O, rng)
+    """Simula (my, opp) por Poisson com o vies do motor: quick_sim(F - sim_bias(O), O)."""
+    return RL.quick_sim(user_F - sim_bias(O), O, rng)
 
 
 def stages_of(tr):
@@ -560,7 +575,7 @@ class Campaign:
         return out
 
     def simulate_current(self):
-        """Simula a partida pendente (Poisson com SIM_BIAS) e registra. Devolve o dict de record_match."""
+        """Simula a partida pendente (Poisson com sim_bias(O)) e registra. Devolve o dict de record_match."""
         act = self._peek_match()
         my, opp = sim_match(act["user_F"], act["O"], self._rng("sim"))
         return self.record_match(my, opp, simulated=True)
@@ -573,13 +588,13 @@ class Campaign:
 
     # ------------------------------------------------------------------ treino
     def training_ovr(self):
-        return max(30, int(round(self.chapter()["F_start"])) - TRAIN_DELTA)
+        return max(TRAIN_MIN_OVR, int(round(self.chapter()["F_start"])) - TRAIN_DELTA)
 
     def training_econ_tier(self):
         return G.clamp(self.econ_tier() - 1, 0, len(G.TIER_MUL) - 1)
 
     def training_cfg(self):
-        """Adversario de treino (Forca de inicio do capitulo - 7; recompensa com tier-1): nao avanca nada.
+        """Adversario de treino (Forca de inicio do capitulo - 12; recompensa com tier-1): nao avanca nada.
         {"home","away","opp","O","user_F","econ_tier","training":True}."""
         rng = self._rng("train")
         name = rng.choice(RL.TEAM_NAMES)
