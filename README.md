@@ -19,7 +19,7 @@ anel de LED e barra de bateria, bola com brilho, rastro e faíscas, e HUD e menu
 novos.
 
 ## Modos
-No menu (teclas 1-5): `1 - AMISTOSO`, `2 - AMISTOSO`, `3 - NOVA CARREIRA`, `4 - CONTINUAR CARREIRA` e `5 - MODO ROBÔS`.
+No menu (teclas 1-6): `1 - AMISTOSO`, `2 - AMISTOSO`, `3 - NOVA CARREIRA`, `4 - CONTINUAR CARREIRA`, `5 - MODO ROBÔS` e `6 - CAMPANHA`.
 
 1. **Amistoso: um jogador** contra a CPU (2 min)
 2. **Amistoso: dois jogadores** no mesmo teclado
@@ -54,6 +54,34 @@ No menu (teclas 1-5): `1 - AMISTOSO`, `2 - AMISTOSO`, `3 - NOVA CARREIRA`, `4 - 
    - **Save próprio**, separado da carreira de clubes: `localStorage`
      (`soccerpy_robots_v1`) no navegador; `~/.soccerpy_robots.json` no desktop. Um save
      inválido só é sobrescrito pelo NOVO JOGO após confirmação explícita; a cópia fica em `.bad`.
+6. **Campanha** "A Garagem do Vô": a história do torneio de robôs aspiradores, jogada
+   sobre a mesma garagem/bancada/loja do Modo Robôs, mas com **save próprio**.
+   - **Enredo:** Téo (Moreira) descobre na garagem do Vô Nestor o Zé Poeira, um
+     aspirador antigo, e junta-se ao Prof. Ambrósio para salvar o clube de robótica do
+     Colégio Santa Faísca. No caminho conhece Vivi (Valentina), Bia e Dudu, e passa a
+     enfrentar a corporação Limpex e o chip X-9 do Dr. Augusto Brilhante, do torneio
+     escolar ao mundial.
+   - **Estrutura:** Prólogo + 5 capítulos (Copa Interclasses, Taça Vale do Pó, Estadual
+     Limpex Cup, Copa Brasil e Mundial de Aspiradores) + epílogo, com ~53 cenas de
+     diálogo. Retratos e cenários são **desenhados por código** (sem imagens externas).
+   - **Escolhas:** algumas cenas oferecem 2-3 opções que mudam falas seguintes e podem dar
+     recompensas (sucata, XP, peça). Esc na cena abre um mini-menu; PULAR CENA pede
+     confirmação (e, se há escolha, assume a opção 1).
+   - **Torneios:** grupo de 4 + mata-mata com pênaltis (o Mundial tem também quartas).
+     Você é sempre o mandante. Em cada partida escolhe **ASSISTIR** (partida jogada no
+     motor, velocidade 1x/2x/4x/MAX nas teclas 1-4) ou **SIMULAR** (resultado estatístico).
+   - **Chefes e "ajuda":** a cada derrota seguida contra o chefe ele perde 1 de Força
+     (até -3); zera ao vencer.
+   - **TREINO:** partidas ilimitadas contra um adversário mais fraco, na garagem ou no
+     mapa, para juntar sucata e XP sem mexer no torneio.
+   - **Progressão:** cada capítulo concluído dá recompensa única (sucata, peça, XP) e
+     libera chassis (Tanque, Velocista, Goleiro e Titã nos Caps. 1 a 4) e recrutas
+     (os robôs Gambiarra, Pixelado e Majestade). A loja evolui com o capítulo.
+   - **Save próprio**, separado da carreira de clubes e do Modo Robôs: `localStorage`
+     (`soccerpy_campaign_v1`) no navegador; `~/.soccerpy_campaign.json` no desktop. Um
+     save inválido só é sobrescrito pelo NOVO JOGO após confirmação; a cópia fica em
+     `.bad`. Um save com pequenos defeitos é reparado automaticamente, voltando ao início
+     do capítulo.
 
 ### Controles (modos 1 e 2)
 | Ação | Modo 1 jogador | J1 | J2 |
@@ -71,8 +99,8 @@ O jogador controlado troca sozinho (o mais perto da bola).
 |---|---|---|
 | 1 | Robôs com chassis e 8 atributos, bateria, arena tecnológica (neon) | pronta |
 | 2 | Garagem e laboratório: peças, upgrades, XP, evolução, loja e liga (Modo Robôs) | pronta e jogável |
-| 3 | **Campanha**: história do torneio de robôs (escola -> mundial), rival, capítulos | planejada |
-| 4 | Editor de firmware (regras da IA em blocos) e acabamento | planejada |
+| 3 | **Campanha** "A Garagem do Vô": história, diálogos, torneios, chefes e treino (escola -> mundial) | pronta e jogável |
+| 4 | Editor de firmware (regras da IA em blocos) | planejada |
 
 **Robôs (Fase 1):** 6 chassis (Disco, Tanque, Velocista, Goleiro, Orbital, Titã) e 8 atributos
 (velocidade, aceleração, chute, controle/sucção, defesa, visão, bateria, QI) que
@@ -104,15 +132,23 @@ export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy
 .venv/bin/python tests/test_robot_save.py              # save do Modo Robôs (store, validação, save inválido)
 .venv/bin/python tests/test_robots_ui.py               # telas do Modo Robôs
 .venv/bin/python tests/test_visual.py                  # cores dos clubes, efeitos, pausa, save
+.venv/bin/python tests/test_story.py                   # dados da campanha (cenas, textos, torneios, capítulos, recompensas)
+.venv/bin/python tests/test_campaign.py                # lógica da campanha (torneios, pity, treino, recompensas)
+.venv/bin/python tests/test_campaign_save.py           # save da campanha (validação, reparo, save inválido)
+.venv/bin/python tests/test_campaign_ui.py             # telas da campanha (menu, mapa, diálogo, torneio, fim)
+.venv/bin/python tests/test_portraits.py               # retratos e cenários desenhados por código
+.venv/bin/python tests/test_campaign_balance.py        # balanço da campanha por simulação (~1,5 min)
 .venv/bin/python tests/sim_harness.py golden --check   # regressão: 80 placares do modo legado
 .venv/bin/python tests/sim_harness.py golden-new --check  # regressão: 80 placares do balanço novo
 ```
 Os testes de garagem, save e UI não tocam nos saves reais (`~/.soccerpy_*.json`).
-Os de partida são lentos (minutos); rode quando mexer em atributos, peças ou balanço:
+Os testes da campanha também não gravam nos saves reais. Os de partida são lentos
+(minutos); rode quando mexer em atributos, peças ou balanço:
 ```bash
 .venv/bin/python tests/test_mechanics.py               # efeito dos atributos na partida
 .venv/bin/python tests/test_robot_balance.py [-n 70] [--procs 4]  # balanço da equipe (peças/raridades) contra o time base
 .venv/bin/python tests/calib_robots.py [--n 100] [--diffs ...] [--fit] [--procs 4]  # calibra a simulação estatística da liga contra o motor
+.venv/bin/python tests/calib_campaign.py [--n 200] [--procs 4]  # calibra a simulação da campanha (SIM_BIAS) contra o motor; pesado, opcional
 ```
 Utilitários do harness (`tests/sim_harness.py`): `golden`/`golden-new` com
 `--write` (regrava a baseline) ou `--check`, `run <ovrA> <ovrB> <n> [seed0] [legacy]`
@@ -129,6 +165,10 @@ Utilitários do harness (`tests/sim_harness.py`): `golden`/`golden-new` com
 - `game/store.py`: armazenamento de texto (`localStorage` no navegador, arquivo em `~` no desktop)
 - `game/robots_ui.py`: telas do Modo Robôs (hub, garagem, banco, loja, liga)
 - `game/career.py` / `game/career_ui.py`: carreira de clubes (liga, mercado, finanças, save) e suas telas
+- `game/story.py`: dados da campanha (personagens, times, cenas/diálogos, torneios, capítulos, recompensas); módulo puro, sem pygame
+- `game/campaign.py`: lógica da campanha (progresso, torneios, chefes/pity, treino, recompensas, save)
+- `game/campaign_ui.py`: telas da campanha (menu, mapa, diálogo, torneio, resultado, fim de capítulo), reaproveitando garagem/bancada/loja do Modo Robôs
+- `game/portraits.py`: retratos e cenários da campanha, desenhados por código
 - `tests/`: testes, harness de simulação e baselines (`baseline_golden*.json`) (ficam fora de `game/` para não entrar no pacote do pygbag)
 
 ## Notas
