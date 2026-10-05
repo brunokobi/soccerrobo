@@ -6,6 +6,9 @@
 ![Status](https://img.shields.io/badge/status-em%20desenvolvimento-orange)
 ![Last commit](https://img.shields.io/github/last-commit/brunokobi/soccerrobo)
 ![Repo size](https://img.shields.io/github/repo-size/brunokobi/soccerrobo)
+[![Jogar online](https://img.shields.io/badge/jogar%20online-copaaspirador.brunokobi.tech-00b4d8?logo=googlechrome&logoColor=white)](https://copaaspirador.brunokobi.tech)
+
+**Jogue agora no navegador: https://copaaspirador.brunokobi.tech**
 
 Futebol arcade 5x5 feito **100% em Python** (pygame), que roda no navegador via
 [pygbag](https://pygame-web.github.io/) (Python -> WebAssembly). O projeto está
