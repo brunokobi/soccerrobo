@@ -11,6 +11,8 @@ from collections import OrderedDict, deque
 import pygame
 from pygame import Vector2 as V
 
+import crowd
+import prefs
 import robot_art
 import robots
 from campaign import Campaign
@@ -39,6 +41,8 @@ ACTIVE_TUNING = robots.TUNING          # padrao do jogo; o modo legado (robots.L
 BATTERY_ON = True                      # bateria ligada (False so no modo legado)
 FX_MAX = 120                           # teto de particulas
 TEXT_CACHE_MAX = 600
+CROWD_CYCLE = ("ALTA", "MEDIA", "OFF")    # opcao TORCIDA (prefs "crowd"), tecla T no menu e na pausa
+CROWD_LABELS = {"ALTA": "ALTA", "MEDIA": "MÉDIA", "OFF": "DESLIGADA"}
 HUMAN_AIM_ERR = 30                     # graus de erro de mira humano por 1.0 de (0.65 - chu/100); so chu < 65
 
 # (papel, fracao x a partir do proprio gol, fracao y)
@@ -190,6 +194,9 @@ class Game:
         self.trail = deque(maxlen=10)
         self.sprites = {}
         self.speed_idx = 0
+        self.crowd = None                         # torcida da partida assistida (crowd.Crowd) ou None
+        self.crowd_clock = None                   # relogio injetavel da torcida (testes); None = perf_counter
+        self.crowd_venue = None                   # local da partida assistida atual (re-warm na pausa)
         self.pitch_surf = self.build_arena()
         self.glows = self.build_glows()
         self.hud_panel = self.build_hud_panel()
@@ -251,6 +258,7 @@ class Game:
         self.score = [0, 0]
         self.career_match = False
         self.match_sink = None
+        self.crowd = None
         self.speed_idx = 0
         self.match_time = self.time_left = MATCH_TIME
         self.events = []
@@ -260,20 +268,22 @@ class Game:
         self.reset_fx()
         self.kickoff(0)
 
-    def start_career_match(self, home, away):
+    def start_career_match(self, home, away, venue=None):
         """Partida automática (CPU x CPU) do modo carreira. home/away = match_cfg()."""
         self.match_sink = None
-        self._begin_match(home, away)
+        self._begin_match(home, away, venue=venue)
 
-    def start_robot_match(self, home, away, on_done, tuning=robots.TUNING_ROBOTS, return_state="robots"):
+    def start_robot_match(self, home, away, on_done, tuning=robots.TUNING_ROBOTS, return_state="robots",
+                          venue=None):
         """Partida automática do modo robôs. home/away = {"name","color","squad":[5 dicts]}.
 
         Ao terminar chama on_done(score, events) e volta ao estado return_state ("robots" por padrao).
+        venue: local da torcida (crowd.VENUES); None = crowd.DEFAULT_VENUE.
         """
-        self._begin_match(home, away, tuning)
+        self._begin_match(home, away, tuning, venue=venue)
         self.match_sink = (return_state, on_done)
 
-    def _begin_match(self, home, away, tuning=None):
+    def _begin_match(self, home, away, tuning=None, venue=None):
         self.mode = 0
         c1 = tuple(away["color"])
         if sum(abs(a - b) for a, b in zip(led_color(home["color"]), led_color(c1))) < 130:
@@ -291,11 +301,13 @@ class Game:
         self.ball = Ball()
         self.paused = False
         self.reset_fx()
+        self.warm_crowd(venue)
         self.state = "kickoff"
         self.kickoff(0)
 
     def finish_career_match(self):
         self.career_match = False
+        self.crowd = None
         self.fx.clear()
         sink, self.match_sink = self.match_sink, None
         if sink:
@@ -325,6 +337,8 @@ class Game:
         b.owner = kicker
         self.state = "kickoff"
         self.timer = 1.6
+        if self.crowd is not None:
+            self.crowd_event("kickoff")
 
     def formation_pos(self, p, attack=0.0, kickoff=False):
         t, b = p.team, self.ball
@@ -376,11 +390,15 @@ class Game:
                     self.robots_ui.open()
                 elif e.key == pygame.K_6:
                     self.campaign_ui.open()
+                elif e.key == pygame.K_t:
+                    self.toggle_crowd()
             elif self.career_match:
                 if e.key in (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4):
                     self.speed_idx = e.key - pygame.K_1
                 elif e.key == pygame.K_p:
                     self.paused = not self.paused
+                elif e.key == pygame.K_t and self.paused:
+                    self.toggle_crowd()
                 elif e.key in (pygame.K_RETURN, pygame.K_SPACE) and self.state == "over":
                     self.finish_career_match()
             elif self.state == "over":
@@ -486,6 +504,8 @@ class Game:
         if self.state == "play" and self.time_left <= 0:
             self.time_left = 0
             self.state = "over"
+            if self.crowd is not None:
+                self.crowd_end()
 
     def update_goal(self, dt):
         self.timer -= dt
@@ -500,6 +520,8 @@ class Game:
             if self.time_left <= 0:
                 self.time_left = 0
                 self.state = "over"
+                if self.crowd is not None:
+                    self.crowd_end()
             else:
                 self.kickoff(1 - self.scorer)
 
@@ -574,6 +596,10 @@ class Game:
         p.cd = 0.35
         if power >= 600:
             self.fx_emit("kick", b.pos, d=d)
+        if self.crowd is not None and power > 450:      # chance: chute forte perto do gol, na direcao dele
+            t = p.team
+            if d.x * t.dir > 0.5 and abs(b.pos.x - t.target_x) < 300:
+                self.crowd_event("chance", t.idx)
 
     def pass_ball(self, p, aim):
         best, best_score = None, 1e9
@@ -661,6 +687,8 @@ class Game:
                     else:
                         self.deflect(p, 0.6, spread=25)
                         p.cd = 0.35
+                    if self.crowd is not None and speed >= CATCH_SPEED:   # defesa de chute forte
+                        self.crowd_event("save", t.idx)
                     return
                 cs = p.f.catch_speed
                 if speed < cs:
@@ -728,6 +756,8 @@ class Game:
         self.fx_emit("goal", self.ball.pos, led_color(self.teams[team_idx].color))
         self.state = "goal"
         self.timer = 2.4
+        if self.crowd is not None:
+            self.crowd_event("goal", team_idx)
 
     # ---------------------------------------------------------- movement
     def tick_battery(self, p, dt):
@@ -937,6 +967,66 @@ class Game:
     def fx_wall(self, impact):
         if impact > 200 and self.ball.owner is None:
             self.fx_emit("wall", self.ball.pos)
+            if self.crowd is not None:               # trave: batida no fundo, rente a boca do gol
+                b = self.ball
+                if (abs(b.pos.x - CX) > PITCH.w / 2 - BR - 2
+                        and GOAL_HALF - BR <= abs(b.pos.y - CY) < GOAL_HALF + 18):
+                    self.crowd_event("post")
+
+    # --------------------------------------------------------------- torcida
+    def warm_crowd(self, venue=None):
+        """Torcida da partida assistida (inicio da partida, nunca no meio). prefs "crowd" OFF = sem torcida.
+
+        Pre-renderiza o atlas e a arena composta (cache LRU de 3 em crowd.py). Nao toca o random global.
+        Tambem busca (text_img) as imagens de onomatopeias, placas de LED e legendas do telao: nenhum
+        texto novo e renderizado durante a partida.
+        """
+        self.crowd = None
+        self.crowd_venue = venue
+        level = self.crowd_level()
+        if level not in crowd.LEVELS:                 # "OFF" (ou valor estranho): sem torcida
+            return None
+        c0, c1 = (led_color(t.color) for t in self.teams)
+        bundle = crowd.warm_crowd(venue, c0, c1, level, base=self.pitch_surf, txt=self.text_img)
+        self.crowd = crowd.Crowd(bundle, clock=self.crowd_clock, txt=self.text_img, telao=self.career_match)
+        return self.crowd
+
+    def crowd_level(self):
+        try:
+            level = prefs.get("crowd")
+        except Exception:  # noqa: BLE001  (prefs nunca devem derrubar a partida)
+            level = "ALTA"
+        return level if level in CROWD_CYCLE else "ALTA"
+
+    def toggle_crowd(self):
+        """Tecla T (menu ou pausa da partida): ALTA -> MEDIA -> OFF -> ALTA, gravado em prefs.
+
+        Na pausa de uma partida assistida aplica na hora (re-warm aqui, no evento; nunca no desenho)."""
+        cur = self.crowd_level()
+        nxt = CROWD_CYCLE[(CROWD_CYCLE.index(cur) + 1) % len(CROWD_CYCLE)]
+        try:
+            prefs.set("crowd", nxt)
+        except Exception:  # noqa: BLE001
+            pass
+        if self.state != "menu" and self.career_match:
+            self.warm_crowd(self.crowd_venue)
+        return nxt
+
+    def crowd_label(self):
+        return "T: torcida " + CROWD_LABELS[self.crowd_level()]
+
+    def crowd_on(self):
+        """Torcida desenhada/reagindo agora: partida assistida, existe e nao esta em MAX."""
+        return self.crowd is not None and self.career_match and self.speed_idx != 3
+
+    def crowd_event(self, kind, team=None):
+        """Hook do motor: so escreve no estado da torcida (nunca na simulacao nem no RNG global)."""
+        if self.crowd is not None and self.speed_idx != 3:
+            self.crowd.event(kind, team)
+
+    def crowd_end(self):
+        a, c = self.score
+        self.crowd_event("end", None if a == c else (0 if a > c else 1))
 
     def draw_fx(self, scr):
         now = time.perf_counter()
@@ -1120,7 +1210,16 @@ class Game:
         if self.state == "menu":
             scr.blit(self.menu_bg, (0, 0))
             return self.draw_menu()
-        scr.blit(self.pitch_surf, (0, 0))
+        cr = self.crowd if self.career_match else None
+        if cr is not None and self.speed_idx == 3:
+            scr.blit(cr.b.static, (0, 0))               # MAX: so a arena composta (1 blit), sem extras
+            cr = None
+        elif cr is None:
+            scr.blit(self.pitch_surf, (0, 0))
+        else:
+            t_draw = time.perf_counter()
+            scr.blit(cr.b.static, (0, 0))
+            cr.draw(scr, self.paused)
 
         b = self.ball
         pygame.draw.ellipse(scr, (3, 8, 18), (b.pos.x - BR + 2, b.pos.y - BR + 5, BR * 2, BR * 1.4))
@@ -1129,10 +1228,14 @@ class Game:
                 self.draw_player(t, p)
         self.draw_ball()
         self.draw_fx(scr)
+        if cr is not None:
+            cr.draw_over(scr, self.paused)
         self.draw_hud()
 
         if self.paused:
             self.banner("PAUSADO", "P para continuar" + ("" if self.career_match else "  |  ESC para o menu"))
+            if self.career_match:
+                self.draw_crowd_option()
         elif self.state == "kickoff":
             self.banner("PREPARAR!" if not self.career_match else "BOLA ROLANDO!", None)
         elif self.state == "goal":
@@ -1152,6 +1255,17 @@ class Game:
                 self.draw_scorers()
             else:
                 self.banner(title, "ENTER = jogar de novo   |   ESC = menu", col)
+        if cr is not None and not self.paused:          # LOD automatico: tempo do quadro de partida
+            cr.lod_feed((time.perf_counter() - t_draw) * 1000)
+
+    def draw_crowd_option(self):
+        """Pausa da partida assistida: opcao TORCIDA (tecla T), logo abaixo da faixa do PAUSADO."""
+        lab = self.crowd_label()
+        img = self.text_img(lab, 28, (255, 230, 120))
+        r = img.get_rect(center=(W // 2, CY + 100))
+        pygame.draw.rect(self.screen, (2, 8, 20), r.inflate(28, 14), border_radius=10)
+        pygame.draw.rect(self.screen, (0, 200, 240), r.inflate(28, 14), 2, border_radius=10)
+        self.screen.blit(img, r)
 
     def draw_scorers(self):
         for team in (0, 1):
@@ -1290,7 +1404,7 @@ class Game:
                   (225, 210, 250), center=(r.centerx, r.centery + 18), shadow=False)
         self.text("clique ou aperte 1 / 2 / 3 / 4 / 5 / 6" if self.has_save else "clique ou aperte 1 / 2 / 3 / 5 / 6",
                   28, (200, 225, 235), center=(cx, 640))
-        self.text("F11: tela cheia", 22, (120, 160, 185), center=(cx, 672), shadow=False)
+        self.text("F11: tela cheia  |  " + self.crowd_label(), 22, (120, 160, 185), center=(cx, 672), shadow=False)
 
 
 async def main():

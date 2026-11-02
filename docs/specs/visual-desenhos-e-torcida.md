@@ -83,7 +83,7 @@ Campo novo `venue` na ação de partida da campanha (derivado do `bg` do torneio
 Onomatopeias e letreiros no lugar de áudio, sempre via `text_img` (cache) em tamanhos fixos {26, 36, 52}: "GOOOL!", "OOOH!", "UUUH!", "OLÉ!", "CLAP CLAP", "BUZZ!" (skill), "ZOOM" (arrancada), "CLANG!" (trave). Surgem acima da arquibancada da fidelidade que reage, sobem 30 px em 0,8 s e desaparecem por troca de cor em 4 passos (sem `set_alpha` em Surfaces compartilhadas: o fade usa `scale_color` no `text_img` com os 4 degraus pré-cacheados). No máximo 2 onomatopeias ao mesmo tempo.
 
 ### 2.7 Telão (HUD de estádio)
-Mostrador pré-renderizado de ~450x34 px na tarja do rodapé (x 270..720, y 658..692), só em partidas assistidas (`career_match`). Conteúdo: linha 1 placar compacto + minuto; linha 2 legenda do locutor (Galvão/Cleide) por evento ("Que lance, Cleide!", "O chinelo ainda está no lugar, Galvão."), até 3 variações por tipo escolhidas por `event_index % n`. Textos pré-renderizados via `text_img`. Placas de LED no campo mostram a marca do local (Limpex, Santa Faísca, Superliga, Copa dos Campeões) em uma tira longa scrollada com `blit(..., area=Rect(off, 0, 980, 10))`.
+Mostrador pré-renderizado de ~450x34 px na tarja do rodapé (x 270..720, y 658..692), só em partidas assistidas (`career_match`). Conteúdo: linha 1 placar compacto + minuto; linha 2 legenda do locutor (Tonho/Cleide) por evento ("Que lance, Cleide!", "O chinelo ainda está no lugar, Tonho."), até 3 variações por tipo escolhidas por `event_index % n`. Textos pré-renderizados via `text_img`. Placas de LED no campo mostram a marca do local (Limpex, Santa Faísca, Superliga, Copa dos Campeões) em uma tira longa scrollada com `blit(..., area=Rect(off, 0, 980, 10))`.
 
 ## 3. Robôs em campo
 
@@ -109,7 +109,7 @@ Hoje o robô é um disco 64x64 (chassis só muda detalhes). Plano (arquivo novo 
 **Personagens**:
 - Humores novos (8): `determinado`, `maravilhado`, `malicioso`, `sonolento`, `chorando`, `gritando`, `piscando`, `euforico` em `draw_face` (boca e sobrancelha novas; lágrima, estrelinhas nos olhos, "zzz" pelo `susp`).
 - **Sincronia da fala**: durante a digitação (`dlg_typing`), a boca alterna 2 quadros a cada ~120 ms; ao fim volta ao humor. Pisca a cada ~3,5 s com duração de 0,12 s, determinístico por contador (sem RNG global). `bob` de respiração leve.
-- **Personagens novos** (7): `nestor`, `valquiria`, `gabi`, `odete`, `ogawa`, `galvao`/`cleide` (em `cabine`, com microfone), `zeperfeito`/`xomega` (variantes de `draw_robot`: sem chinelo, LED vermelho no X-Ômega).
+- **Personagens novos** (7): `nestor`, `valquiria`, `gabi`, `odete`, `ogawa`, `tonho`/`cleide` (em `cabine`, com microfone), `zeperfeito`/`xomega` (variantes de `draw_robot`: sem chinelo, LED vermelho no X-Ômega).
 - Estilos novos: cabelo `trancas`, `coque`, `moicano`; acessórios `bone`, `bengala`, `avental`, `tiara`, `cachecol`; roupas `avental`, `colete`. Mantêm `R` e `k` como parâmetros.
 - **Zé Poeira**: expressão por LED mais rica (LED muda de cor por humor já existe), mais 4 estados (rodinha caindo em animação de 3 quadros).
 

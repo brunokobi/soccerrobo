@@ -28,11 +28,11 @@ Todos seguem o formato de `story.CHARACTERS` (nome <= 14 chars, Latin-1). Estilo
 | `gabi` | GABI TROVÃO | Rival prodígio de 14 anos, "eu sou o futuro". Evolui de rival a aliado ou inimigo (escolha B1) | cabelo espetado azul, boné; camiseta amarela |
 | `odete` | DONA ODETE | Merendeira do Santa Faísca, dona do bolo. Dá missões secundárias | coque grisalho; avental |
 | `ogawa` | MESTRE OGAWA | Sensei do Kenji; zen, fala em provérbios que não fazem sentido | raspado, bigode; kimono |
-| `galvao` / `cleide` | GALVÃO PÓ / CLEIDE MOP | Locutores. Aparecem em 2 cenas e como legendas no telão | cabine (bg `cabine`) |
+| `tonho` / `cleide` | TONHO VASSOURA / CLEIDE MOP | Locutores. Aparecem em 2 cenas e como legendas no telão | cabine (bg `cabine`) |
 | `zeperfeito` | ZÉ PERFEITO | Clone perfeito do Zé Poeira, sem chinelo (robô branco/ciano) | variante de `draw_robot` |
 | `xomega` | X-ÔMEGA | Chip Zero, só voz e LED vermelho (usa o retrato de robô) | variante de `draw_robot` |
 
-(São 8 entradas; `galvao` e `cleide` contam como 2, total 19 com os 12 atuais menos nenhum.)
+(São 8 entradas; `tonho` e `cleide` contam como 2, total 19 com os 12 atuais menos nenhum.)
 
 Cenários novos em `story.BGS` (+7): `praca`, `laboratorio`, `aeroporto`, `dojo`, `fabrica`, `coliseu`, `lanchonete` (+ `cabine` para os locutores). Detalhe visual na spec de visual.
 
