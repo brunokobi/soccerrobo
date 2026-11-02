@@ -507,6 +507,38 @@ def test_bench_draw_states_zero_surface_and_cache():
     ui.editing = False
 
 
+def test_bench_modulo_slot_layout_and_equip():
+    """B4: sem mod_on a bancada tem os 7 slots de sempre; com mod_on, 8 slots a 42 px (altura 38),
+    acima das acoes (y 548), e o Modulo equipa pela bancada."""
+    gg = bench_open()
+    assert not gg.mod_on()
+    rects = robots_ui.bench_slot_rects(False)
+    assert [s for s, _ in rects] == list(robots_ui.P.GEAR_SLOTS)
+    assert all(r == slot_rect(i) for i, (_s, r) in enumerate(rects))
+    rects8 = robots_ui.bench_slot_rects(True)
+    assert [s for s, _ in rects8] == list(robots_ui.P.SLOTS) and len(rects8) == 8
+    assert rects8[-1][1].bottom == 512 < 548 and all(r.h == 38 for _s, r in rects8)
+    for (_a, r1), (_b, r2) in zip(rects8, rects8[1:]):
+        assert r2.y - r1.y == 42 and not r1.colliderect(r2)
+    mod = free_part(gg, "Módulo Arrancada", 2)
+    ok, _ = gg.equip(ui.bench_rid, mod["id"])
+    assert not ok                                          # bloqueado sem mod_on
+    gg.flags["mod_on"] = 1
+    frame()
+    click(rects8[-1][1].center)
+    frame()
+    assert ui.sel_slot == "modulo"
+    click(piece_rect(0).center)
+    frame()
+    assert ui.sel_piece == mod["id"]
+    assert btn_at(20, 548)                                 # EQUIPAR
+    frame()
+    assert gg.robot(ui.bench_rid)["slots"]["modulo"] == mod["id"]
+    zero_surface_frames(30)
+    gg.flags.pop("mod_on", None)
+    gg.robot(ui.bench_rid)["slots"]["modulo"] = None
+
+
 def test_bench_full_flow():
     gg = bench_open(scrap=1000)
     rid = ui.bench_rid
@@ -723,7 +755,7 @@ def test_shop_draw_states_zero_surface_and_cache():
     gg = fresh(scrap=3000)
     tab("shop")
     zero_surface_frames()                                            # PEÇAS / COMPRAR / TODOS
-    for sl in robots_ui.P.SLOTS:
+    for sl in robots_ui.P.GEAR_SLOTS:        # filtros da loja = 7 slots de equipamento (modulo: B12)
         ui.set_shop_slot(sl)
         zero_surface_frames(10)
     ui.set_shop_slot(None)

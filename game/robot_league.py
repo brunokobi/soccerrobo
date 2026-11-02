@@ -222,6 +222,8 @@ def finish_league(garage, rng):
     advanced = pos <= ADVANCE_POS
     if advanced:
         garage.tier_done = max(garage.tier_done, tier)
+        if garage.tier_done >= gm.MOD_ON_TIER:
+            garage.flags[gm.MOD_FLAG] = 1          # B4: slot Modulo/skills liberados no Modo Robos
     garage.league = None
     nxt = garage.tier()
     garage.refresh_shop(nxt, rng)

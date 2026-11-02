@@ -103,7 +103,7 @@ def _equip_all(g, rar, lvl):
         r["slots"] = {s: None for s in parts.SLOTS}
     g.inventory = []
     for r in g.robots:
-        for slot in parts.SLOTS:
+        for slot in parts.GEAR_SLOTS:
             pc = g.new_piece(BAL[slot], rar, lvl)
             g.inventory.append(pc)
             assert g.equip(r["id"], pc["id"])[0]

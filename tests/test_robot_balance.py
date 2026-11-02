@@ -56,7 +56,7 @@ def build_garage(rar=None, level=1, oc=0, lvl=0):
     g.inventory = []
     if rar is not None:
         for r in g.robots:
-            for slot in parts.SLOTS:
+            for slot in parts.GEAR_SLOTS:
                 pc = g.new_piece(BAL[slot], rar, lvl)
                 g.inventory.append(pc)
                 assert g.equip(r["id"], pc["id"])[0]

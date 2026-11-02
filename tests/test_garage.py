@@ -38,10 +38,13 @@ def bare_robot(**kw):
 
 # ----------------------------------------------------------------- catalogo
 def test_catalog():
-    assert len(parts.PARTS) == 14
-    for slot in parts.SLOTS:
-        assert len(parts.models_for_slot(slot)) == 2, slot
-    for m, d in parts.PARTS.items():
+    # Fase 4/B1: o catalogo original (14 modelos, 2 por slot de equipamento) vive em CORE_MODELS;
+    # os modelos novos, reliquias e modulos sao conferidos em tests/test_parts_v2.py.
+    assert len(parts.CORE_MODELS) == 14 and parts.MODELS == parts.CORE_MODELS
+    for slot in parts.GEAR_SLOTS:
+        assert len(parts.models_for_slot(slot, parts.CORE_MODELS)) == 2, slot
+    for m in parts.CORE_MODELS:
+        d = parts.PARTS[m]
         assert d["slot"] in parts.SLOTS, m
         assert d["w"] and all(a in robots.ATTRS for a in d["w"]), m
         prim = max(d["w"].values())
@@ -136,7 +139,7 @@ def test_new_game():
     ids = [r["id"] for r in g.robots] + [p["id"] for p in g.inventory] + [p["id"] for p in stock]
     assert len(set(ids)) == len(ids) and g.next_id > max(ids)
     d = g.to_dict()
-    assert d["v"] == 1 and all(f in d for f in gm.FIELDS)
+    assert d["v"] == gm.VERSION and all(f in d for f in gm.FIELDS)
     d["scrap"] = 0
     assert g.scrap == 150, "to_dict deve copiar"
     # deterministico

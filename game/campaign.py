@@ -80,6 +80,7 @@ MIGRATIONS = {}
 MAX_DONE, MAX_DONE_RAW, MAX_RESULTS = 300, 1000, 12
 SEED_MAX, STAT_MAX = 2 ** 53, 10 ** 9
 STAT_KEYS = ("ev", "matches", "sims", "trained")
+UNLOCK_REWARD = "rw_5"       # fim do Ato 1: liga modulos/skills (mod_on) e o nivel maximo 15
 
 
 # --- funcoes puras ------------------------------------------------------------------
@@ -315,10 +316,10 @@ class Campaign:
         if fx.get("scrap"):
             g.scrap = G.clamp(g.scrap + int(fx["scrap"]), 0, G.SCRAP_MAX)
         if fx.get("xp_hero") and self.hero_robot() is not None:
-            G.add_xp(self.hero_robot(), fx["xp_hero"])
+            G.add_xp(self.hero_robot(), fx["xp_hero"], g.cap)
         if fx.get("xp_team"):
             for r in g.robots:
-                G.add_xp(r, fx["xp_team"])
+                G.add_xp(r, fx["xp_team"], g.cap)
         if fx.get("piece"):
             self._give_piece(fx["piece"])
 
@@ -643,6 +644,7 @@ class Campaign:
         rw = story.REWARDS[rid]
         g = self.garage
         self.done.append(key)
+        sync_unlocks(g, self.done)
         rep = dict(empty, applied=True, recruits=[], unlocked=[], warnings=[])
         if rw.get("scrap"):
             g.scrap = G.clamp(g.scrap + rw["scrap"], 0, G.SCRAP_MAX)
@@ -660,11 +662,11 @@ class Campaign:
                 g.unlocked.append(c)
                 rep["unlocked"].append(c)
         if rw.get("xp_hero") and self.hero_robot() is not None:
-            G.add_xp(self.hero_robot(), rw["xp_hero"])
+            G.add_xp(self.hero_robot(), rw["xp_hero"], g.cap)
             rep["xp_hero"] = rw["xp_hero"]
         if rw.get("xp_team"):
             for r in g.robots:
-                G.add_xp(r, rw["xp_team"])
+                G.add_xp(r, rw["xp_team"], g.cap)
             rep["xp_team"] = rw["xp_team"]
         if rw.get("equip_hero_piece") and self.hero_robot() is not None:
             pc = self._give_piece(rw["equip_hero_piece"])
@@ -703,6 +705,18 @@ class Campaign:
             if pc is not None:
                 g.equip(rb["id"], pc["id"])
         return warn
+
+
+def sync_unlocks(g, done):
+    """Liberacoes da campanha derivadas de `done` (B3/B4): concluido o capitulo UNLOCK_REWARD (fim do
+    Ato 1), o flag de sistema mod_on liga (slot Modulo/skills) e o teto de nivel sobe para
+    G.CAMPAIGN_CAP. mod_on e estritamente derivado (um garage v1 migrado com tier_done >= 0 nao o liga
+    na campanha); o cap so sobe (nunca corta niveis ja ganhos)."""
+    if ("reward:%s" % UNLOCK_REWARD) in done:
+        g.flags[G.MOD_FLAG] = 1
+        g.cap = max(g.cap, G.CAMPAIGN_CAP)
+    else:
+        g.flags.pop(G.MOD_FLAG, None)
 
 
 # --- persistencia: armazenamento (monkeypatchavel nos testes) -------------------------------
@@ -865,6 +879,7 @@ def _sanitize(data):
     done = _done_keys(c.get("done"))
     if done is None:
         return None
+    sync_unlocks(gobj, done)
     warns = []
     rewind = not sv_ok
     if not sv_ok:

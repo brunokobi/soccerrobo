@@ -13,6 +13,7 @@ import random
 
 import parts
 import robots
+import skills
 import store
 
 # --- constantes de balanceamento -------------------------------------------------
@@ -20,7 +21,9 @@ LEVEL_STEP = 1.1
 OC_BAT = (0, 6, 14)
 OC_MUL = (1.0, 1.15, 1.30)
 OC_NAMES = ("NORMAL", "TURBO", "OVERDRIVE")
-MAX_LEVEL = 10
+MAX_LEVEL = 10                 # teto do Modo Robos (Garage.cap padrao)
+CAMPAIGN_CAP = 15              # teto da campanha (Garage.cap = 15 a partir do Ato 2)
+MOD_ON_TIER = 0                # Modo Robos: modulos/skills ligam ao concluir o tier 1 (indice 0)
 BASE_OVR = 46   # starter (Disco, sem bonus de papel de chassis): compensa ~-10 pts vs chassis de papel do oponente
 MIN_SQUAD, MAX_SQUAD = 5, 8
 MAX_INVENTORY = 200
@@ -61,20 +64,51 @@ NAME_MAX_ROBOT, NAME_MAX_TEAM = 12, 16
 NAME_MAX_LEAGUE_TEAM = 24     # nomes gerados da liga (ex.: "Engrenagem Atlética")
 
 FIELDS = ("scrap", "next_id", "team", "robots", "lineup", "inventory", "unlocked",
-          "tier_done", "league", "shop", "stats", "flags")
-VERSION = 1
+          "tier_done", "league", "shop", "stats", "flags", "items", "cosmetics", "cap", "tactic")
+# v2 (Fase 4/B3): slot "modulo", robo.skills/look, items, cosmetics, cap, tactic, MAX_FLAGS 128.
+VERSION = 2
 SAVE_KEY = "soccerpy_robots_v1"
 SAVE_PATH = os.path.join(os.path.expanduser("~"), ".soccerpy_robots.json")
 MAX_SAVE_CHARS = 2_000_000
 SCRAP_MAX = 10_000_000
 ID_MAX = 10 ** 9
-MAX_FLAGS, FLAG_KEY_MAX = 64, 32
+MAX_FLAGS, FLAG_KEY_MAX = 128, 32
+MOD_FLAG = "mod_on"           # flag de sistema: slot Modulo/skills liberados
 SHOP_MAX = 16
 LEAGUE_TEAMS, LEAGUE_ROUNDS = 6, 10          # espelha robot_league (evita import circular)
 # status de load_status()
 SAVE_NONE, SAVE_OK, SAVE_BAD = "none", "ok", "bad"
 # migracoes: {versao_de_origem: fn(dict) -> dict da versao seguinte}, aplicadas antes do sanitize
 MIGRATIONS = {}
+
+
+def _migrate_v1(d):
+    """v1 -> v2: so ACRESCENTA (nada e removido nem renomeado). Robos ganham slots.modulo=None,
+    skills (PH retroativos = nivel-1), look={}; o garage ganha items={}, cosmetics=[], cap=10,
+    tactic padrao; flag mod_on se o tier 1 ja foi concluido (a campanha re-deriva o flag dela).
+    Entradas estranhas passam como estao (o sanitize limpa depois)."""
+    d = copy.deepcopy(d)
+    for r in d.get("robots") if isinstance(d.get("robots"), list) else ():
+        if not isinstance(r, dict):
+            continue
+        if isinstance(r.get("slots"), dict):
+            r["slots"].setdefault("modulo", None)
+        lv = _int(r.get("level"), 1, MAX_LEVEL, 1)
+        r.setdefault("skills", {"learned": {}, "equipped": [], "pts": skills.ph_for_level(lv)})
+        r.setdefault("look", {})
+    d.setdefault("items", {})
+    d.setdefault("cosmetics", [])
+    d.setdefault("cap", MAX_LEVEL)
+    d.setdefault("tactic", skills.DEFAULT_TACTIC)
+    td = d.get("tier_done")
+    fl = d.get("flags")
+    if _is_int(td) and td >= MOD_ON_TIER and isinstance(fl, dict):
+        fl.setdefault(MOD_FLAG, 1)
+    d["v"] = 2
+    return d
+
+
+MIGRATIONS[1] = _migrate_v1
 
 
 def clamp(v, lo, hi):
@@ -89,17 +123,26 @@ def effective_attrs(robot, pieces_by_id):
     raw = {a: float(robot["base"][a]) + LEVEL_STEP * (robot.get("level", 1) - 1)
            for a in robots.ATTRS}
     bat_extra = 0.0
+    models = []
     for slot in parts.SLOTS:
         pid = robot.get("slots", {}).get(slot)
         pc = pieces_by_id.get(pid) if pid is not None else None
         if pc is None or parts.part_slot(pc) != slot:
             continue
+        models.append(pc["model"])
         for a, v in parts.part_bonus(pc["model"], pc["rar"], pc["lvl"]).items():
             if a == "bat":
                 bat_extra += v
             else:
                 raw[a] += ocm * v
         bat_extra -= parts.part_heat(pc["model"], pc["rar"], pc["lvl"])
+    # sets (B2): bonus fixo por faixa (2/4/6 pecas), fora do multiplicador de overclock
+    set_attrs, _passives = parts.set_bonus(parts.set_counts(models))
+    for a, v in set_attrs.items():
+        if a == "bat":
+            bat_extra += v
+        else:
+            raw[a] += v
     raw["bat"] += bat_extra - OC_BAT[oc]
     return {a: int(clamp(round(raw[a]), robots.ATTR_MIN, robots.ATTR_MAX))
             for a in robots.ATTRS}
@@ -111,6 +154,17 @@ def team_rating(robot_list, pieces_by_id):
         return 0.0
     tot = sum(robots.mean_attr(effective_attrs(r, pieces_by_id)) for r in robot_list)
     return tot / len(robot_list) * 100.0
+
+
+def robot_set_counts(robot, pieces_by_id):
+    """{set: n} das pecas equipadas no robo (para a UI: 'Faxineiro 3/6')."""
+    models = []
+    for slot in parts.SLOTS:
+        pid = robot.get("slots", {}).get(slot)
+        pc = pieces_by_id.get(pid) if pid is not None else None
+        if pc is not None and parts.part_slot(pc) == slot:
+            models.append(pc["model"])
+    return parts.set_counts(models)
 
 
 # peca -> overlay desenhado em campo (A9; a arte de cada overlay fica em robot_art.py). Modelos fora da
@@ -153,27 +207,32 @@ def xp_need(level):
     return 40 + 25 * (level - 1) + 5 * (level - 1) ** 2
 
 
-def xp_to_next(robot):
-    """XP que falta para o proximo nivel (0 no nivel maximo)."""
-    if robot["level"] >= MAX_LEVEL:
+def xp_to_next(robot, cap=MAX_LEVEL):
+    """XP que falta para o proximo nivel (0 no nivel maximo `cap`)."""
+    if robot["level"] >= cap:
         return 0
     return xp_need(robot["level"]) - robot["xp"]
 
 
-def add_xp(robot, amount):
-    """Soma XP (xp guarda o resto dentro do nivel); devolve niveis ganhos."""
+def add_xp(robot, amount, cap=MAX_LEVEL):
+    """Soma XP (xp guarda o resto dentro do nivel); devolve niveis ganhos. `cap` = nivel maximo
+    (MAX_LEVEL=10 no Modo Robos; Garage.cap, ate CAMPAIGN_CAP=15, na campanha). Cada nivel ganho da
+    skills.PH_PER_LEVEL ponto de habilidade (robo.skills.pts)."""
     gained = 0
     amount = max(0, int(amount))
-    if robot["level"] >= MAX_LEVEL:
+    cap = clamp(int(cap), 1, CAMPAIGN_CAP)
+    if robot["level"] >= cap:
         robot["xp"] = 0
         return 0
     robot["xp"] += amount
-    while robot["level"] < MAX_LEVEL and robot["xp"] >= xp_need(robot["level"]):
+    while robot["level"] < cap and robot["xp"] >= xp_need(robot["level"]):
         robot["xp"] -= xp_need(robot["level"])
         robot["level"] += 1
         gained += 1
-    if robot["level"] >= MAX_LEVEL:
+    if robot["level"] >= cap:
         robot["xp"] = 0
+    if gained and isinstance(robot.get("skills"), dict):
+        skills.grant_pts(robot, gained * skills.PH_PER_LEVEL)
     return gained
 
 
@@ -193,6 +252,10 @@ class Garage:
         self.shop = {"stock": [], "seed": 0}
         self.stats = {"played": 0, "w": 0, "d": 0, "l": 0, "titles": 0}
         self.flags = {}
+        self.items = {}
+        self.cosmetics = []
+        self.cap = MAX_LEVEL
+        self.tactic = skills.DEFAULT_TACTIC
 
     # ---------------------------------------------------------------- serializacao
     def to_dict(self):
@@ -208,9 +271,9 @@ class Garage:
     @staticmethod
     def sanitize(data):
         """Dict (qualquer coisa vinda do JSON) -> dict limpo com exatamente VERSION+FIELDS,
-        ou None se irrecuperavel. Nunca levanta."""
+        ou None se irrecuperavel. Versao antiga e migrada antes (MIGRATIONS). Nunca levanta."""
         try:
-            return _sanitize(data)
+            return _sanitize(_migrate(data))
         except Exception as ex:  # noqa: BLE001
             print("sanitize error:", ex)
             return None
@@ -291,6 +354,16 @@ class Garage:
         return [p for p in self.inventory if p["id"] not in used
                 and (slot is None or parts.part_slot(p) == slot)]
 
+    def mod_on(self):
+        return bool(self.flags.get(MOD_FLAG))
+
+    def xp_to_next(self, robot):
+        return xp_to_next(robot, self.cap)
+
+    def skills_of(self, robot):
+        """[(id, rank, up)] efetivas do robo (o motor so as usa a partir do passo B6)."""
+        return skills.effective_skills(robot, self.pieces_by_id(), self.mod_on())
+
     def attrs_of(self, robot):
         return effective_attrs(robot, self.pieces_by_id())
 
@@ -323,7 +396,8 @@ class Garage:
                 "xp": 0,
                 "paint": list(paint if paint is not None else self.team["color"]),
                 "base": robots.from_overall(base_ovr, role, chassis, seed=rid),
-                "slots": {s: None for s in parts.SLOTS}, "oc": 0}
+                "slots": {s: None for s in parts.SLOTS}, "oc": 0,
+                "skills": skills.new_robot_skills(), "look": {}}
 
     def tier(self):
         """Tier da proxima liga: o seguinte ao ultimo concluido (3 e o teto)."""
@@ -337,6 +411,8 @@ class Garage:
         if p is None:
             return False, "Peça não encontrada."
         ps = parts.part_slot(p)
+        if ps == "modulo" and not self.mod_on():
+            return False, "Módulos ainda bloqueados."
         if slot is not None and slot != ps:
             return False, "Essa peça não encaixa no slot %s." % parts.SLOT_NAMES.get(slot, slot)
         other = self.equipped_by(pid)
@@ -388,6 +464,8 @@ class Garage:
         p = self.piece(pid)
         if p is None:
             return False, "Peça não encontrada."
+        if parts.is_unique(p["model"]):
+            return False, "Relíquias não podem ser vendidas."
         other = self.equipped_by(pid)
         if other is not None:
             return False, "Desequipe a peça de %s antes de vender." % other["name"]
@@ -501,15 +579,17 @@ class Garage:
 
     # ---------------------------------------------------------------- loja
     def refresh_shop(self, tier, rng):
-        """Novo estoque: 6 Comuns, 1 Rara garantida, Epica 25% (tier>=1), Lendaria 10% (tier>=3)."""
+        """Novo estoque: 6 Comuns, 1 Rara garantida, Epica 25% (tier>=1), Lendaria 10% (tier>=3).
+        Modelos: parts.shop_models(tier, rar) = CORE_MODELS ate o tier 3 (stream do RNG identico ao
+        da v1), ALL_MODELS a partir do tier 4."""
         seed = rng.getrandbits(31)
         r = random.Random(seed)
-        stock = [self.new_piece(r.choice(parts.MODELS), 0) for _ in range(SHOP_COMMONS)]
-        stock.append(self.new_piece(r.choice(parts.MODELS), 1))
+        stock = [self.new_piece(r.choice(parts.shop_models(tier, 0)), 0) for _ in range(SHOP_COMMONS)]
+        stock.append(self.new_piece(r.choice(parts.shop_models(tier, 1)), 1))
         if tier >= EPIC_MIN_TIER and r.random() < EPIC_CHANCE:
-            stock.append(self.new_piece(r.choice(parts.MODELS), 2))
+            stock.append(self.new_piece(r.choice(parts.shop_models(tier, 2)), 2))
         if tier >= LEGEND_MIN_TIER and r.random() < LEGEND_CHANCE:
-            stock.append(self.new_piece(r.choice(parts.MODELS), 3))
+            stock.append(self.new_piece(r.choice(parts.shop_models(tier, 3)), 3))
         self.shop = {"stock": stock, "seed": seed}
         return stock
 
@@ -562,11 +642,11 @@ def match_rewards(garage, my_goals, opp_goals, scorer_pids, tier, rng):
         else:
             amt = int((XP_BASE + bonus) * XP_RESERVE_PCT)
         xp[r["id"]] = amt
-        levels[r["id"]] = add_xp(r, amt)
+        levels[r["id"]] = add_xp(r, amt, garage.cap)
     garage.scrap += scrap
     drop = None
     if res == "w" and rng.random() < DROP_CHANCE and len(garage.inventory) < MAX_INVENTORY:
-        drop = garage.new_piece(rng.choice(parts.MODELS), 0)
+        drop = garage.new_piece(rng.choice(parts.CORE_MODELS), 0)
         garage.inventory.append(drop)
     st = garage.stats
     st["played"] += 1
@@ -697,12 +777,48 @@ def _piece(p):
     model = p.get("model")
     if pid is None or not isinstance(model, str) or model not in parts.PARTS:
         return None
-    return {"id": pid, "model": model,
-            "rar": _int(p.get("rar"), 0, len(parts.RARITIES) - 1, 0),
+    rar = _int(p.get("rar"), 0, len(parts.RARITIES) - 1, 0)
+    if parts.is_unique(model):
+        rar = parts.LEGEND                       # reliquia: sempre Lendaria
+    return {"id": pid, "model": model, "rar": rar,
             "lvl": _int(p.get("lvl"), 0, parts.MAX_UP, 0)}
 
 
-def _robot(r, team_color):
+def _robot_skills(sk, level):
+    """skills do robo: learned {id: rank 1..3} (so ids de skills.SKILLS), equipped (subconjunto de
+    learned, sem duplicatas, <= MAX_EQUIPPED, carga <= LOAD_MAX), pts 0..PTS_MAX."""
+    sk = sk if isinstance(sk, dict) else {}
+    lr = sk.get("learned")
+    learned = {}
+    if isinstance(lr, dict):
+        for k, v in list(lr.items())[:len(skills.SKILLS) * 4]:
+            rk = _strict_int(v, 1, 3)
+            if isinstance(k, str) and k in skills.SKILLS and rk is not None:
+                learned[k] = rk
+    eq_raw = sk.get("equipped")
+    equipped, load = [], 0
+    for k in (eq_raw[:skills.MAX_EQUIPPED * 4] if isinstance(eq_raw, list) else []):
+        if not isinstance(k, str) or k not in learned or k in equipped:
+            continue
+        ld = skills.load_of(k, learned[k])
+        if len(equipped) < skills.MAX_EQUIPPED and load + ld <= skills.LOAD_MAX:
+            equipped.append(k)
+            load += ld
+    return {"learned": learned, "equipped": equipped,
+            "pts": _int(sk.get("pts"), 0, skills.PTS_MAX, 0)}
+
+
+def _look(lk):
+    out = {}
+    if isinstance(lk, dict):
+        for kind, ids in parts.LOOK_KINDS.items():
+            v = lk.get(kind)
+            if isinstance(v, str) and v in ids:
+                out[kind] = v
+    return out
+
+
+def _robot(r, team_color, cap=MAX_LEVEL):
     """Robo limpo (slots ainda como candidatos) ou None."""
     if not isinstance(r, dict):
         return None
@@ -721,15 +837,16 @@ def _robot(r, team_color):
         if f is None:
             return None
         base[a] = int(clamp(round(f), robots.ATTR_MIN, robots.ATTR_MAX))
-    level = _int(r.get("level"), 1, MAX_LEVEL, 1)
-    xp = 0 if level >= MAX_LEVEL else _int(r.get("xp"), 0, xp_need(level) - 1, 0)
+    level = _int(r.get("level"), 1, cap, 1)
+    xp = 0 if level >= cap else _int(r.get("xp"), 0, xp_need(level) - 1, 0)
     slots = r.get("slots")
     slots = slots if isinstance(slots, dict) else {}
     return {"id": rid, "name": _str(r.get("name"), NAME_MAX_ROBOT, "Robô %d" % rid),
             "chassis": chassis, "role": role, "level": level, "xp": xp,
             "paint": _color(r.get("paint"), team_color), "base": base,
             "slots": {s: _strict_int(slots.get(s), 1, ID_MAX) for s in parts.SLOTS},
-            "oc": _int(r.get("oc"), 0, len(OC_MUL) - 1, 0)}
+            "oc": _int(r.get("oc"), 0, len(OC_MUL) - 1, 0),
+            "skills": _robot_skills(r.get("skills"), level), "look": _look(r.get("look"))}
 
 
 def _league(lg):
@@ -796,13 +913,17 @@ def _sanitize(data):
     tm = tm if isinstance(tm, dict) else {}
     team = {"name": _str(tm.get("name"), NAME_MAX_TEAM, "Meu Time"),
             "color": _color(tm.get("color"), TEAM_COLOR)}
-    # pecas (inventario): ids unicos, modelo conhecido, <=200
+    cap = _int(data.get("cap"), MAX_LEVEL, CAMPAIGN_CAP, MAX_LEVEL)
+    # pecas (inventario): ids unicos, modelo conhecido, <=200, reliquia (unique) no maximo 1
     inv_raw = data.get("inventory")
-    inventory, ids = [], set()
+    inventory, ids, uniq = [], set(), set()
     for p in (inv_raw[:MAX_INVENTORY * 2] if isinstance(inv_raw, list) else []):
         pc = _piece(p)
-        if pc is not None and pc["id"] not in ids and len(inventory) < MAX_INVENTORY:
+        if pc is not None and pc["id"] not in ids and len(inventory) < MAX_INVENTORY \
+                and pc["model"] not in uniq:
             ids.add(pc["id"])
+            if parts.is_unique(pc["model"]):
+                uniq.add(pc["model"])
             inventory.append(pc)
     # robos: ids unicos, <=8
     rb_raw = data.get("robots")
@@ -810,7 +931,7 @@ def _sanitize(data):
         return None
     robot_list, rids = [], set()
     for r in rb_raw[:MAX_SQUAD * 4]:
-        rb = _robot(r, team["color"])
+        rb = _robot(r, team["color"], cap)
         if rb is not None and rb["id"] not in rids and len(robot_list) < MAX_SQUAD:
             rids.add(rb["id"])
             robot_list.append(rb)
@@ -834,8 +955,10 @@ def _sanitize(data):
     st_raw = sh.get("stock")
     for p in (st_raw[:SHOP_MAX * 2] if isinstance(st_raw, list) else []):
         pc = _piece(p)
-        if pc is not None and pc["id"] not in ids and len(stock) < SHOP_MAX:
+        if pc is not None and pc["id"] not in ids and len(stock) < SHOP_MAX and pc["model"] not in uniq:
             ids.add(pc["id"])
+            if parts.is_unique(pc["model"]):
+                uniq.add(pc["model"])
             stock.append(pc)
     shop = {"stock": stock, "seed": _int(sh.get("seed"), 0, 2 ** 31 - 1, 0)}
     # demais campos
@@ -850,11 +973,29 @@ def _sanitize(data):
     flags = {}
     f_raw = data.get("flags")
     if isinstance(f_raw, dict):
-        for k, v in list(f_raw.items())[:MAX_FLAGS * 2]:
+        items_f = list(f_raw.items())[:MAX_FLAGS * 2]
+        if MOD_FLAG in f_raw:                       # flag de sistema: nunca e cortado pelo limite
+            items_f = [(MOD_FLAG, f_raw[MOD_FLAG])] + [kv for kv in items_f if kv[0] != MOD_FLAG]
+        for k, v in items_f:
             key = _str(k, FLAG_KEY_MAX, "")
             val = _int(v, -ID_MAX, ID_MAX, None)
             if key and val is not None and len(flags) < MAX_FLAGS:
                 flags[key] = val
+    it_raw = data.get("items")
+    items = {}
+    if isinstance(it_raw, dict):
+        for k, v in list(it_raw.items())[:len(skills.ITEMS) * 4]:
+            q = _int(v, 0, skills.ITEM_MAX, 0)
+            if isinstance(k, str) and k in skills.ITEMS and q > 0:
+                items[k] = q
+    co_raw = data.get("cosmetics")
+    cosmetics = []
+    for c in (co_raw[:len(parts.COSMETICS) * 4] if isinstance(co_raw, list) else []):
+        if isinstance(c, str) and c in parts.COSMETICS and c not in cosmetics:
+            cosmetics.append(c)
+    tactic = data.get("tactic")
+    if not (isinstance(tactic, str) and tactic in skills.TACTICS):
+        tactic = skills.DEFAULT_TACTIC
     max_id = max([r["id"] for r in robot_list] + list(ids))
     clean = {"v": VERSION,
              "scrap": _int(data.get("scrap"), 0, SCRAP_MAX, 0),
@@ -863,7 +1004,7 @@ def _sanitize(data):
              "unlocked": unlocked,
              "tier_done": _int(data.get("tier_done"), -1, len(TIER_OVR) - 1, -1),
              "league": _league(data.get("league")), "shop": shop, "stats": stats,
-             "flags": flags}
+             "flags": flags, "items": items, "cosmetics": cosmetics, "cap": cap, "tactic": tactic}
     # escalacao: 5 ids distintos de robos existentes; senao automatica
     lu = data.get("lineup")
     ok = (isinstance(lu, list) and len(lu) == len(LINEUP_SLOTS)

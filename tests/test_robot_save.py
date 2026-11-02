@@ -246,7 +246,7 @@ def test_invalid_json_and_roots():
 
 @run_with_store
 def test_version_problems():
-    for mut in ("missing", None, "1", 0, -1, 2, 99, 1.5, True, [1], {"a": 1}):
+    for mut in ("missing", None, "1", 0, -1, gm.VERSION + 1, 99, 1.5, True, [1], {"a": 1}):
         d = valid_dict()
         if mut == "missing":
             del d["v"]
@@ -265,19 +265,21 @@ def test_future_version_and_migration_hook():
     expect_none_and_bad()
     # v antiga sem migracao registrada -> None; com migracao -> aplicada
     saved = dict(gm.MIGRATIONS)
+    old_v = gm.VERSION
     try:
-        old_v = gm.VERSION
-        gm.VERSION = 2
+        # simula uma versao FUTURA (VERSION+1) com o save atual como "antigo"
+        gm.VERSION = old_v + 1
         d = valid_dict()
-        d["v"] = 1
+        d["v"] = old_v
         d["scrap"] = 10
         put(d)
         MEM.pop(BAD, None)
+        gm.MIGRATIONS.pop(old_v, None)
         assert gm.Garage.load() is None and BAD in MEM        # sem migracao
-        gm.MIGRATIONS[1] = lambda x: dict(x, v=2, scrap=x["scrap"] + 1)
+        gm.MIGRATIONS[old_v] = lambda x: dict(x, v=old_v + 1, scrap=x["scrap"] + 1)
         g = gm.Garage.load()
         assert g is not None and g.scrap == 11
-        gm.MIGRATIONS[1] = lambda x: 1 / 0                    # migracao quebrada -> None
+        gm.MIGRATIONS[old_v] = lambda x: 1 / 0                # migracao quebrada -> None
         assert gm.Garage.load() is None
     finally:
         gm.VERSION = old_v

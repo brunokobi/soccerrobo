@@ -23,11 +23,22 @@ FRAME_SCREENS = tuple(t for t, _ in TABS)          # telas com cabeçalho + abas
 END_SCREENS = ("round", "league_end")
 SCREENS = ("menu",) + FRAME_SCREENS + ("bench",) + END_SCREENS
 SLOT_LABELS = {"motor": "MOTOR", "bateria": "BATERIA", "parachoque": "PARA-CHOQUE",
-               "chutador": "CHUTADOR", "succao": "SUCÇÃO", "sensor": "SENSOR", "chip": "CHIP"}
+               "chutador": "CHUTADOR", "succao": "SUCÇÃO", "sensor": "SENSOR", "chip": "CHIP",
+               "modulo": "MÓDULO"}
 FUN_NAMES = ("Zé Parafuso", "Chuta-Bolt", "Mini Hulk", "Robozilla", "Fio Solto", "Sir Pixel",
              "Dona Bateria", "Bip Bop", "Lata Veia", "Cabo Zero", "Faísca Jr", "Mecha Fofo",
              "Turbinado", "Zunido", "Ferrugento", "Pé de Ferro")
 PIECE_ROWS = 6
+
+
+def bench_slot_rects(mod_on):
+    """[(slot, Rect)] da coluna de slots da bancada: 7 slots a 50 px (altura 46) ou, com o Modulo
+    liberado (mod_on), 8 slots a 42 px (altura 38), terminando em 180 + 7*42 + 38 = 512 (< 548)."""
+    if mod_on:
+        return [(sl, pygame.Rect(20, 180 + i * 42, 280, 38)) for i, sl in enumerate(P.SLOTS)]
+    return [(sl, pygame.Rect(20, 182 + i * 50, 280, 46)) for i, sl in enumerate(P.GEAR_SLOTS)]
+
+
 SHOP_ROWS = 10
 ROLE_PT = {"GK": "goleiro", "DEF": "defensor", "MID": "meia", "ATT": "atacante"}
 TEAM_NAMES = ("Meu Time", "Os Cabos Soltos", "Pó de Ferro", "Aspira Mais", "Sucata FC",
@@ -374,7 +385,7 @@ class RobotsUI(CareerUI):
             self.btn((280 + i * 120, 132, 110, 36), lab, lambda m=m: self.set_shop_mode(m),
                      color=(0, 140, 110) if (self.shop_mode == m and m == "buy") else (
                          (170, 90, 60) if self.shop_mode == m else (16, 44, 70)), size=24)
-        for i, sl in enumerate((None,) + P.SLOTS):
+        for i, sl in enumerate((None,) + P.GEAR_SLOTS):
             self.btn((20 + i * 132, 176, 126, 32), "TODOS" if sl is None else SLOT_LABELS[sl],
                      lambda s=sl: self.set_shop_slot(s),
                      color=(50, 160, 220) if self.shop_slot == sl else (16, 44, 70), size=20)
@@ -885,12 +896,12 @@ class RobotsUI(CareerUI):
         self.text(str(ovr), 28, ovr_color(ovr), midright=(535, cy))
         bar = pygame.Rect(560, cy - 6, 140, 12)
         pygame.draw.rect(scr, BG, bar, border_radius=4)
-        if rb["level"] >= G.MAX_LEVEL:
+        if rb["level"] >= gg.cap:
             frac = 1.0
         else:
             frac = max(0.0, min(1.0, rb["xp"] / float(G.xp_need(rb["level"]))))
         if frac > 0:
-            pygame.draw.rect(scr, GOLD if rb["level"] >= G.MAX_LEVEL else (0, 190, 230),
+            pygame.draw.rect(scr, GOLD if rb["level"] >= gg.cap else (0, 190, 230),
                              (bar.x, bar.y, max(4, int(bar.w * frac)), bar.h), border_radius=4)
         pygame.draw.rect(scr, LINE, bar, 1, border_radius=4)
         self.hit(r, lambda rid=rb["id"], s=slot: self.click_row(rid, s))
@@ -1070,7 +1081,7 @@ class RobotsUI(CareerUI):
         self.text("%s  Nv %d" % (rb["chassis"], rb["level"]), 24, DIM, midleft=(268, 152))
         bar = pygame.Rect(420, 146, 200, 12)
         pygame.draw.rect(scr, BG, bar, border_radius=4)
-        maxed = rb["level"] >= G.MAX_LEVEL
+        maxed = rb["level"] >= gg.cap
         frac = 1.0 if maxed else max(0.0, min(1.0, rb["xp"] / float(G.xp_need(rb["level"]))))
         if frac > 0:
             pygame.draw.rect(scr, GOLD if maxed else (0, 190, 230),
@@ -1081,18 +1092,18 @@ class RobotsUI(CareerUI):
         self.btn((735, 132, 70, 36), "ANT", lambda: self.bench_nav(-1), color=(60, 80, 130), size=24)
         self.btn((815, 132, 70, 36), "PROX", lambda: self.bench_nav(1), color=(60, 80, 130), size=24)
         self.btn((895, 132, 185, 36), "VOLTAR", self.bench_back, color=(60, 60, 70), size=26)
-        # ---- coluna esquerda: 7 slots
-        for i, sl in enumerate(P.SLOTS):
-            y = 182 + i * 50
-            r = pygame.Rect(20, y, 280, 46)
+        # ---- coluna esquerda: 7 slots (8 com o Modulo liberado: mod_on; layout final no passo B10)
+        for i, (sl, r) in enumerate(bench_slot_rects(gg.mod_on())):
+            y = r.y
             pygame.draw.rect(scr, (16, 50, 75) if sl == slot else PANEL, r, border_radius=6)
             pygame.draw.rect(scr, SEL_COLOR if sl == slot else LINE, r, 2, border_radius=6)
-            self.text(SLOT_LABELS[sl], 18, DIM, topleft=(30, y + 5))
+            self.text(SLOT_LABELS[sl], 18, DIM, topleft=(30, y + (5 if r.h > 40 else 3)))
             pc = pb.get(rb["slots"].get(sl))
             if pc is None:
-                self.text("vazio", 24, DIM, midleft=(30, y + 33))
+                self.text("vazio", 24, DIM, midleft=(30, y + r.h - 13))
             else:
-                self.text(self.fit(P.part_name(pc), 24, 262), 24, P.RAR_COLORS[pc["rar"]], midleft=(30, y + 33))
+                self.text(self.fit(P.part_name(pc), 24, 262), 24, P.RAR_COLORS[pc["rar"]],
+                          midleft=(30, y + r.h - 13))
             self.hit(r, lambda s=sl: self.pick_slot(s))
         # ---- coluna central: peças livres + ANTES/DEPOIS
         cx, cw = 312, 410
