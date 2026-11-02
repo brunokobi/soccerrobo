@@ -16,6 +16,25 @@ virando um **futebol de robôs aspiradores** com campanha em estilo RPG
 (escola -> mundial), laboratório de upgrades e partidas automáticas decididas
 pelas habilidades dos robôs.
 
+## Telas
+
+| | |
+|---|---|
+| ![Menu principal](docs/img/menu.png) | ![Partida com câmera de estádio e torcida no gol](docs/img/partida-estadio-gol.png) |
+| **Menu** - amistosos, carreira de clubes, Modo Robôs e campanha | **Partida assistida** - câmera de estádio, torcida reagindo ao gol, LED e telão |
+| ![Campanha: diálogo](docs/img/campanha-dialogo.png) | ![Campanha: mapa dos capítulos](docs/img/campanha-mapa.png) |
+| **Campanha** - diálogos com retratos animados e cenários desenhados por código | **Mapa da campanha** - da escola ao Mundial de Aspiradores |
+| ![Campanha: torneio](docs/img/campanha-torneio.png) | ![Modo Robôs: liga](docs/img/modo-robos-liga.png) |
+| **Torneio** - grupo, chaveamento e final contra o chefe (ASSISTIR ou SIMULAR) | **Modo Robôs** - liga de 6 times em 4 tiers |
+| ![Garagem: bancada com 8 slots](docs/img/garagem-bancada.png) | ![Árvore de habilidades](docs/img/habilidades.png) |
+| **Garagem** - 8 slots (com Módulo), sets, relíquias e o antes/depois de cada peça | **Habilidades** - árvore Ataque/Controle/Defesa, skills equipadas e tática do time |
+| ![Mochila de itens](docs/img/mochila.png) | ![Galeria de cosméticos](docs/img/visual-cosmeticos.png) |
+| **Mochila** - até 2 itens de partida, gastos ao jogar | **Visual** - adesivo, antena, rastro e comemoração por robô |
+
+Robôs em campo com cosméticos (câmera PERTO):
+
+![Partida com robôs personalizados](docs/img/partida-perto.png)
+
 ## Visual
 Tema tecnológico/neon: arena com grade e linhas holográficas, robôs-disco com
 anel de LED e barra de bateria, bola com brilho, rastro e faíscas, e HUD e menu
@@ -223,6 +242,7 @@ Utilitários do harness (`tests/sim_harness.py`): `golden`/`golden-new` com
 - `game/campaign.py`: lógica da campanha (progresso, torneios, chefes/pity, treino, recompensas, save)
 - `game/campaign_ui.py`: telas da campanha (menu, mapa, diálogo, torneio, resultado, fim de capítulo), reaproveitando garagem/bancada/loja do Modo Robôs
 - `game/portraits.py`: retratos e cenários da campanha, desenhados por código
+- `docs/`: planejamento e especificações (`docs/INDEX.md`); `docs/img/`: capturas de tela do README
 - `tests/`: testes, harness de simulação e baselines (`baseline_golden*.json`) (ficam fora de `game/` para não entrar no pacote do pygbag)
 
 ## Notas

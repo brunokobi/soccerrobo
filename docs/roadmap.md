@@ -1,6 +1,8 @@
 # Roadmap - Copa Aspirador
 
-## 1. Estado atual (HEAD fd5e17b)
+## 1. Estado atual
+
+Tabela original do planejamento (HEAD fd5e17b); a linha da Fase 4 está atualizada.
 
 | Fase | Conteúdo | Situação |
 |---|---|---|
