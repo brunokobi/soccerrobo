@@ -53,7 +53,7 @@ CX, CY = PITCH.center
 AW, AH = 14, 18                 # atomo (espectador) em pe/sentado, vista "de frente para a camera"
 KEY = (255, 0, 255)             # colorkey das faixas
 CACHE_MAX = 3
-DEFAULT_VENUE = "arena"         # partidas assistidas sem local definido (o mapeamento por modo e o A8)
+DEFAULT_VENUE = "arena"         # partida assistida sem local (venue=None); por modo/bg: BG_VENUE e cia. (A8)
 
 SIT, UP, SAD, FLAG_A, FLAG_B, MOSAIC = range(6)
 POSES = (SIT, UP, SAD, FLAG_A, FLAG_B)
@@ -246,6 +246,40 @@ def _shirt(c):
 
 def resolve_venue(venue):
     return venue if venue in VENUES else DEFAULT_VENUE
+
+
+# --- local por modo/cenario (A8): a UNICA tabela de "onde se joga" ------------------------------
+# bg (story.BGS) -> local da torcida. Cenarios que nao sao campo (garagem, cantina, camarim...) caem
+# no local mais proximo do enredo: casa/bairro -> "bairro", colegio -> "quadra", bastidores -> o
+# estadio onde ficam. Todo bg de story.BGS tem entrada (test_robot_art::test_bg_venue_covers_*).
+BG_VENUE = {
+    "garagem": "bairro", "oficina": "bairro", "praca": "bairro", "lanchonete": "bairro",
+    "escola": "quadra", "cantina": "quadra", "quadra": "quadra",
+    "ginasio": "ginasio",
+    "arena": "arena", "camarim": "arena",
+    "federacao": "estadio", "estadio": "estadio", "cabine": "estadio",
+    "mundial": "mundial",
+    "laboratorio": "laboratorio", "fabrica": "fabrica", "dojo": "dojo", "aeroporto": "aeroporto",
+    "coliseu": "coliseu",
+}
+ROBOTS_VENUE = "bairro"         # Modo Robos (liga do bairro; spec 2.5)
+FRIENDLY_VENUE = "bairro"       # Amistoso (modos 1/2), versao leve; so se prefs "crowd" != OFF
+# Carreira de clubes (a spec deixa "estadio por divisao depois"): Div. 1 estadio, Div. 2 arena,
+# Div. 3 ginasio (indice = clube["div"]).
+CAREER_DIV_VENUE = ("estadio", "arena", "ginasio")
+
+
+def venue_for_bg(bg):
+    """Local da torcida para um cenario (bg) da campanha; desconhecido -> DEFAULT_VENUE."""
+    return BG_VENUE.get(bg, DEFAULT_VENUE)
+
+
+def venue_for_div(div):
+    """Local da partida da carreira de clubes pela divisao (0 = Div. 1)."""
+    try:
+        return CAREER_DIV_VENUE[max(0, min(len(CAREER_DIV_VENUE) - 1, int(div)))]
+    except (TypeError, ValueError):
+        return DEFAULT_VENUE
 
 
 def resolve_level(level):

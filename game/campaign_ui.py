@@ -32,6 +32,7 @@ import math
 import pygame
 
 import campaign as C
+import crowd
 import garage as G
 import parts as P
 import portraits
@@ -758,12 +759,20 @@ class CampaignUI(RobotsUI):
             return None
         return self.sync_act("match")
 
+    def match_venue(self, act):
+        """Local da torcida (A8): o bg do torneio (partida) ou do torneio do capitulo (treino)."""
+        bg = act.get("bg") if isinstance(act, dict) else None
+        if bg is None and self.campaign is not None:
+            bg = self.campaign.chapter_bg()
+        return crowd.venue_for_bg(bg)
+
     def do_watch_match(self):
         act = self.fresh_match()
         if act is None:
             return
         self.pending = {"act": act, "training": False}
-        self.g.start_robot_match(act["home"], act["away"], on_done=self.match_done, return_state="campaign")
+        self.g.start_robot_match(act["home"], act["away"], on_done=self.match_done, return_state="campaign",
+                                 venue=self.match_venue(act))
 
     def do_sim_match(self):
         act = self.fresh_match()
@@ -805,7 +814,7 @@ class CampaignUI(RobotsUI):
             return
         self.pending = {"act": self.train, "training": True}
         self.g.start_robot_match(self.train["home"], self.train["away"], on_done=self.train_done,
-                                 return_state="campaign")
+                                 return_state="campaign", venue=self.match_venue(self.train))
 
     def do_sim_train(self):
         cp = self.campaign

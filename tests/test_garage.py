@@ -112,7 +112,8 @@ def test_effective_attrs():
     # match_entry
     g = fresh()
     ent = gm.match_entry(g.robots[0], g.pieces_by_id())
-    assert set(ent) == {"name", "attrs", "chassis", "pid", "paint"}
+    assert set(ent) == {"name", "attrs", "chassis", "pid", "paint", "vis"}       # vis: A9, so visual
+    assert set(ent["vis"]) == {"chassis", "paint", "parts", "hot"}
     assert ent["pid"] == g.robots[0]["id"] and list(ent["attrs"]) == list(robots.ATTRS)
     assert ent["attrs"] == g.attrs_of(g.robots[0])
     assert len(g.match_cfg()["squad"]) == 5

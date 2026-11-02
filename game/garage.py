@@ -113,10 +113,38 @@ def team_rating(robot_list, pieces_by_id):
     return tot / len(robot_list) * 100.0
 
 
+# peca -> overlay desenhado em campo (A9; a arte de cada overlay fica em robot_art.py). Modelos fora da
+# tabela (motor escovado, baterias, borracha, solenoide) nao aparecem.
+VIS_OVERLAY = {"Turbina": "turbina", "Canhão de Plasma": "canhao", "Blindado": "blindado",
+               "Escova de Sucção": "escova", "Vácuo Turbo": "vacuo", "Radar LiDAR": "radar",
+               "Infravermelho": "antena", "Chip de CPU": "modulo", "Chip Neural": "modulo"}
+
+
+def robot_vis(robot, pieces_by_id):
+    """Dados SO visuais do robo para a partida: {"chassis","paint","parts":((overlay, raridade),..),
+    "hot"}. hot = alguma peca de calor equipada ou overclock (fumaca ao superaquecer). Nao entra na
+    simulacao; Team/Player aceitam a ausencia (squads antigos e os goldens nao tem `vis`)."""
+    vis_parts = []
+    hot = int(robot.get("oc", 0) or 0) > 0
+    for slot in parts.SLOTS:
+        pid = robot.get("slots", {}).get(slot)
+        pc = pieces_by_id.get(pid) if pid is not None else None
+        if pc is None or parts.part_slot(pc) != slot:
+            continue
+        if parts.part_heat(pc["model"], pc["rar"], pc["lvl"]) > 0:
+            hot = True
+        nm = VIS_OVERLAY.get(pc["model"])
+        if nm:
+            vis_parts.append((nm, int(pc["rar"])))
+    return {"chassis": robot["chassis"], "paint": tuple(robot["paint"]), "parts": tuple(sorted(vis_parts)),
+            "hot": hot}
+
+
 def match_entry(robot, pieces_by_id):
-    """Entrada de elenco aceita por soccer.Team (modo robos)."""
+    """Entrada de elenco aceita por soccer.Team (modo robos). `vis` (A9) e aditivo e so visual."""
     return {"name": robot["name"], "attrs": effective_attrs(robot, pieces_by_id),
-            "chassis": robot["chassis"], "pid": robot["id"], "paint": tuple(robot["paint"])}
+            "chassis": robot["chassis"], "pid": robot["id"], "paint": tuple(robot["paint"]),
+            "vis": robot_vis(robot, pieces_by_id)}
 
 
 # --- XP -----------------------------------------------------------------------------

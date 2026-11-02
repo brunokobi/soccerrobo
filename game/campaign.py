@@ -336,7 +336,8 @@ class Campaign:
         {"kind":"scene","id","key","scene"} | {"kind":"match",...} |
         {"kind":"chapter_end","chapter","report"} | {"kind":"end","draft"?}.
         O "match" traz: tournament, stage, stage_name, boss, knockout, training(False), opp (time),
-        home/away (cfgs para Game.start_robot_match), user_F, O (ovr efetivo c/ pity), F_rec, pity."""
+        home/away (cfgs para Game.start_robot_match), user_F, O (ovr efetivo c/ pity), F_rec, pity e bg
+        (cenario do torneio; a UI converte em local da torcida com crowd.venue_for_bg)."""
         for _ in range(64):
             nodes = self.chapter()["nodes"]
             if self.node >= len(nodes):
@@ -464,7 +465,7 @@ class Campaign:
         stages = stages_of(tr)
         opp = self._opp_team(tr, stage, tour["seed"])
         frac = stages.index(stage) / max(1, len(stages) - 1)
-        return {"kind": "match", "tournament": tour["id"], "stage": stage,
+        return {"kind": "match", "tournament": tour["id"], "stage": stage, "bg": tr.get("bg"),
                 "stage_name": STAGE_NAMES[stage], "boss": self._is_boss(tr, stage),
                 "knockout": stage[0] != "G", "training": False, "opp": opp,
                 "home": self.garage.match_cfg(), "away": RL.match_cfg(opp),
@@ -593,16 +594,23 @@ class Campaign:
     def training_econ_tier(self):
         return G.clamp(self.econ_tier() - 1, 0, len(G.TIER_MUL) - 1)
 
+    def chapter_bg(self):
+        """Cenario (bg) do torneio do capitulo atual (o local onde o treino acontece); None se nao ha."""
+        for kind, nid in self.chapter()["nodes"]:
+            if kind == "tournament" and nid in story.TOURNAMENTS:
+                return story.TOURNAMENTS[nid].get("bg")
+        return None
+
     def training_cfg(self):
         """Adversario de treino (Forca de inicio do capitulo - 12; recompensa com tier-1): nao avanca nada.
-        {"home","away","opp","O","user_F","econ_tier","training":True}."""
+        {"home","away","opp","O","user_F","econ_tier","bg","training":True} (bg = local do capitulo)."""
         rng = self._rng("train")
         name = rng.choice(RL.TEAM_NAMES)
         color = rng.choice(RL.TEAM_COLORS)
         team = RL.opponent_team(name, color, self.training_ovr(), rng.randrange(1, 100000))
         return {"home": self.garage.match_cfg(), "away": RL.match_cfg(team), "opp": team,
                 "O": team["ovr"], "user_F": self.garage.rating(), "econ_tier": self.training_econ_tier(),
-                "training": True}
+                "bg": self.chapter_bg(), "training": True}
 
     def record_training(self, my, opp, events=None, simulated=False):
         """Recompensas de um treino (tier-1); nao mexe em torneio, pity nem nos."""

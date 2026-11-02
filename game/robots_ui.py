@@ -10,6 +10,7 @@ import random
 
 import pygame
 
+import crowd
 import garage as G
 import parts as P
 import robot_league as RL
@@ -504,7 +505,7 @@ class RobotsUI(CareerUI):
             return
         self.pending = fx
         home, away = self.side_cfgs(fx)
-        self.g.start_robot_match(home, away, on_done=self.match_done)
+        self.g.start_robot_match(home, away, on_done=self.match_done, venue=crowd.ROBOTS_VENUE)
 
     def do_sim(self):
         gg = self.garage

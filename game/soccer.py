@@ -89,7 +89,20 @@ FX_KINDS = {
     "bump":   (4, 60, 160, 0.2, 0.4, (255, 170, 80), 2),
     "goal":   (40, 100, 420, 0.6, 1.2, None, 4),
     "wall":   (4, 50, 150, 0.2, 0.35, (150, 200, 255), 2),
+    # A11 (robos): so pelo desenho (Game.robot_fx), no RNG proprio e com teto ROBOT_FX_MAX
+    "dust":   (2, 20, 60, 0.35, 0.6, (150, 128, 96), 2),       # poeira ao correr/arrancar
+    "smoke":  (1, 10, 30, 0.6, 1.0, (176, 178, 188), 4),       # superaquecendo (pecas de calor)
+    "smoke_dark": (2, 10, 26, 0.7, 1.2, (58, 58, 64), 4),      # bateria critica (< 0,10)
+    "spark":  (3, 70, 170, 0.12, 0.25, (255, 236, 110), 1),    # curto-circuito (bateria baixa)
 }
+# estilo da particula: indice em robot_art.PUFF_COLORS (fumaca/poeira desenhadas com sprites prontos);
+# ausente = faisca (linha + circulo). FX_RISE: deriva para cima (fumaca).
+FX_STYLE = {"dust": 0, "smoke": 1, "smoke_dark": 2}
+FX_RISE = {"smoke": 26.0, "smoke_dark": 34.0}
+ROBOT_FX = ("dust", "smoke", "smoke_dark", "spark")
+ROBOT_FX_MAX = 36                      # particulas de robo ao mesmo tempo (dentro do FX_MAX)
+DUST_SPEED = 165.0                     # px/s: acima disso o robo levanta poeira
+LOW_BAT, CRIT_BAT = 0.25, 0.10
 
 
 class Human:
@@ -115,7 +128,7 @@ class Ball:
 
 class Player:
     def __init__(self, team, idx, role, fx, fy, name="", ovr=65.0, chassis=None, seed=None,
-                 attrs=None, tuning=None, pid=None, paint=None):
+                 attrs=None, tuning=None, pid=None, paint=None, vis=None):
         self.team = team
         self.idx = idx
         self.role = role
@@ -123,6 +136,10 @@ class Player:
         self.chassis = chassis or robots.ROLE_CHASSIS[role]
         self.pid = pid                           # id do robo no modo robos (vai no evento de gol)
         self.paint = tuple(paint[:3]) if paint else None   # pintura = cor do LED
+        self.vis = vis if isinstance(vis, dict) else None    # so desenho (pecas visiveis); nao entra na simulacao
+        self.art = None                          # robot_art.Art (warm_sprites); referencias prontas do desenho
+        self.vdir = None                         # direcao visual 0..7 (histerese no desenho)
+        self.fx_next = 0.0                       # proxima particula de robo (relogio real do desenho)
         if attrs is not None:                    # modo robos: atributos diretos, tuning do proprio robo
             self.tuning = tuning or ACTIVE_TUNING
             self.robot = dict(attrs)
@@ -160,7 +177,7 @@ class Team:
             elif isinstance(squad[i], dict):       # modo robos: {name, attrs, chassis, pid, paint}
                 e = squad[i]
                 nm, ovr, chassis, seed = e.get("name", ""), 65, e.get("chassis"), None
-                extra = dict(attrs=e["attrs"], pid=e.get("pid"), paint=e.get("paint"))
+                extra = dict(attrs=e["attrs"], pid=e.get("pid"), paint=e.get("paint"), vis=e.get("vis"))
             elif len(squad[i]) >= 4:               # carreira: (nome, ovr, pid, pos)
                 nm, ovr, pid, pos = squad[i][:4]
                 chassis, seed = robots.POS_CHASSIS.get(pos), pid
@@ -192,7 +209,9 @@ class Game:
         self.fx_pairs = {}
         self.fx_last = time.perf_counter()
         self.trail = deque(maxlen=10)
-        self.sprites = {}
+        self.sprites = robot_art.SpriteCache()   # sprites dos robos (LRU por bytes; ver robot_art)
+        self.puffs = None
+        self.fx_amb = 0                           # particulas de robo vivas (teto ROBOT_FX_MAX)
         self.speed_idx = 0
         self.crowd = None                         # torcida da partida assistida (crowd.Crowd) ou None
         self.crowd_clock = None                   # relogio injetavel da torcida (testes); None = perf_counter
@@ -243,7 +262,9 @@ class Game:
         x = W // 2 + 10 if self.has_save else W // 2 - 160
         return pygame.Rect(x, 450, 320, 70)
 
-    def new_match(self, mode):
+    def new_match(self, mode, venue=None):
+        """Amistoso (modos 1/2). venue: local da torcida leve (A8: o menu passa crowd.FRIENDLY_VENUE);
+        None = sem torcida (padrao: testes, goldens e o Game() inicial nao pre-renderizam nada)."""
         self.mode = mode
         if mode == 1:
             h0, h1 = Human(SOLO_KEYS), None
@@ -266,6 +287,9 @@ class Game:
         self.ball = Ball()
         self.paused = False
         self.reset_fx()
+        self.crowd_venue = None
+        if venue is not None:
+            self.warm_crowd(venue)
         self.kickoff(0)
 
     def start_career_match(self, home, away, venue=None):
@@ -379,9 +403,9 @@ class Game:
         if e.type == pygame.KEYDOWN:
             if self.state == "menu":
                 if e.key == pygame.K_1:
-                    self.new_match(1)
+                    self.new_match(1, crowd.FRIENDLY_VENUE)
                 elif e.key == pygame.K_2:
-                    self.new_match(2)
+                    self.new_match(2, crowd.FRIENDLY_VENUE)
                 elif e.key == pygame.K_3:
                     self.career_ui.open_new()
                 elif e.key == pygame.K_4:
@@ -403,7 +427,7 @@ class Game:
                     self.finish_career_match()
             elif self.state == "over":
                 if e.key in (pygame.K_RETURN, pygame.K_SPACE):
-                    self.new_match(self.mode)
+                    self.new_match(self.mode, self.crowd_venue)
                 elif e.key == pygame.K_ESCAPE:
                     self.state = "menu"
             else:
@@ -411,11 +435,13 @@ class Game:
                     self.state = "menu"
                 elif e.key == pygame.K_p:
                     self.paused = not self.paused
+                elif e.key == pygame.K_t and self.paused and self.crowd_venue is not None:
+                    self.toggle_crowd()
         elif e.type == pygame.MOUSEBUTTONDOWN:
             if self.state == "menu":
                 for i, r in enumerate(self.menu_btns):
                     if r.collidepoint(e.pos):
-                        [lambda: self.new_match(1), lambda: self.new_match(2),
+                        [lambda: self.new_match(1, crowd.FRIENDLY_VENUE), lambda: self.new_match(2, crowd.FRIENDLY_VENUE),
                          self.career_ui.open_new][i]()
                         return
                 if self.has_save and self.continue_btn.collidepoint(e.pos):
@@ -928,6 +954,7 @@ class Game:
     # ------------------------------------------------------------------ fx
     def reset_fx(self):
         self.fx.clear()
+        self.fx_amb = 0
         self.fx_pairs.clear()
         self.trail.clear()
         self.warm_sprites()
@@ -936,16 +963,24 @@ class Game:
         return self.speed_idx != 3 and self.state != "over"
 
     def fx_emit(self, kind, pos, color=None, d=None):
-        """Dispara faiscas. Usa so o RNG proprio; no-op em MAX e em 'over'. Nao altera a simulacao."""
+        """Dispara faiscas. Usa so o RNG proprio; no-op em MAX e em 'over'. Nao altera a simulacao.
+
+        Particula: [x, y, vx, vy, vida, vida_max, cor, tam, estilo, de_robo]; estilo None = faisca,
+        int = sprite de fumaca/poeira (FX_STYLE). As de robo (ROBOT_FX) tem teto ROBOT_FX_MAX."""
         if self.speed_idx == 3 or self.state == "over":
             return
         n, v0, v1, l0, l1, base, size = FX_KINDS[kind]
         col = color or base or (255, 255, 255)
         room = FX_MAX - len(self.fx)
+        amb = kind in ROBOT_FX
+        if amb:
+            room = min(room, ROBOT_FX_MAX - self.fx_amb)
         if room <= 0:
             return
         rng = self.fx_rng
         px, py = pos.x, pos.y
+        style = FX_STYLE.get(kind)
+        rise = FX_RISE.get(kind, 0.0)
         for _ in range(min(n, room)):
             if d is not None:                       # leque para tras da direcao do chute
                 a = math.atan2(d.y, d.x) + math.pi + rng.uniform(-0.9, 0.9)
@@ -953,7 +988,37 @@ class Game:
                 a = rng.uniform(0, 2 * math.pi)
             sp = rng.uniform(v0, v1)
             life = rng.uniform(l0, l1)
-            self.fx.append([px, py, math.cos(a) * sp, math.sin(a) * sp, life, life, col, size])
+            self.fx.append([px, py, math.cos(a) * sp, math.sin(a) * sp - rise, life, life, col, size, style, amb])
+        if amb:
+            self.fx_amb += min(n, room)
+
+    def robot_fx(self, p, art, now):
+        """A11: poeira ao correr, fumaca ao superaquecer/bateria critica, faiscas com bateria baixa.
+
+        Chamado pelo desenho (relogio real, RNG proprio fx_rng): nunca toca a simulacao nem o random
+        global; desligado em MAX, em 'over' e na pausa (fx_emit/guarda abaixo)."""
+        if now < p.fx_next or self.paused or self.speed_idx == 3 or self.state == "over":
+            return
+        sp2 = p.vel.length_squared()
+        bat = p.bat
+        rng = self.fx_rng
+        if bat < CRIT_BAT:
+            kind, gap = "smoke_dark", 0.2
+        elif art.hot and bat < 0.5 and sp2 > 140 * 140:
+            kind, gap = "smoke", 0.28
+        elif bat < LOW_BAT:
+            kind, gap = "spark", 0.3 + rng.random() * 0.5
+        elif sp2 > DUST_SPEED * DUST_SPEED:
+            kind, gap = "dust", 0.14
+        else:
+            p.fx_next = now + 0.1
+            return
+        p.fx_next = now + gap
+        if kind == "spark":
+            self.fx_emit(kind, p.pos + V(rng.uniform(-8, 8), rng.uniform(-8, 8)))
+            return
+        back = p.vel.normalize() * -art.rad if sp2 > 1 else V(0, 0)
+        self.fx_emit(kind, p.pos + back, d=(p.vel if sp2 > 1 else None))
 
     def fx_bump(self, a, c):
         """Colisao robo x robo: 4 faiscas, no maximo 1 por par a cada 0.3 s de jogo."""
@@ -1008,8 +1073,8 @@ class Game:
             prefs.set("crowd", nxt)
         except Exception:  # noqa: BLE001
             pass
-        if self.state != "menu" and self.career_match:
-            self.warm_crowd(self.crowd_venue)
+        if self.state != "menu" and (self.career_match or self.crowd_venue is not None):
+            self.warm_crowd(self.crowd_venue)   # amistoso: so se comecou com torcida (crowd_venue)
         return nxt
 
     def crowd_label(self):
@@ -1017,7 +1082,7 @@ class Game:
 
     def crowd_on(self):
         """Torcida desenhada/reagindo agora: partida assistida, existe e nao esta em MAX."""
-        return self.crowd is not None and self.career_match and self.speed_idx != 3
+        return self.crowd is not None and self.speed_idx != 3
 
     def crowd_event(self, kind, team=None):
         """Hook do motor: so escreve no estado da torcida (nunca na simulacao nem no RNG global)."""
@@ -1033,8 +1098,11 @@ class Game:
         dt = 0.0 if self.paused else min(now - self.fx_last, 0.05)
         self.fx_last = now
         if not self.fx:
+            self.fx_amb = 0
             return
         keep = []
+        amb = 0
+        puffs = self.puffs
         for p in self.fx:
             p[4] -= dt
             if p[4] <= 0:
@@ -1044,12 +1112,21 @@ class Game:
             p[2] *= 0.94
             p[3] *= 0.94
             keep.append(p)
+            if len(p) > 9 and p[9]:
+                amb += 1
             f = p[4] / p[5]
-            col = scale_color(p[6], f)
             x, y = int(p[0]), int(p[1])
+            st = p[8] if len(p) > 8 else None
+            if st is not None and puffs is not None:     # fumaca/poeira: sprite pronto (cresce e some)
+                img = robot_art.puff_img(puffs, st, p[7], f)
+                hw = img.get_width() >> 1
+                scr.blit(img, (x - hw, y - hw))
+                continue
+            col = scale_color(p[6], f)
             pygame.draw.line(scr, col, (x, y), (int(x - p[2] * 0.03), int(y - p[3] * 0.03)), 2)
             pygame.draw.circle(scr, col, (x, y), max(1, int(p[7] * f)))
         self.fx = keep
+        self.fx_amb = amb
 
     # ------------------------------------------------------------- drawing
     def font(self, size):
@@ -1192,6 +1269,7 @@ class Game:
 
     def warm_sprites(self):
         robot_art.warm_sprites(self.sprites, self.teams)
+        self.puffs = robot_art.get_puffs(self.sprites)
 
     def draw(self):
         scr = self.screen
@@ -1210,7 +1288,7 @@ class Game:
         if self.state == "menu":
             scr.blit(self.menu_bg, (0, 0))
             return self.draw_menu()
-        cr = self.crowd if self.career_match else None
+        cr = self.crowd                                 # amistoso: so existe se o menu pediu (A8)
         if cr is not None and self.speed_idx == 3:
             scr.blit(cr.b.static, (0, 0))               # MAX: so a arena composta (1 blit), sem extras
             cr = None
@@ -1234,7 +1312,7 @@ class Game:
 
         if self.paused:
             self.banner("PAUSADO", "P para continuar" + ("" if self.career_match else "  |  ESC para o menu"))
-            if self.career_match:
+            if self.career_match or self.crowd_venue is not None:
                 self.draw_crowd_option()
         elif self.state == "kickoff":
             self.banner("PREPARAR!" if not self.career_match else "BOLA ROLANDO!", None)
@@ -1276,20 +1354,69 @@ class Game:
                 self.text(txt, 28, (240, 240, 240), center=(x, CY + 105 + k * 26))
 
     def draw_player(self, t, p):
+        """Robo em camadas (A9-A11): halo aditivo pulsando, baixo/cima por direcao, escovas girando,
+        corpo (quadro low piscando), extras por pygame.draw. So blits de Surfaces prontas (p.art)."""
         scr = self.screen
         pos = (int(p.pos.x), int(p.pos.y))
-        ch, led, gk = self.sprite_key(t, p)
-        low = p.bat < 0.25 and int(time.perf_counter() * 5) % 2 == 0
-        spr = self.get_sprite(ch, led, gk, low)
-        scr.blit(spr, (pos[0] - 32, pos[1] - 32))
+        art = p.art
+        if art is None:                                      # fora do warm (nao deveria): aquece 1 vez
+            art = p.art = robot_art.warm_player(self.sprites, self.sprite_key(t, p), p.vis)
+        led = art.led
+        now = time.perf_counter()
+        bat = p.bat
+        low = bat < LOW_BAT and int(now * 5) % 2 == 0
+        d = p.vdir = robot_art.face_dir(p.face, p.vdir)
+        x0, y0 = pos[0] - 32, pos[1] - 32
+        if bat < LOW_BAT:
+            lvl = robot_art.HALO_LOW if low else 0
+        else:
+            lvl = int((math.sin(now * 3.1 + p.idx * 1.7 + t.idx) + 1.0) * 1.999)
+        scr.blit(art.halo[lvl], (x0, y0), special_flags=pygame.BLEND_RGB_ADD)
+        u = art.atlas.under[d]
+        if u is not None:
+            scr.blit(u[0], (pos[0] + u[1], pos[1] + u[2]))
+        moving = p.vel.length_squared() > 400
+        if art.turbina and moving and not low:               # chama/ar da turbina (2 circulos)
+            jx, jy = art.jet_off[d]
+            k = int(now * 22) % 2
+            pygame.draw.circle(scr, (255, 150, 60) if k else (255, 236, 150), (pos[0] + jx, pos[1] + jy), 4 - k)
+            pygame.draw.circle(scr, (255, 252, 230), (pos[0] + jx, pos[1] + jy), 1)
+        if bat >= CRIT_BAT:                                  # escovas (somem com bateria critica)
+            fr = art.brushes[int(now * (22 if moving else 9) + p.idx) % robot_art.BRUSH_FRAMES]
+            for bx, by in art.brush_off[d]:
+                scr.blit(fr, (pos[0] + bx, pos[1] + by))
+        scr.blit(art.low if low else art.body, (x0, y0))
+        o = art.atlas.over[d]
+        if o is not None:
+            scr.blit(o[0], (pos[0] + o[1], pos[1] + o[2]))
+        if art.orbital:                                      # satelites orbitando (2 circulos)
+            a = now * 2.6 + p.idx
+            ca, sa = math.cos(a) * robot_art.ORBIT_R, math.sin(a) * robot_art.ORBIT_R
+            sc = scale_color(led, 0.45) if low else led
+            for sx in (1, -1):
+                q = (int(pos[0] + ca * sx), int(pos[1] + sa * sx))
+                pygame.draw.circle(scr, (12, 16, 24), q, 4)
+                pygame.draw.circle(scr, sc, q, 3)
+                pygame.draw.circle(scr, (245, 252, 255), q, 1)
+        if art.radar is not None:                            # varredura do radar
+            rx, ry = art.radar_off[d]
+            a = now * 6.5
+            c0 = (pos[0] + rx, pos[1] + ry)
+            pygame.draw.line(scr, art.radar, c0, (int(c0[0] + math.cos(a) * 4), int(c0[1] + math.sin(a) * 4)), 1)
+            pygame.draw.circle(scr, (240, 250, 255), c0, 1)
+        if art.modulo is not None:                           # luzinha do modulo
+            mx, my = art.mod_off[d]
+            on = int(now * 2.5 + p.idx) % 2 == 0
+            pygame.draw.circle(scr, art.modulo if on else scale_color(art.modulo, 0.35), (pos[0] + mx, pos[1] + my), 1)
         eye = p.pos + p.face * (PR - 6)                      # olho/sensor na direcao do rosto
         ex, ey = int(eye.x), int(eye.y)
         pygame.draw.circle(scr, (10, 14, 20), (ex, ey), 5)
         pygame.draw.circle(scr, (235, 250, 255), (ex, ey), 3)
         pygame.draw.circle(scr, led, (ex, ey), 1)
+        self.robot_fx(p, art, now)
         bat = p.bat
         if bat < 0.98 or p.vel.length_squared() > 625:       # barra de bateria 22x4
-            x, y = pos[0] - 12, pos[1] - PR - 11
+            x, y = pos[0] - 12, pos[1] - art.rad - 11
             pygame.draw.rect(scr, (6, 10, 18), (x, y, 24, 6))
             if bat >= 0.5:
                 bc = (70, 230, 110)
@@ -1297,7 +1424,7 @@ class Game:
                 bc = (255, 215, 60)
             else:
                 bc = (255, 70, 60)
-            if bat >= 0.25 or int(time.perf_counter() * 5) % 2 == 0:
+            if bat >= 0.25 or int(now * 5) % 2 == 0:
                 pygame.draw.rect(scr, bc, (x + 1, y + 1, int(22 * bat), 4))
         if t.human and p is t.ctrl and self.state != "over":
             pygame.draw.circle(scr, (255, 255, 255), pos, PR + 4, 2)

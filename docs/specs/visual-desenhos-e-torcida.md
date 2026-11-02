@@ -79,6 +79,22 @@ Faixas e cartazes: tiras de pano pré-renderizadas pendem da fileira frontal ("V
 
 Campo novo `venue` na ação de partida da campanha (derivado do `bg` do torneio, com tabela em `crowd.py`) e parâmetro opcional `venue=None` em `Game.start_robot_match(...)` e `_begin_match(...)` (padrão `None` = nenhuma torcida, mantendo goldens e carreira de clubes). O Modo Robôs usa `venue="bairro"` por padrão.
 
+**Implementado (A8)** - tabela única em `crowd.py` (`BG_VENUE`, `ROBOTS_VENUE`, `FRIENDLY_VENUE`, `CAREER_DIV_VENUE`). A ação de partida/treino da campanha traz `bg` (o do torneio; no treino, o do torneio do capítulo) e a UI converte com `crowd.venue_for_bg`. `venue=None` continua valendo `DEFAULT_VENUE` ("arena"), que é o caminho dos goldens.
+
+| Modo / bg | Local |
+|---|---|
+| Campanha: `quadra`, `escola`, `cantina` | `quadra` |
+| Campanha: `ginasio` | `ginasio` |
+| Campanha: `arena`, `camarim` | `arena` |
+| Campanha: `estadio`, `federacao`, `cabine` | `estadio` |
+| Campanha: `mundial` | `mundial` |
+| Campanha: `laboratorio`, `fabrica`, `dojo`, `aeroporto`, `coliseu` | o próprio |
+| Campanha: `garagem`, `oficina`, `praca`, `lanchonete` | `bairro` |
+| Treino da campanha | local do torneio do capítulo |
+| Modo Robôs | `bairro` |
+| Carreira de clubes | Div. 1 `estadio`, Div. 2 `arena`, Div. 3 `ginasio` |
+| Amistoso (modos 1/2, pelo menu) | `bairro` leve, só se prefs TORCIDA != OFF (T na pausa alterna); sem telão |
+
 ### 2.6 "Som visual"
 Onomatopeias e letreiros no lugar de áudio, sempre via `text_img` (cache) em tamanhos fixos {26, 36, 52}: "GOOOL!", "OOOH!", "UUUH!", "OLÉ!", "CLAP CLAP", "BUZZ!" (skill), "ZOOM" (arrancada), "CLANG!" (trave). Surgem acima da arquibancada da fidelidade que reage, sobem 30 px em 0,8 s e desaparecem por troca de cor em 4 passos (sem `set_alpha` em Surfaces compartilhadas: o fade usa `scale_color` no `text_img` com os 4 degraus pré-cacheados). No máximo 2 onomatopeias ao mesmo tempo.
 
@@ -102,6 +118,7 @@ Hoje o robô é um disco 64x64 (chassis só muda detalhes). Plano (arquivo novo 
 - **Dano e bateria baixa**: variante `low` (já existe) ganha faíscas elétricas e meio LED apagado (quadro `low` pré-renderizado); abaixo de 0,10 de bateria, o robô perde a escova (some o overlay).
 - **Pintura e cosméticos**: pintura continua `led_color`; `look.decal` (adesivo 8x8) e `look.antenna` desenhados no sprite pré-renderizado (chave de cache ganha `decal`).
 - **Skills**: FX por 0,3-1,5 s (anel dourado, rastro de imagens residuais, halo vermelho) usando `pygame.draw` e sprites aditivos prontos; ver a spec de itens e habilidades.
+- **Implementado (A9-A11)**: corpo sem halo por `(chassis, led, gk, low)`; halo = 5 Surfaces RGB aditivas por cor (4 pulsos + bateria baixa); atlas por `(chassis, led, gk, peças visíveis)` com as camadas "baixo"/"cima" em 8 direções recortadas no bounding rect (15-40 KB); escova = 6 quadros 14x14 compartilhados; fumaça/poeira = sprites alfa prontos. `p.vis` vem de `garage.robot_vis` via `match_entry` (aditivo; squads sem `vis` funcionam). Cache `robot_art.SpriteCache` com LRU por bytes (teto 6 MB; uma partida usa ~0,9 MB). FX novos `dust`, `smoke`, `smoke_dark`, `spark` (RNG `fx_rng`, teto `ROBOT_FX_MAX` = 36 dentro do `FX_MAX`), emitidos pelo desenho; nada em MAX, na pausa e em `over`.
 - **Custo**: cache de sprites por `(chassis, led, gk, low, decal)`: ~6 chassis x ~14 cores x 2 x 2 = ~340 sprites de 64x64x4 B = ~5,5 MB no pior caso; `warm_sprites` já constrói só o que o jogo usa.
 
 ## 4. Retratos e cenários (`portraits.py`)

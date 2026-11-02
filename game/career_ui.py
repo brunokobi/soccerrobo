@@ -2,6 +2,7 @@
 import pygame
 
 import career as C
+import crowd
 
 W, H = 1100, 700
 BG = (8, 14, 24)
@@ -102,7 +103,8 @@ class CareerUI:
     def play_match(self):
         c = self.career
         h, a = c.user_fixture()
-        self.g.start_career_match(c.match_cfg(h), c.match_cfg(a))
+        self.g.start_career_match(c.match_cfg(h), c.match_cfg(a),
+                                  venue=crowd.venue_for_div(c.clubs[c.user]["div"]))
 
     def quick_sim(self):
         self.career.play_round(None)

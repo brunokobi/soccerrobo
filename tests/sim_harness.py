@@ -13,8 +13,10 @@ O golden confere o MODO LEGADO: ele aplica LEGACY_TUNING + BATTERY_ON=False expl
   ... tests/sim_harness.py shot out.png
   ... tests/sim_harness.py crowd-shots [local ...]     (PNGs em $SOCCERPY_SHOTS_DIR ou num tempdir)
   ... tests/sim_harness.py ui-shots                    (gol/confete, telao, LED, pausa e menu: A4-A7)
+  ... tests/sim_harness.py robot-shots                 (robos A9-A11: grade de chassis, zoom, estadio, bairro)
 """
 import json
+import math
 import os
 import random
 import sys
@@ -161,8 +163,40 @@ def draw_crowd_ms(level="ALTA", n=300):
             g.draw()
         out[v] = {"draw_ms": round((time.perf_counter() - t) / n * 1000, 3), "warm_ms": round(b.build_ms, 1),
                   "pessoas": b.people, "faixas": len(b.segs)}
+    out["mundial+robos_com_pecas"] = robots_draw_ms("mundial", n)
     g.state = "menu"
     return out
+
+
+def robots_draw_ms(venue="mundial", n=300):
+    """A9-A11: partida da campanha (garagem carregada: 5 chassis, pecas visiveis) no local `venue`, com um
+    gol em curso. draw_ms medio, warm da partida (sprites + torcida, cache frio) e memoria do cache."""
+    import crowd
+    import robot_art
+    import robot_league as RL
+    crowd.clear_cache()
+    g.sprites.clear()
+    gg = loaded_garage()
+    away = RL.match_cfg(RL.opponent_team("Platinum", (230, 230, 245), 60, 7))
+    random.seed(0)
+    t = time.perf_counter()
+    g.start_robot_match(gg.match_cfg(), away, lambda s, e: None, venue=venue)
+    warm = (time.perf_counter() - t) * 1000
+    for _ in range(120):
+        g.step(1 / 60)
+    g.state = "play"
+    for t_ in g.teams:
+        t_.players[1].bat = 0.2                     # faiscas/low em um robo por time
+    g.crowd_event("goal", 0)
+    for _ in range(10):
+        g.draw()
+    t = time.perf_counter()
+    for _ in range(n):
+        g.draw()
+    ms = (time.perf_counter() - t) / n * 1000
+    g.match_sink = None
+    return {"draw_ms": round(ms, 3), "warm_ms": round(warm, 1), "sprites": len(g.sprites),
+            "cache_kb": g.sprites.nbytes // 1024, "atlas": robot_art.STATS["atlas"]}
 
 
 def crowd_shots(venues=None):
@@ -193,6 +227,22 @@ def crowd_shots(venues=None):
 def _run_for(secs):
     t0 = time.perf_counter()
     while time.perf_counter() - t0 < secs:
+        g.draw()
+
+
+def _play_for(secs, sim_secs=12.0):
+    """Simula ate `sim_secs` de jogo (passos de 1/60 s) espalhados por `secs` de tempo real, desenhando
+    a cada passo (as particulas e animacoes usam o relogio real)."""
+    g.state = "play"
+    t0 = time.perf_counter()
+    steps = int(sim_secs * 60)
+    while True:
+        el = time.perf_counter() - t0
+        if el >= secs:
+            break
+        while steps > 0 and steps > int(sim_secs * 60 * (1 - el / secs)):
+            g.step(1 / 60)
+            steps -= 1
         g.draw()
 
 
@@ -260,6 +310,130 @@ def ui_shots():
     return paths
 
 
+LOADOUT = (  # (chassis, [(modelo, raridade)]) dos 5 titulares da garagem "carregada" (capturas/testes A9)
+    ("Goleiro", [("Radar LiDAR", 2), ("Chip Neural", 3)]),
+    ("Titã", [("Blindado", 3), ("Vácuo Turbo", 2)]),
+    ("Orbital", [("Canhão de Plasma", 3), ("Infravermelho", 1)]),
+    ("Tanque", [("Blindado", 1), ("Escova de Sucção", 0)]),
+    ("Velocista", [("Turbina", 3), ("Canhão de Plasma", 1), ("Chip de CPU", 1)]),
+)
+
+
+def loaded_garage(seed=1):
+    """Garagem (em memoria, nunca gravada) com os 5 chassis e pecas visiveis equipadas (LOADOUT)."""
+    import garage as G
+    gg = G.new_game(random.Random(seed), "Faisca FC")
+    for rb, (ch, models) in zip(gg.robots, LOADOUT):
+        rb["chassis"] = ch
+        for model, rar in models:
+            pc = gg.new_piece(model, rar, 2)
+            gg.inventory.append(pc)
+            ok, msg = gg.equip(rb["id"], pc["id"])
+            assert ok, msg
+    return gg
+
+
+class _FakeClock:
+    """Relogio fixo para capturas (time.perf_counter do soccer): quadro `low` e fases deterministicas."""
+
+    def __init__(self, t):
+        self.t = t
+
+    def perf_counter(self):
+        return self.t
+
+
+def robot_shots():
+    """Capturas A9-A11: grade de todos os chassis x 8 direcoes (com e sem pecas, normal e low), zoom de
+    robo com turbina/canhao, partida da campanha no estadio cheio e Modo Robos (bairro)."""
+    import tempfile
+    import robot_art
+    import robots
+    from types import SimpleNamespace
+    out = os.environ.get("SOCCERPY_SHOTS_DIR") or tempfile.mkdtemp(prefix="soccerpy_shots_")
+    os.makedirs(out, exist_ok=True)
+    _crowd_prefs("ALTA")
+    paths = []
+
+    def save(name, surf=None):
+        paths.append(os.path.join(out, name))
+        pygame.image.save(surf or _scr, paths[-1])
+
+    chassis = list(robots.CHASSIS)
+    # sem conflito visual: o canhao e o blindado/vacuo ficam na frente; um de cada por robo
+    sets = {"pecas": {"parts": (("turbina", 3), ("canhao", 3), ("radar", 2), ("modulo", 3), ("escova", 0)),
+                      "hot": True},
+            "pecas2": {"parts": (("blindado", 2), ("vacuo", 1), ("antena", 1)), "hot": False}}
+    team = SimpleNamespace(idx=0, human=None, color=(0, 200, 255), gk_color=(250, 200, 40), players=[])
+    real_time = soccer.time
+    for tag, vis, bat in (("normal", None, 1.0), ("pecas", sets["pecas"], 1.0), ("pecas2", sets["pecas2"], 1.0),
+                          ("low", sets["pecas"], 0.2)):
+        _scr.fill((6, 12, 26))
+        _scr.blit(g.pitch_surf, (0, 0), pygame.Rect(0, 0, 1100, 700))
+        soccer.time = _FakeClock(0.0 if tag == "low" else 0.33)
+        g.state, g.paused, g.speed_idx = "play", True, 0
+        for r, ch in enumerate(chassis):
+            for dcol in range(8):
+                a = dcol * math.pi / 4
+                p = SimpleNamespace(pos=soccer.V(140 + dcol * 110, 130 + r * 90), face=soccer.V(math.cos(a), math.sin(a)),
+                                    vel=soccer.V(math.cos(a), math.sin(a)) * 100, bat=bat, idx=dcol, vis=vis,
+                                    art=None, vdir=None, fx_next=1e9, chassis=ch, paint=None,
+                                    role="GK" if ch == "Goleiro" else "MID", team=team)
+                g.draw_player(team, p)
+            g.text(ch, 22, (230, 240, 250), midleft=(10, 130 + r * 90), shadow=True)
+        save("a9_grade_%s.png" % tag)
+        if tag == "pecas":
+            _zoom((140 - 40, 130 + 2 * 90 - 40, 300, 80), os.path.join(out, "a9_zoom_velocista.png"), 4)
+            paths.append(os.path.join(out, "a9_zoom_tita_orbital.png"))
+            _zoom((140 - 40, 130 + 4 * 90 - 40, 300, 170), paths[-1], 3)
+            paths.append(os.path.join(out, "a9_zoom_velocista.png"))
+        if tag == "low":
+            _zoom((100, 130 - 40, 340, 6 * 90), os.path.join(out, "a11_zoom_low.png"), 2)
+            paths.append(os.path.join(out, "a11_zoom_low.png"))
+    soccer.time = real_time
+    g.paused = False
+    # partida da campanha (estadio cheio) com a garagem carregada
+    gg = loaded_garage()
+    random.seed(3)
+    opp = soccer.robots  # noqa: F841
+    import robot_league as RL
+    away = RL.match_cfg(RL.opponent_team("Platinum", (230, 230, 245), 60, 7))
+    g.start_robot_match(gg.match_cfg(), away, lambda s, e: None, return_state="campaign", venue="estadio")
+    _play_for(2.5)
+    save("a9_campanha_estadio.png")
+    b = g.ball.pos
+    r = pygame.Rect(0, 0, 360, 240)
+    r.center = (int(b.x), int(b.y))
+    _zoom(r.clamp(soccer.PITCH), os.path.join(out, "a9_campanha_zoom.png"), 3)
+    paths.append(os.path.join(out, "a9_campanha_zoom.png"))
+    random.seed(5)
+    g.start_robot_match(gg.match_cfg(), away, lambda s, e: None, return_state="campaign", venue="estadio")
+    for t in g.teams:                                     # bateria baixa/critica: faiscas e fumaca
+        for k, p in enumerate(t.players):
+            p.bat = (0.2, 0.06, 0.3, 0.2, 0.06)[k]
+    soccer.BATTERY_ON = False                             # congela a bateria (so para a captura)
+    _play_for(1.2, sim_secs=1.5)
+    soccer.BATTERY_ON = True
+    save("a11_bateria_fumaca.png")
+    p = g.teams[0].players[1]
+    r.center = (int(p.pos.x), int(p.pos.y))
+    _zoom(r.clamp(soccer.PITCH), os.path.join(out, "a11_fumaca_zoom.png"), 3)
+    paths.append(os.path.join(out, "a11_fumaca_zoom.png"))
+    g.match_sink = None
+    # Modo Robos (bairro)
+    random.seed(4)
+    import garage as G
+    g2 = G.new_game(random.Random(2), "Bairro FC")
+    g.start_robot_match(g2.match_cfg(), RL.match_cfg(RL.opponent_team("Vila Poeira", (255, 120, 40), 50, 3)),
+                        lambda s, e: None, venue="bairro")
+    _play_for(2.5)
+    save("a9_robos_bairro.png")
+    g.match_sink = None
+    g.state = "menu"
+    paths.append(out)
+    return paths
+
+
 def golden_scores():
     out = {}
     for oa, ob in MATCHUPS:
@@ -306,6 +480,9 @@ if __name__ == "__main__":
         print(draw_ms())
     elif a[:1] == ["ui-shots"]:
         for p in ui_shots():
+            print(p)
+    elif a[:1] == ["robot-shots"]:
+        for p in robot_shots():
             print(p)
     elif a[:1] == ["crowd-shots"]:
         for p in crowd_shots(a[1:] or None):
