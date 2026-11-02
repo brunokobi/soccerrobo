@@ -158,7 +158,7 @@ def effective_attrs(robot, pieces_by_id):
 def team_rating(robot_list, pieces_by_id, mod_on=False):
     """Forca da equipe: media da media dos atributos efetivos dos robos, x100; com mod_on (skills
     ligadas) soma skills.team_skill_force (pontos de F calibrados no motor por tests/calib_skills.py,
-    teto SK_CAP 4,0 no time). Sem mod_on (Ato 1, Modo Robos antes do tier 1) e o valor antigo exato."""
+    teto SK_CAP 9,0 no time). Sem mod_on (Ato 1, Modo Robos antes do tier 1) e o valor antigo exato."""
     if not robot_list:
         return 0.0
     tot = sum(robots.mean_attr(effective_attrs(r, pieces_by_id)) for r in robot_list)
@@ -391,7 +391,7 @@ class Garage:
         return [self.robot(i) for i in self.lineup]
 
     def rating(self):
-        """Forca do time (B9: com mod_on inclui a forca das skills, teto 4,0). Os consumiveis da
+        """Forca do time (B9: com mod_on inclui a forca das skills, teto SK_CAP). Os consumiveis da
         Mochila NAO entram aqui (so na partida: match_F)."""
         return team_rating(self.lineup_robots(), self.pieces_by_id(), self.mod_on())
 

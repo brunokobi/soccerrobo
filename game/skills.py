@@ -41,9 +41,10 @@ RANKS = (1, 2, 3)
 RANK_MUL = (1.0, 1.25, 1.5)
 RANK_CD = (1.0, 0.9, 0.8)
 UP_MUL = 0.04                 # +4% de magnitude por nivel de upgrade do modulo (provisorio)
-SK_CAP = 4.0                  # teto da forca de skills (pontos de F) por time
+SK_CAP = 9.0                  # teto da forca de skills (pontos de F) por time; 4,0 subestimava o motor
+#                               em ~5 F apos o rebalanceamento B14 (calib_campaign --skills, calib_robots --skills)
 FORCE_R1_MAX, FORCE_R3_MAX = 5.5, 8.5   # B14/B15: teto da SKILL_FORCE (pontos de F por robo) no rank 1 e no 3
-ROBOT_SK_CAP = 20.0           # teto por robo (B9): = 5 x SK_CAP, um robo sozinho (ex.: goleiro com Defesa
+ROBOT_SK_CAP = 20.0           # teto por robo (B9), um robo sozinho (ex.: goleiro com Defesa
 #                               Elastica) pode carregar no maximo o teto do time inteiro
 PH_PER_LEVEL = 1              # 1 PH por nivel a partir do 2
 PTS_MAX = 99

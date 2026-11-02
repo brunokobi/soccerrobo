@@ -300,7 +300,7 @@ def test_skill_force_and_cap():
     many = [(sid, 3) for sid in S.SKILL_IDS]
     assert S.skill_force(many) == S.ROBOT_SK_CAP
     assert S.team_skill_force([]) == 0.0
-    assert S.team_skill_force([many] * 5) == S.SK_CAP == 4.0
+    assert S.team_skill_force([many] * 5) == S.SK_CAP == 9.0
     t = S.team_skill_force([[("arrancada", 1)], [], [], [], []])
     assert abs(t - f1 / 5) < 1e-12
     assert abs(S.item_force(["cera_turbo", "cafe", "xyz"]) - 1.4) < 1e-12
