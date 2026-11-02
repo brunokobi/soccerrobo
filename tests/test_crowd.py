@@ -55,8 +55,10 @@ SHOTS_DIR = os.environ.get("SOCCERPY_SHOTS_DIR")
 LEVELS = ("ALTA", "MEDIA")
 
 
-def set_level(level):
-    PREFS["raw"] = '{"v": 1, "crowd": "%s"}' % level
+def set_level(level, camera="PERTO"):
+    """Nivel da torcida + camera EXPLICITA: os testes deste arquivo conferem a geometria PERTO (campo em
+    tela cheia); a camera ESTADIO (padrao AUTO das partidas assistidas) fica em tests/test_camera.py."""
+    PREFS["raw"] = '{"v": 1, "crowd": "%s", "camera": "%s"}' % (level, camera)
     prefs.reset_cache()
 
 

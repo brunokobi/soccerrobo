@@ -10,6 +10,10 @@ excecao. Preferencia corrompida nao e copiada para ".bad" (nao e progresso): so 
 sobrescrita quando o jogador muda alguma opcao (set/save).
 
 Uso: prefs.get("crowd") -> "ALTA"; prefs.set("crowd", "OFF") -> True se gravou.
+
+Campos OPCIONAIS (padrao None em FIELDS): ausentes = "o jogador nunca escolheu". Nao aparecem em
+load()/no JSON gravado ate o primeiro set(); unset(campo) volta ao automatico. Ex.: "camera"
+(ESTADIO / PERTO): sem escolha, a partida decide pelo modo (ver soccer.Game.camera_mode).
 """
 import json
 import os
@@ -22,17 +26,20 @@ VERSION = 1
 MAX_CHARS = 10_000                          # prefs sao minusculas; maior que isso = lixo
 
 CROWD_LEVELS = ("ALTA", "MEDIA", "OFF")     # torcida: completa / sem ondas / desligada
+CAMERA_MODES = ("ESTADIO", "PERTO")         # camera da partida: campo reduzido + arquibancadas / campo cheio
 
 # campo -> (valores aceitos, padrao). Campos futuros entram aqui (o sanitize ja os trata).
 FIELDS = {
     "crowd": (CROWD_LEVELS, "ALTA"),
+    "camera": (CAMERA_MODES, None),         # opcional: None = automatico (assistida ESTADIO, amistoso PERTO)
 }
 
 _cur = None                                 # cache em memoria (None = ainda nao carregado)
 
 
 def defaults():
-    return {k: d for k, (_, d) in FIELDS.items()}
+    """Padroes dos campos obrigatorios (os opcionais, padrao None, ficam de fora ate serem escolhidos)."""
+    return {k: d for k, (_, d) in FIELDS.items() if d is not None}
 
 
 def sanitize(d):
@@ -105,6 +112,15 @@ def set(name, value):  # noqa: A001  (API do modulo: prefs.set)
     if spec is None or not isinstance(value, str) or value not in spec[0]:
         return False
     _prefs()[name] = value
+    return save()
+
+
+def unset(name):
+    """Esquece a escolha de um campo OPCIONAL (volta ao automatico) e grava. False se nao e opcional."""
+    spec = FIELDS.get(name)
+    if spec is None or spec[1] is not None:
+        return False
+    _prefs().pop(name, None)
     return save()
 
 

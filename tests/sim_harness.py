@@ -9,9 +9,11 @@ Uso (da raiz do repo):
 O golden confere o MODO LEGADO: ele aplica LEGACY_TUNING + BATTERY_ON=False explicitamente
 (o padrao do jogo agora e TUNING + BATTERY_ON=True) e tem de ficar 80/80.
   ... tests/sim_harness.py draw
-  ... tests/sim_harness.py draw --crowd [ALTA|MEDIA]   (draw_ms por local da torcida, partida assistida)
+  ... tests/sim_harness.py draw --crowd [ALTA|MEDIA] [ESTADIO|PERTO]
+        (draw_ms por local da torcida, partida assistida; camera padrao = AUTO = ESTADIO nas assistidas)
   ... tests/sim_harness.py shot out.png
   ... tests/sim_harness.py crowd-shots [local ...]     (PNGs em $SOCCERPY_SHOTS_DIR ou num tempdir)
+  ... tests/sim_harness.py camera-shots [local ...]    (camera ESTADIO x PERTO por local, com gol e confete)
   ... tests/sim_harness.py ui-shots                    (gol/confete, telao, LED, pausa e menu: A4-A7)
   ... tests/sim_harness.py robot-shots                 (robos A9-A11: grade de chassis, zoom, estadio, bairro)
 """
@@ -124,10 +126,12 @@ def draw_ms(n=300):
     return {"draw_ms": play_ms, "menu_ms": menu_ms}
 
 
-def _crowd_prefs(level="ALTA"):
-    """Torcida no nivel pedido sem ler nem gravar ~/.soccerpy_prefs.json (store em memoria)."""
+def _crowd_prefs(level="ALTA", camera=None):
+    """Torcida no nivel pedido sem ler nem gravar ~/.soccerpy_prefs.json (store em memoria).
+    camera None = AUTO (partida assistida -> ESTADIO)."""
     import prefs
-    prefs._store_get = lambda: '{"v": 1, "crowd": "%s"}' % level
+    cam = ', "camera": "%s"' % camera if camera else ""
+    prefs._store_get = lambda: '{"v": 1, "crowd": "%s"%s}' % (level, cam)
     prefs._store_set = lambda text: False
     prefs.reset_cache()
 
@@ -140,7 +144,7 @@ def _prep_crowd(venue, warm=120):
     g.state = "play"
 
 
-def draw_crowd_ms(level="ALTA", n=300):
+def draw_crowd_ms(level="ALTA", n=300, camera=None):
     """draw_ms (partida assistida, 1x) sem torcida e com torcida em cada local, com um gol em curso."""
     import crowd
     _crowd_prefs("OFF")
@@ -149,7 +153,7 @@ def draw_crowd_ms(level="ALTA", n=300):
     for _ in range(n):
         g.draw()
     out = {"sem_torcida": (time.perf_counter() - t) / n * 1000}
-    _crowd_prefs(level)
+    _crowd_prefs(level, camera)
     for v in crowd.VENUES:
         crowd.clear_cache()
         t = time.perf_counter()
@@ -162,7 +166,7 @@ def draw_crowd_ms(level="ALTA", n=300):
         for _ in range(n):
             g.draw()
         out[v] = {"draw_ms": round((time.perf_counter() - t) / n * 1000, 3), "warm_ms": round(b.build_ms, 1),
-                  "pessoas": b.people, "faixas": len(b.segs)}
+                  "pessoas": b.people, "faixas": len(b.segs), "camera": b.camera, "kb": b.nbytes // 1024}
     out["mundial+robos_com_pecas"] = robots_draw_ms("mundial", n)
     g.state = "menu"
     return out
@@ -220,6 +224,32 @@ def crowd_shots(venues=None):
             g.draw()
         paths.append(os.path.join(out, "crowd_%s_gol.png" % v))
         pygame.image.save(_scr, paths[-1])
+    g.state = "menu"
+    return paths
+
+
+def camera_shots(venues=None):
+    """Camera ESTADIO x PERTO por local (antes e durante um gol, com confete) em $SOCCERPY_SHOTS_DIR."""
+    import tempfile
+    import crowd
+    out = os.environ.get("SOCCERPY_SHOTS_DIR") or tempfile.mkdtemp(prefix="soccerpy_shots_")
+    os.makedirs(out, exist_ok=True)
+    paths = []
+    for cam in ("ESTADIO", "PERTO"):
+        _crowd_prefs("ALTA", cam)
+        for v in venues or ("bairro", "ginasio", "estadio", "mundial"):
+            _prep_crowd(v, warm=200)
+            g.crowd.react.clear()
+            g.crowd.next_upd = 0
+            g.draw()
+            paths.append(os.path.join(out, "camera_%s_%s.png" % (cam.lower(), v)))
+            pygame.image.save(_scr, paths[-1])
+            g.goal(0)
+            t0 = time.perf_counter()
+            while time.perf_counter() - t0 < 0.6:
+                g.draw()
+            paths.append(os.path.join(out, "camera_%s_%s_gol.png" % (cam.lower(), v)))
+            pygame.image.save(_scr, paths[-1])
     g.state = "menu"
     return paths
 
@@ -474,7 +504,8 @@ if __name__ == "__main__":
                   legacy="legacy" in a))
     elif a[:1] == ["draw"] and "--crowd" in a:
         lv = [x for x in a if x in ("ALTA", "MEDIA")]
-        for k, v in draw_crowd_ms(lv[0] if lv else "ALTA").items():
+        cam = [x for x in a if x in ("ESTADIO", "PERTO")]
+        for k, v in draw_crowd_ms(lv[0] if lv else "ALTA", camera=cam[0] if cam else None).items():
             print(k, v)
     elif a[:1] == ["draw"]:
         print(draw_ms())
@@ -483,6 +514,9 @@ if __name__ == "__main__":
             print(p)
     elif a[:1] == ["robot-shots"]:
         for p in robot_shots():
+            print(p)
+    elif a[:1] == ["camera-shots"]:
+        for p in camera_shots(a[1:] or None):
             print(p)
     elif a[:1] == ["crowd-shots"]:
         for p in crowd_shots(a[1:] or None):

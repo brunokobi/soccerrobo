@@ -43,6 +43,22 @@ FX_MAX = 120                           # teto de particulas
 TEXT_CACHE_MAX = 600
 CROWD_CYCLE = ("ALTA", "MEDIA", "OFF")    # opcao TORCIDA (prefs "crowd"), tecla T no menu e na pausa
 CROWD_LABELS = {"ALTA": "ALTA", "MEDIA": "MÉDIA", "OFF": "DESLIGADA"}
+# Camera (prefs "camera", tecla C no menu e na pausa). Regra: sem escolha do jogador (AUTO) as partidas
+# ASSISTIDAS (campanha, Modo Robos, carreira) usam ESTADIO e o Amistoso com humano (modos 1/2) usa PERTO;
+# escolhida, vale para todas. No menu C gira AUTO -> ESTADIO -> PERTO -> AUTO; na pausa alterna a camera
+# da partida (grava a escolha). ESTADIO so existe com torcida (OFF = campo cheio) e fora do MAX.
+CAMERA_MODES = ("ESTADIO", "PERTO")
+CAMERA_MENU_CYCLE = (None, "ESTADIO", "PERTO")
+CAMERA_LABELS = {None: "AUTO", "ESTADIO": "ESTÁDIO", "PERTO": "PERTO"}
+# LOD da camera: media do tempo de desenho (ms) em janelas de CAM_LOD_WINDOW quadros em ESTADIO; acima de
+# CAM_LOD_MS a partida cai para PERTO ate o fim (re-warm unico da torcida; a pausa/C pode voltar).
+CAM_LOD_WINDOW, CAM_LOD_MS = 60, 8.0
+# Escala do mundo por quadro, sempre com destino pre-alocado: f(src, size, dest) existe com essa assinatura
+# no pygame 2.6.1 (desktop) e no pygame-ce 2.5.7 (navegador). Medido (desktop, 1068x596 -> 854x477):
+# smoothscale 1,1-1,7 ms (pygame) / 0,8-0,9 ms (ce, SSE2) contra scale 0,25-0,3 / 0,12-0,2 ms. O WASM nao
+# tem o caminho SIMD: "scale" (vizinho mais proximo; casa com o visual pixelado) e o padrao.
+CAM_SCALERS = {"scale": pygame.transform.scale, "smooth": pygame.transform.smoothscale}
+CAM_SCALER = "scale"
 HUMAN_AIM_ERR = 30                     # graus de erro de mira humano por 1.0 de (0.65 - chu/100); so chu < 65
 
 # (papel, fracao x a partir do proprio gol, fracao y)
@@ -218,6 +234,17 @@ class Game:
         self.crowd_venue = None                   # local da partida assistida atual (re-warm na pausa)
         self.crowd_story = False                  # partida da campanha: faixas da torcida citam o Ze Poeira
         self.pitch_surf = self.build_arena()
+        # camera ESTADIO: o mundo (campo/robos/bola/FX) e desenhado aqui e reduzido para crowd.CAM_RECT.
+        # Tudo pre-alocado: a escala por quadro usa a API com destino (nenhuma Surface nova).
+        self.world = pygame.Surface((W, H)).convert()
+        self.world_src = self.world.subsurface(crowd.CAM_CROP)
+        self.world_dst = pygame.Surface(crowd.CAM_SIZE).convert()
+        self.cam_scale = CAM_SCALERS[CAM_SCALER]
+        self.cam_fallback = False                 # LOD da camera: caiu para PERTO nesta partida
+        self.cam_acc, self.cam_n = 0.0, 0
+        self.last_draw_ms = 0.0                   # ultimo quadro de partida medido (informativo)
+        self.world_dirty = []                     # retangulos desenhados no mundo no quadro anterior
+        self.world_full = True                    # proximo quadro ESTADIO repinta o campo inteiro
         self.glows = self.build_glows()
         self.hud_panel = self.build_hud_panel()
         self.banner_veil = self.build_banner_veil()
@@ -290,6 +317,7 @@ class Game:
         self.reset_fx()
         self.crowd_venue = None
         self.crowd_story = False
+        self.cam_reset()
         if venue is not None:
             self.warm_crowd(venue)
         self.kickoff(0)
@@ -328,6 +356,7 @@ class Game:
         self.ball = Ball()
         self.paused = False
         self.reset_fx()
+        self.cam_reset()
         self.warm_crowd(venue)
         self.state = "kickoff"
         self.kickoff(0)
@@ -419,6 +448,8 @@ class Game:
                     self.campaign_ui.open()
                 elif e.key == pygame.K_t:
                     self.toggle_crowd()
+                elif e.key == pygame.K_c:
+                    self.toggle_camera()
             elif self.career_match:
                 if e.key in (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4):
                     self.speed_idx = e.key - pygame.K_1
@@ -426,6 +457,8 @@ class Game:
                     self.paused = not self.paused
                 elif e.key == pygame.K_t and self.paused:
                     self.toggle_crowd()
+                elif e.key == pygame.K_c and self.paused:
+                    self.toggle_camera()
                 elif e.key in (pygame.K_RETURN, pygame.K_SPACE) and self.state == "over":
                     self.finish_career_match()
             elif self.state == "over":
@@ -440,6 +473,8 @@ class Game:
                     self.paused = not self.paused
                 elif e.key == pygame.K_t and self.paused and self.crowd_venue is not None:
                     self.toggle_crowd()
+                elif e.key == pygame.K_c and self.paused and self.crowd_venue is not None:
+                    self.toggle_camera()
         elif e.type == pygame.MOUSEBUTTONDOWN:
             if self.state == "menu":
                 for i, r in enumerate(self.menu_btns):
@@ -1054,8 +1089,10 @@ class Game:
         level = self.crowd_level()
         if level not in crowd.LEVELS:                 # "OFF" (ou valor estranho): sem torcida
             return None
+        self.world_full = True
         c0, c1 = (led_color(t.color) for t in self.teams)
-        bundle = crowd.warm_crowd(venue, c0, c1, level, base=self.pitch_surf, txt=self.text_img)
+        bundle = crowd.warm_crowd(venue, c0, c1, level, base=self.pitch_surf, txt=self.text_img,
+                                  camera=self.camera_mode())
         self.crowd = crowd.Crowd(bundle, clock=self.crowd_clock, txt=self.text_img, telao=self.career_match,
                                  story=self.crowd_story)
         return self.crowd
@@ -1083,6 +1120,96 @@ class Game:
 
     def crowd_label(self):
         return "T: torcida " + CROWD_LABELS[self.crowd_level()]
+
+    # ------------------------------------------------------------- camera
+    def camera_pref(self):
+        """Escolha gravada (prefs "camera"): "ESTADIO", "PERTO" ou None (AUTO, nunca escolhida)."""
+        try:
+            c = prefs.get("camera")
+        except Exception:  # noqa: BLE001
+            c = None
+        return c if c in CAMERA_MODES else None
+
+    def camera_mode(self):
+        """Camera da partida atual. AUTO: assistida ESTADIO, amistoso com humano (modos 1/2) PERTO.
+        O LOD da camera (cam_fallback) forca PERTO ate a proxima partida."""
+        if self.cam_fallback:
+            return "PERTO"
+        c = self.camera_pref()
+        if c is None:
+            c = "PERTO" if (not self.career_match and self.mode in (1, 2)) else "ESTADIO"
+        return c
+
+    def camera_on(self):
+        """Camera ESTADIO desenhando agora: torcida larga existe e nao esta em MAX."""
+        cr = self.crowd
+        return cr is not None and cr.b.camera == "ESTADIO" and self.speed_idx != 3
+
+    def cam_reset(self):
+        self.cam_fallback = False
+        self.cam_acc, self.cam_n = 0.0, 0
+
+    def toggle_camera(self):
+        """Tecla C. Menu: AUTO -> ESTADIO -> PERTO -> AUTO (gravado). Pausa da partida (com torcida):
+        alterna a camera atual, grava a escolha e aplica na hora (re-warm aqui, no evento)."""
+        if self.state == "menu":
+            cur = self.camera_pref()
+            nxt = CAMERA_MENU_CYCLE[(CAMERA_MENU_CYCLE.index(cur) + 1) % len(CAMERA_MENU_CYCLE)]
+            try:
+                prefs.set("camera", nxt) if nxt is not None else prefs.unset("camera")
+            except Exception:  # noqa: BLE001
+                pass
+            return nxt
+        nxt = "PERTO" if self.camera_mode() == "ESTADIO" else "ESTADIO"
+        try:
+            prefs.set("camera", nxt)
+        except Exception:  # noqa: BLE001
+            pass
+        self.cam_reset()
+        if self.career_match or self.crowd_venue is not None:
+            self.warm_crowd(self.crowd_venue)
+        return nxt
+
+    def camera_label(self, menu=False):
+        return "C: câmera " + CAMERA_LABELS[self.camera_pref() if menu else self.camera_mode()]
+
+    def world_restore(self):
+        """Fundo do mundo (ESTADIO): o campo inteiro so quando preciso (world_full); senao repinta do
+        pitch_surf apenas os retangulos desenhados no quadro anterior (world_dirty)."""
+        bg = self.pitch_surf
+        if self.world_full:
+            self.world.blit(bg, crowd.CAM_CROP.topleft, crowd.CAM_CROP)
+            self.world_full = False
+        elif self.world_dirty:
+            self.world.blits([(bg, r, r) for r in self.world_dirty], False)
+        self.world_dirty.clear()
+
+    def world_mark(self):
+        """Caixas (folgadas) de tudo que foi desenhado no mundo neste quadro: robos (halo 64x64, barra,
+        seta/forca do humano, satelites), bola (glow, sombra, rastro) e particulas (linha/fumaca)."""
+        d = self.world_dirty
+        R = pygame.Rect
+        for t in self.teams:
+            for p in t.players:
+                d.append(R(int(p.pos.x) - 40, int(p.pos.y) - 50, 80, 100))
+        b = self.ball
+        d.append(R(int(b.pos.x) - 30, int(b.pos.y) - 30, 60, 60))
+        for q in self.trail:
+            d.append(R(q[0] - 10, q[1] - 10, 20, 20))
+        for p in self.fx:
+            d.append(R(int(p[0]) - 24, int(p[1]) - 24, 48, 48))
+
+    def cam_feed(self, ms):
+        """LOD da camera: amostra do quadro em ESTADIO; media da janela > CAM_LOD_MS -> PERTO (uma vez)."""
+        self.cam_acc += ms
+        self.cam_n += 1
+        if self.cam_n < CAM_LOD_WINDOW:
+            return
+        avg = self.cam_acc / self.cam_n
+        self.cam_acc, self.cam_n = 0.0, 0
+        if avg > CAM_LOD_MS and not self.cam_fallback:
+            self.cam_fallback = True
+            self.warm_crowd(self.crowd_venue)     # torcida PERTO (custo unico; nada por quadro depois)
 
     def crowd_on(self):
         """Torcida desenhada/reagindo agora: partida assistida, existe e nao esta em MAX."""
@@ -1293,23 +1420,44 @@ class Game:
             scr.blit(self.menu_bg, (0, 0))
             return self.draw_menu()
         cr = self.crowd                                 # amistoso: so existe se o menu pediu (A8)
+        cam = False
         if cr is not None and self.speed_idx == 3:
-            scr.blit(cr.b.static, (0, 0))               # MAX: so a arena composta (1 blit), sem extras
+            if cr.b.camera == "ESTADIO":                # MAX na camera ESTADIO: o minimo (campo cheio)
+                scr.blit(self.pitch_surf, (0, 0))
+            else:
+                scr.blit(cr.b.static, (0, 0))           # MAX: so a arena composta (1 blit), sem extras
             cr = None
         elif cr is None:
             scr.blit(self.pitch_surf, (0, 0))
         else:
             t_draw = time.perf_counter()
-            scr.blit(cr.b.static, (0, 0))
+            cam = cr.b.camera == "ESTADIO"
+            if cam:                                     # ESTADIO: so as arquibancadas (o mundo cobre o meio)
+                st = cr.b.static
+                for r in crowd.CAM_STRIPS:
+                    scr.blit(st, r, r)
+            else:
+                scr.blit(cr.b.static, (0, 0))
             cr.draw(scr, self.paused)
 
-        b = self.ball
-        pygame.draw.ellipse(scr, (3, 8, 18), (b.pos.x - BR + 2, b.pos.y - BR + 5, BR * 2, BR * 1.4))
-        for t in self.teams:
-            for p in t.players:
-                self.draw_player(t, p)
-        self.draw_ball()
-        self.draw_fx(scr)
+        if cam:                                         # ESTADIO: o mundo vai para a Surface pre-alocada
+            self.world_restore()
+            self.screen = self.world
+        try:
+            ws = self.screen
+            b = self.ball
+            pygame.draw.ellipse(ws, (3, 8, 18), (b.pos.x - BR + 2, b.pos.y - BR + 5, BR * 2, BR * 1.4))
+            for t in self.teams:
+                for p in t.players:
+                    self.draw_player(t, p)
+            self.draw_ball()
+            self.draw_fx(ws)
+        finally:
+            self.screen = scr
+        if cam:                                         # escala com destino pronto (zero Surface por quadro)
+            self.world_mark()
+            self.cam_scale(self.world_src, crowd.CAM_SIZE, self.world_dst)
+            scr.blit(self.world_dst, crowd.CAM_POS)
         if cr is not None:
             cr.draw_over(scr, self.paused)
         self.draw_hud()
@@ -1338,16 +1486,20 @@ class Game:
             else:
                 self.banner(title, "ENTER = jogar de novo   |   ESC = menu", col)
         if cr is not None and not self.paused:          # LOD automatico: tempo do quadro de partida
-            cr.lod_feed((time.perf_counter() - t_draw) * 1000)
+            ms = (time.perf_counter() - t_draw) * 1000
+            self.last_draw_ms = ms
+            cr.lod_feed(ms)
+            if cam:
+                self.cam_feed(ms)
 
     def draw_crowd_option(self):
         """Pausa da partida assistida: opcao TORCIDA (tecla T), logo abaixo da faixa do PAUSADO."""
-        lab = self.crowd_label()
-        img = self.text_img(lab, 28, (255, 230, 120))
-        r = img.get_rect(center=(W // 2, CY + 100))
-        pygame.draw.rect(self.screen, (2, 8, 20), r.inflate(28, 14), border_radius=10)
-        pygame.draw.rect(self.screen, (0, 200, 240), r.inflate(28, 14), 2, border_radius=10)
-        self.screen.blit(img, r)
+        for lab, y in ((self.crowd_label(), CY + 100), (self.camera_label(), CY + 146)):
+            img = self.text_img(lab, 28, (255, 230, 120))
+            r = img.get_rect(center=(W // 2, y))
+            pygame.draw.rect(self.screen, (2, 8, 20), r.inflate(28, 14), border_radius=10)
+            pygame.draw.rect(self.screen, (0, 200, 240), r.inflate(28, 14), 2, border_radius=10)
+            self.screen.blit(img, r)
 
     def draw_scorers(self):
         for team in (0, 1):
@@ -1535,7 +1687,12 @@ class Game:
                   (225, 210, 250), center=(r.centerx, r.centery + 18), shadow=False)
         self.text("clique ou aperte 1 / 2 / 3 / 4 / 5 / 6" if self.has_save else "clique ou aperte 1 / 2 / 3 / 5 / 6",
                   28, (200, 225, 235), center=(cx, 640))
-        self.text("F11: tela cheia  |  " + self.crowd_label(), 22, (120, 160, 185), center=(cx, 672), shadow=False)
+        a, c = "F11: tela cheia  |  " + self.crowd_label(), "  |  " + self.camera_label(menu=True)
+        col = (120, 160, 185)
+        wa, wc = self.text_img(a, 22, col).get_width(), self.text_img(c, 22, col).get_width()
+        x0 = cx - (wa + wc) // 2
+        self.text(a, 22, col, midleft=(x0, 672), shadow=False)
+        self.text(c, 22, col, midleft=(x0 + wa, 672), shadow=False)
 
 
 async def main():

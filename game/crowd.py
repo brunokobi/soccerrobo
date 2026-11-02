@@ -42,6 +42,12 @@ y 79..87. A tarja do rodape (y 670..700) fica por cima da torcida, mais opaca at
 Visibilidade: a UI da partida (UI_HUD, UI_PAUSE, UI_TELAO, UI_SPEED, UI_HINT; ver ui_rects) cobre o
 topo e quase toda a frente. _pick enche primeiro os lugares visiveis (as laterais, em todos os
 locais) e deixa a frente so para o excedente.
+
+**Camera** (prefs "camera"; ver Layout, PERTO/ESTADIO): a geometria acima e a da camera PERTO (campo
+em tela cheia). Na camera ESTADIO o jogo desenha o "mundo" (campo, gols, robos, bola, FX) numa Surface
+fora da tela e o reduz (CAM_SCALE) para CAM_RECT; sobram arquibancadas LARGAS em volta (VENUES_WIDE:
+fileiras em cima, ate 6 colunas nas laterais, fileiras embaixo; zona "T" = arquibancada de cima, de
+frente para a camera), desenhadas aqui em resolucao cheia. O pacote guarda a camera (chave da cache).
 """
 import math
 import random
@@ -110,6 +116,67 @@ VENUES = {
                         style="aeroporto"),
 }
 
+# --- camera ESTADIO: o "mundo" reduzido (soccer.Game desenha nele e escala para CAM_RECT) -----------
+# CAM_CROP = parte do mundo (coordenadas do jogo) que a camera mostra: campo, gols e uma folga para
+# halo/barra de bateria dos robos na borda. Fator 0,80 (escolhido pelo visual + custo: ver docs/specs).
+CAM_SCALE = 0.80
+CAM_CROP = pygame.Rect(16, 72, 1068, 596)
+CAM_SIZE = (int(round(CAM_CROP.w * CAM_SCALE)), int(round(CAM_CROP.h * CAM_SCALE)))     # (854, 477)
+CAM_POS = ((W - CAM_SIZE[0]) // 2, 128)
+CAM_RECT = pygame.Rect(CAM_POS, CAM_SIZE)                                               # x 123..977, y 128..605
+
+
+def cam_point(x, y):
+    """Ponto do mundo (coordenadas do jogo) -> tela, na camera ESTADIO."""
+    return (int(round(CAM_POS[0] + (x - CAM_CROP.x) * CAM_SCALE)),
+            int(round(CAM_POS[1] + (y - CAM_CROP.y) * CAM_SCALE)))
+
+
+def _cam_rect(r):
+    a = cam_point(r.left, r.top)
+    b = cam_point(r.right, r.bottom)
+    return pygame.Rect(a[0], a[1], b[0] - a[0], b[1] - a[1])
+
+
+CAM_PITCH = _cam_rect(PITCH)                                                            # campo na tela (ESTADIO)
+# a arena composta da camera ESTADIO e blitada so FORA de CAM_RECT (o mundo reduzido cobre o resto)
+CAM_STRIPS = (pygame.Rect(0, 0, W, CAM_RECT.top), pygame.Rect(0, CAM_RECT.bottom, W, H - CAM_RECT.bottom),
+              pygame.Rect(0, CAM_RECT.top, CAM_RECT.left, CAM_RECT.h),
+              pygame.Rect(CAM_RECT.right, CAM_RECT.top, W - CAM_RECT.right, CAM_RECT.h))
+
+# arquibancadas largas (ESTADIO): linha 0 = mais perto do campo
+W_TOP_Y = (100, 89, 78, 67)             # topo da caixa 14x18 das fileiras de cima (zona "T", de frente)
+W_BOT_Y = (610, 622, 634, 646, 658, 670)   # fileiras de baixo (zona "F", de costas, lado da camera)
+W_SIDE_X = (103, 84, 65, 46, 27, 8)     # esquerda: x da caixa 18x14 de cada coluna (direita espelhada)
+W_SIDE_Y0, W_SIDE_Y1 = CAM_RECT.top, CAM_RECT.bottom - 1
+W_GAP = (270, 462)                      # coluna 0 das laterais: vao da faixa de pano (atras do gol)
+W_LED_Y = CAM_RECT.top - 10             # placa de LED do topo, colada ao muro do campo
+W_STEP = (0.35, 0.25, 0.15, 0.08, 0.03, 0.0)      # _pick: preferencia por fileira/coluna (perto do campo)
+
+# por local: top/bottom = (fileiras, x0, x1); scols = colunas das laterais; spitch = passo vertical das
+# laterais; sspan = trecho vertical das laterais (locais pequenos; padrao a altura toda do campo);
+# far = pessoas estaticas sob o HUD; people = total (dinamicas + far). Lotacao cresce
+# bairro < quadra < ginasio < arena < estadio < mundial/coliseu (tests/test_camera.py).
+VENUES_WIDE = {
+    "bairro":      dict(top=(1, 300, 800), bottom=(2, 250, 850), scols=3, spitch=14, far=0, people=200,
+                        sspan=(184, 560)),
+    "quadra":      dict(top=(2, 200, 900), bottom=(3, 150, 950), scols=3, spitch=14, far=0, people=280,
+                        sspan=(156, 590)),
+    "ginasio":     dict(top=(2, 0, W), bottom=(3, 0, W), scols=4, spitch=14, far=0, people=430),
+    "arena":       dict(top=(3, 0, W), bottom=(4, 0, W), scols=5, spitch=13, far=0, people=640),
+    "estadio":     dict(top=(4, 0, W), bottom=(5, 0, W), scols=6, spitch=13, far=160, people=1000),
+    "superliga":   dict(top=(4, 0, W), bottom=(5, 0, W), scols=6, spitch=13, far=160, people=1000),
+    "mundial":     dict(top=(4, 0, W), bottom=(6, 0, W), scols=6, spitch=12, far=240, people=1180),
+    "coliseu":     dict(top=(4, 0, W), bottom=(6, 0, W), scols=6, spitch=12, far=240, people=1180),
+    "laboratorio": dict(top=(2, 150, 950), bottom=(3, 150, 950), scols=3, spitch=14, far=0, people=300),
+    "fabrica":     dict(top=(2, 150, 950), bottom=(3, 150, 950), scols=3, spitch=14, far=0, people=300),
+    "dojo":        dict(top=(1, 250, 850), bottom=(2, 250, 850), scols=3, spitch=14, far=0, people=210,
+                        sspan=(184, 560)),
+    "aeroporto":   dict(top=(1, 250, 850), bottom=(2, 250, 850), scols=3, spitch=14, far=0, people=210,
+                        sspan=(184, 560)),
+}
+CAMERAS = ("ESTADIO", "PERTO")
+
 # --- UI por cima da torcida (visibilidade) -------------------------------------------------------
 # Retangulos que a UI da partida cobre (mesmas posicoes que soccer.py desenha; conferido em
 # tests/test_crowd.py::test_ui_rects_cover_the_drawn_ui). A escolha de lugares (_pick) enche
@@ -131,6 +198,16 @@ def ui_rects(assisted=True):
 
 
 UI_ALL = (UI_HUD, UI_PAUSE, UI_TELAO, UI_SPEED, UI_HINT)   # _pick: vale para qualquer modo (cache unico)
+UI_HUD_WIDE = pygame.Rect(0, 0, W, 78)            # ESTADIO: so o placar (a placa de LED desce para o muro)
+UI_ALL_WIDE = (UI_HUD_WIDE, UI_PAUSE, UI_TELAO, UI_SPEED, UI_HINT)
+
+
+def ui_rects_cam(assisted=True, camera="PERTO"):
+    """ui_rects da camera: em ESTADIO o topo coberto e so o placar (UI_HUD_WIDE)."""
+    rects = ui_rects(assisted)
+    if camera == "ESTADIO":
+        return (UI_HUD_WIDE,) + rects[1:]
+    return rects
 
 
 def visible_frac(r, rects=UI_ALL):
@@ -278,6 +355,35 @@ CAP_IDLE_GAP = 7.0
 # quadros -> 0 torcida congelada sentada, sem flashes/bandeiras animadas). Volta um nivel depois de
 # LOD_UP_WINDOWS janelas seguidas abaixo de LOD_UP_MS (histerese: nao oscila).
 LOD_WINDOW, LOD_DOWN_MS, LOD_UP_MS, LOD_UP_WINDOWS = 60, 4.0, 2.5, 3
+
+
+
+class Layout:
+    """Geometria da torcida por camera (posicoes na TELA, resolucao cheia). PERTO = a de sempre."""
+
+    def __init__(self, camera, **kw):
+        self.camera = camera
+        self.__dict__.update(kw)
+
+
+PERTO = Layout("PERTO", wide=False, ui_all=UI_ALL, pitch=PITCH, goal_x=(PITCH.left, PITCH.right),
+               led=(LED_X, LED_Y, LED_W, LED_H), ono_y=ONO_Y,
+               flag_x=(20, W - 20 - 22), flag_ys=(112, 232, 492, 612, 172, 552),
+               flare_front_y=657, flare_side=((30, W - 30), (180, 560)),
+               banner_x=(SIDE_COL_X[2] + 2, W - SIDE_COL_X[2] - AH + 2), banner_cy=CY, pocket=POCKET)
+ESTADIO = Layout("ESTADIO", wide=True, ui_all=UI_ALL_WIDE, pitch=CAM_PITCH,
+                 goal_x=(CAM_PITCH.left, CAM_PITCH.right),
+                 led=(CAM_PITCH.left + 1, W_LED_Y, CAM_PITCH.w - 2, LED_H), ono_y=W_BOT_Y[1] + 6,
+                 flag_x=(4, W - 4 - 22), flag_ys=(150, 262, 478, 580, 206, 528),
+                 flare_front_y=W_BOT_Y[0] + 4, flare_side=((44, W - 44), (200, 540)),
+                 banner_x=(W_SIDE_X[0] + 2, W - W_SIDE_X[0] - AH + 2), banner_cy=(W_GAP[0] + W_GAP[1]) // 2,
+                 pocket=W_GAP)
+LAYOUTS = {"PERTO": PERTO, "ESTADIO": ESTADIO}
+
+
+def resolve_camera(camera):
+    return camera if camera in LAYOUTS else "PERTO"
+
 
 SKINS = ((242, 204, 168), (210, 156, 114), (156, 104, 68), (100, 64, 42))
 HAIRS = (("curto", (30, 24, 22)), ("longo", (104, 62, 32)), ("afro", (36, 26, 20)),
@@ -515,9 +621,34 @@ def _seats(v):
     return out
 
 
+def _seats_wide(w):
+    """Lugares da camera ESTADIO (mesmo formato de _seats). Zonas: "T" (em cima, de frente para a camera;
+    linha 0 = a de baixo, junto ao campo), "F" (embaixo, de costas), "L"/"R" (laterais, giradas; a coluna
+    0 tem o vao da faixa de pano, W_GAP, atras do gol)."""
+    out = []
+    for zone, rows_y, (rows, x0, x1) in (("T", W_TOP_Y, w["top"]), ("F", W_BOT_Y, w["bottom"])):
+        for row in range(rows):
+            for i in range(FRONT_SEATS):
+                cx = int((i + 0.5) * W / FRONT_SEATS) + (7 if row % 2 else 0)
+                if cx - 7 < x0 or cx + 7 > x1:              # caixa inteira dentro da tela/arquibancada
+                    continue
+                y = rows_y[row]
+                out.append((zone, row, i, cx - 7, y, cx, y + 9))
+    step = w["spitch"]
+    for zone in "LR":
+        for col, lx in enumerate(W_SIDE_X[:w["scols"]]):
+            bx = lx if zone == "L" else W - lx - AH
+            sy0, sy1 = w.get("sspan", (W_SIDE_Y0, W_SIDE_Y1))
+            for k, y in enumerate(range(sy0, sy1 - AW + 1, step)):
+                if col == 0 and y + AW > W_GAP[0] and y < W_GAP[1]:
+                    continue
+                out.append((zone, col, k, bx, y, bx + 9, y + 7))
+    return out
+
+
 def _seat_rect(seat):
-    """Caixa do espectador na tela (frente 14x18; laterais 18x14, giradas)."""
-    if seat[0] == "F":
+    """Caixa do espectador na tela (frente/cima 14x18; laterais 18x14, giradas)."""
+    if seat[0] in "FT":
         return pygame.Rect(seat[3], seat[4], AW, AH)
     return pygame.Rect(seat[3], seat[4], AH, AW)
 
@@ -527,12 +658,12 @@ def _banner_zone(seat):
     return seat[0] != "F" and seat[1] == 2 and seat[4] + AW > POCKET[0] and seat[4] < POCKET[1]
 
 
-def _seg_key(seat):
+def _seg_key(seat, pocket=POCKET):
     zone, line, idx = seat[0], seat[1], seat[2]
-    if zone == "F":
+    if zone in "FT":
         return (zone, line, idx // SEG_SEATS)
     # laterais: corridas continuas; quebra no bolsao do gol e a cada SIDE_SEG lugares
-    run = 0 if seat[4] < POCKET[0] else (1 if seat[4] < POCKET[1] else 2)
+    run = 0 if seat[4] < pocket[0] else (1 if seat[4] < pocket[1] else 2)
     return (zone, line, run, idx // SIDE_SEG)
 
 
@@ -548,20 +679,28 @@ def _fidelity(zone, cx):
     return "neutral"
 
 
-def _pick(v, seats, n, rng):
+def _pick(v, seats, n, rng, lay=None):
     """Escolhe n lugares. Primeiro os VISIVEIS (fora da UI: placar, rodape, telao, botoes; e fora da
     faixa de pano atras do gol), que sao as laterais; a frente, quase toda atras do rodape, so recebe o
     excedente. Dentro de cada grupo: mais gente perto do campo e do meio-campo, em grupinhos (ruido por
     bloco de 4 lugares) e nada de pontinhos soltos."""
     if n >= len(seats):
         return set(range(len(seats)))
+    wide = lay is not None and lay.wide
     scored = []
     for k, s in enumerate(seats):
         zone, line = s[0], s[1]
-        vis = 0.0 if _banner_zone(s) else visible_frac(_seat_rect(s))
-        if zone == "F":
+        if wide:                                  # ESTADIO: sem bolsao de faixa (o vao nao tem lugares)
+            vis = visible_frac(_seat_rect(s), lay.ui_all)
+            if zone in "FT":
+                w = 1.0 - abs(s[5] - W / 2) / (W / 2) * 0.8 + W_STEP[line]
+            else:
+                w = 1.0 - abs(s[6] - lay.pitch.centery) / 300.0 * 0.4 + W_STEP[line]
+        elif zone == "F":
+            vis = 0.0 if _banner_zone(s) else visible_frac(_seat_rect(s))
             w = 1.0 - abs(s[5] - W / 2) / (W / 2) * 0.8 + (0.35, 0.18, 0.0)[line]
         else:
+            vis = 0.0 if _banner_zone(s) else visible_frac(_seat_rect(s))
             w = 0.7 - abs(s[6] - CY) / 300.0 * 0.6 + (0.45, 0.2, 0.0)[line]
         # visivel vale mais que qualquer combinacao de peso + ruido (< 2,5)
         w += 4.0 * (vis >= 0.5) + 1.0 * vis
@@ -575,12 +714,18 @@ def _blockjit(s, v):
     return (_seed(v["style"], s[0], s[1] // 2, s[2] // 4) % 1000) / 1000.0
 
 
-def people_count(venue, level="ALTA"):
-    """Pessoas desenhadas (dinamicas + distantes) no local/nivel."""
-    v = VENUES[resolve_venue(venue)]
+def people_count(venue, level="ALTA", camera="PERTO"):
+    """Pessoas desenhadas (dinamicas + distantes) no local/nivel/camera."""
+    venue = resolve_venue(venue)
     dens = LEVELS[resolve_level(level)]["density"]
+    if resolve_camera(camera) == "ESTADIO":
+        v = VENUES_WIDE[venue]
+        seats = _seats_wide(v)
+    else:
+        v = VENUES[venue]
+        seats = _seats(v)
     far = int(round(v["far"] * dens))
-    dyn = min(len(_seats(v)), int(round((v["people"] - v["far"]) * dens)))
+    dyn = min(len(seats), int(round((v["people"] - v["far"]) * dens)))
     return dyn + far
 
 
@@ -596,7 +741,7 @@ class Seg:
 
 
 class _Bundle:
-    __slots__ = ("key", "venue", "level", "static", "tarja", "segs", "people", "nbytes", "build_ms",
+    __slots__ = ("key", "venue", "level", "camera", "lay", "static", "tarja", "segs", "people", "nbytes", "build_ms",
                  "ex", "colors", "ono_cols", "anchors", "flags", "flares", "smoke", "star", "conf_cols", "telao",
                  "txt_id", "banners", "led_ads", "led_goal", "led_period")
 
@@ -647,12 +792,12 @@ def _card(seat, cols):
     return light if k % 3 == 0 else main
 
 
-def _build_segments(v, venue, seats, looks, atoms, mosaic=None):
+def _build_segments(v, venue, seats, looks, atoms, mosaic=None, lay=PERTO):
     """Faixas prontas por pose. mosaic = {"home": (cor, clara), "away": (...)} acrescenta a pose
     MOSAIC (cartoes levantados formando listras na cor do time); faixas neutras reusam a pose UP."""
     groups = OrderedDict()
     for k, s in enumerate(seats):
-        groups.setdefault(_seg_key(s), []).append(k)
+        groups.setdefault(_seg_key(s, lay.pocket), []).append(k)
     segs = []
     nbytes = 0
     for gkey, ks in groups.items():
@@ -661,7 +806,8 @@ def _build_segments(v, venue, seats, looks, atoms, mosaic=None):
             continue
         zone = gkey[0]
         first = seats[ks[0]]
-        if zone == "F":
+        flat = zone in "FT"
+        if flat:
             x0 = min(seats[k][3] for k in ks)
             x1 = max(seats[k][3] for k in ks) + AW
             w, h = x1 - x0, AH
@@ -677,7 +823,7 @@ def _build_segments(v, venue, seats, looks, atoms, mosaic=None):
                 pos = [(seats[k][4] - y0, 0) for k in occ]
         back = zone == "F"
         imgs = []
-        if zone == "F":
+        if flat:
             seg_fid = _fidelity(zone, (x0 + x1) // 2)
         else:
             seg_fid = _fidelity(zone, 0)
@@ -706,20 +852,24 @@ def _build_segments(v, venue, seats, looks, atoms, mosaic=None):
             st.set_colorkey(KEY, pygame.RLEACCEL)
             nbytes += st.get_width() * st.get_height() * 4
             imgs.append(st)
-        if zone == "F":
-            x, y, jump = x0, first[4], (0, -3)
+        if flat:
+            x, y, jump = x0, first[4], ((0, -3) if zone == "F" else (0, -2))
             cx, cy = (x0 + x1) // 2, y + 9
         else:
             x, y = first[3], min(seats[k][4] for k in ks)
             jump = (-2, 0) if zone == "L" else (2, 0)
             cx, cy = x + 9, y + (max(seats[k][4] for k in ks) + AW - y) // 2
         # posicao no perimetro (ola): esquerda de cima p/ baixo, frente esq->dir, direita de baixo p/ cima
+        # e (ESTADIO) a de cima da direita para a esquerda
+        P = lay.pitch
         if zone == "L":
-            wave = cy - PITCH.top
+            wave = cy - P.top
         elif zone == "F":
-            wave = PITCH.h + cx
+            wave = P.h + cx
+        elif zone == "R":
+            wave = P.h + W + (P.bottom - cy)
         else:
-            wave = PITCH.h + W + (PITCH.bottom - cy)
+            wave = 2 * P.h + W + (W - cx)
         ph = (_seed(venue, gkey) % 180) / 1000.0
         segs.append(Seg(zone, _fidelity(zone, cx), x, y, tuple(imgs), jump, cx, cy, wave, ph, len(occ),
                         tuple(_seat_rect(seats[k]) for k in occ)))
@@ -819,6 +969,132 @@ def _draw_static(v, venue, base, seats, chosen, home, away, rng):
     return s
 
 
+def _draw_static_wide(v, w, base, seats, home, away, rng):
+    """Estadio em volta do campo reduzido (camera ESTADIO): concreto, degraus das arquibancadas de cima,
+    de baixo e laterais, cadeiras, escadas, muro com neon em volta de CAM_RECT, moldura da placa de LED,
+    torres de refletor e a torcida distante (sob o HUD). O retangulo do campo fica por baixo do mundo."""
+    st = STYLES[v["style"]]
+    step, edge, seat_c = st["step"], st["edge"], st["seat"]
+    s = pygame.Surface((W, H)).convert()
+    dark, mid = scale(step, 0.28), scale(step, 0.5)
+    for y in range(0, H, 4):                                # concreto: mais escuro no alto (profundidade)
+        s.fill(mix(dark, mid, y / H), (0, y, W, 4))
+    # paredes/fundo onde a arquibancada nao chega (locais pequenos): muro com juntas
+    wall = scale(step, 0.62)
+    for zone, (rows, x0, x1), ys in (("T", w["top"], W_TOP_Y), ("F", w["bottom"], W_BOT_Y)):
+        if x0 > 0 or x1 < W:
+            ya, yb = (0, CAM_RECT.top - 12) if zone == "T" else (CAM_RECT.bottom + 2, H)
+            for xa, xb in ((0, x0), (x1, W)):
+                if xb - xa <= 0:
+                    continue
+                s.fill(wall, (xa, ya, xb - xa, yb - ya))
+                for yy in range(ya, yb, 9):
+                    pygame.draw.line(s, scale(wall, 0.8), (xa, yy), (xb, yy))
+                    for xx in range(xa + (yy // 9 % 2) * 11, xb, 22):
+                        pygame.draw.line(s, scale(wall, 0.8), (xx, yy), (xx, yy + 8))
+    # muro nas laterais fora das colunas (locais com menos de 6 colunas) e acima/abaixo do trecho (sspan)
+    x_out = W_SIDE_X[w["scols"] - 1]
+    sy0, sy1 = w.get("sspan", (W_SIDE_Y0, W_SIDE_Y1))
+    ya, yb = W_TOP_Y[0] + 18, CAM_RECT.bottom + 4
+    for xa, xb, y0, y1 in ((0, x_out - 1, ya, yb), (0, CAM_RECT.left - 3, ya, sy0 - 2),
+                           (0, CAM_RECT.left - 3, sy1 + 2, yb)):
+        if xb - xa <= 0 or y1 - y0 <= 0:
+            continue
+        for zx in (xa, W - xb):                            # esquerda e o espelho na direita
+            s.fill(wall, (zx, y0, xb - xa, y1 - y0))
+            for yy in range(y0, y1, 9):
+                pygame.draw.line(s, scale(wall, 0.8), (zx, yy), (zx + xb - xa - 1, yy))
+                for xx in range(zx + (yy // 9 % 2) * 11, zx + xb - xa, 22):
+                    pygame.draw.line(s, scale(wall, 0.8), (xx, yy), (xx, min(yy + 8, y1 - 1)))
+    # degraus: cima (de frente; mais longe = mais escuro) e baixo (de costas, lado da camera)
+    rows, x0, x1 = w["top"]
+    for line in range(rows - 1, -1, -1):
+        y = W_TOP_Y[line] + 7
+        pygame.draw.rect(s, scale(step, 1.0 - 0.13 * line), (x0, y, x1 - x0, 11))
+        pygame.draw.line(s, scale(edge, 0.45 - 0.06 * line), (x0, y), (x1, y))
+    if rows:
+        top = W_TOP_Y[rows - 1] + 7
+        for xx in (W // 3, 2 * W // 3):                    # escadas
+            if x0 < xx < x1:
+                pygame.draw.rect(s, scale(step, 0.6), (xx - 3, top, 6, CAM_RECT.top - 12 - top))
+    rows, x0, x1 = w["bottom"]
+    for line in range(rows):
+        y = W_BOT_Y[line] + 7
+        pygame.draw.rect(s, scale(step, 1.0 - 0.1 * line), (x0, y, x1 - x0, 12 if line < rows - 1 else H - y))
+        pygame.draw.line(s, scale(edge, 0.55), (x0, y), (x1, y))
+    if rows:
+        for xx in (W // 3, 2 * W // 3):
+            if x0 < xx < x1:
+                pygame.draw.rect(s, scale(step, 0.7), (xx - 3, W_BOT_Y[0] + 5, 6, H))
+        if x0 > 0 or x1 < W:                                # pes da arquibancada pequena
+            for xx in (x0, x1 - 3):
+                pygame.draw.rect(s, scale(edge, 0.7), (xx, W_BOT_Y[0] + 3, 3, H - W_BOT_Y[0]))
+    # laterais: colunas (corridas) com degrau e borda
+    for zone in "LR":
+        for col, lx in enumerate(W_SIDE_X[:w["scols"]]):
+            bx = lx if zone == "L" else W - lx - AH
+            sy0, sy1 = w.get("sspan", (W_SIDE_Y0, W_SIDE_Y1))
+            spans = [(sy0, W_GAP[0]), (W_GAP[1], sy1)] if col == 0 else [(sy0, sy1)]
+            for ya, yb in spans:
+                pygame.draw.rect(s, scale(step, 1.0 - 0.1 * col), (bx, ya, AH, yb - ya))
+                ex = bx + AH - 1 if zone == "L" else bx
+                pygame.draw.line(s, scale(edge, 0.5), (ex, ya), (ex, yb))
+        for yy in (CAM_RECT.top + 120, CAM_RECT.bottom - 120):   # corredores horizontais
+            x_out = W_SIDE_X[w["scols"] - 1]
+            xa = x_out if zone == "L" else W - W_SIDE_X[0] - AH
+            pygame.draw.rect(s, scale(step, 0.55), (xa, yy - 2, W_SIDE_X[0] + AH - x_out, 4))
+        gx = W_SIDE_X[0] + 2 if zone == "L" else W - W_SIDE_X[0] - AH + 2   # grade da faixa de pano
+        for xx in (gx, gx + 13):
+            pygame.draw.line(s, scale(edge, 0.75), (xx, W_GAP[0] - 4), (xx, W_GAP[1] + 4))
+        for yy in range(W_GAP[0] - 4, W_GAP[1] + 5, 12):
+            pygame.draw.line(s, scale(edge, 0.55), (gx, yy), (gx + 13, yy))
+    # cadeiras (vazias: aparecem onde nao ha ninguem)
+    for se in seats:
+        if se[0] in "FT":
+            pygame.draw.rect(s, seat_c if se[0] == "F" else scale(seat_c, 0.85), (se[3] + 2, se[4] + 12, 10, 5),
+                             border_radius=2)
+        elif se[0] == "L":
+            pygame.draw.rect(s, seat_c, (se[3] + 12, se[4] + 2, 5, 10), border_radius=2)
+        else:
+            pygame.draw.rect(s, seat_c, (se[3] + 1, se[4] + 2, 5, 10), border_radius=2)
+    # torcida distante (estatica, sob o HUD; o placar translucido deixa um pouco aparecer)
+    if w["far"]:
+        far_n = int(round(w["far"] * LEVELS[v["_level"]]["density"]))
+        spots = []
+        rows_far = [y for y in FAR_ROWS if y < W_TOP_Y[-1] - 2] + [0]
+        for r, y in enumerate(rows_far):
+            pygame.draw.rect(s, scale(step, 0.7 - 0.07 * r), (0, y + 5, W, 6))
+            for i in range(0, W // 9):
+                x = i * 9 + (4 if r % 2 else 0)
+                wt = 1.0 - abs(x - W / 2) / (W / 2) * 0.5 + rng.random() * 0.6 - r * 0.05
+                spots.append((wt, x, y))
+        spots.sort(reverse=True)
+        hs, aw = _shirt(home), _shirt(away)
+        for _, x, y in sorted(spots[:far_n], key=lambda t: t[2]):
+            shirt = hs if x < W * 0.45 else aw if x > W * 0.55 else rng.choice(NEUTRAL_SHIRTS)
+            if rng.random() < 0.2:
+                shirt = rng.choice(NEUTRAL_SHIRTS)
+            _tiny(s, x, y, scale(rng.choice(SKINS), 0.6), rng.choice(HAIRS)[1], scale(shirt, 0.5))
+    # muro em volta do campo (neon do local) e o "fosso" escuro
+    frame = CAM_RECT.inflate(6, 6)
+    pygame.draw.rect(s, (4, 8, 16), frame)
+    pygame.draw.rect(s, scale(edge, 0.45), frame.inflate(4, 4), 2)
+    pygame.draw.rect(s, scale(edge, 0.9), frame, 1)
+    # placa de LED do topo (moldura e blocos apagados); a de baixo e so decorativa (fixa)
+    lx, ly, lw, lh = ESTADIO.led
+    if st["board"]:
+        pygame.draw.rect(s, (8, 10, 18), (lx - 1, ly, lw + 2, lh))
+        for i in range(lx + 3, lx + lw - 30, 60):
+            pygame.draw.rect(s, scale(_shirt(home if i < CX else away), 0.45), (i, ly + 2, 40, 4))
+        pygame.draw.line(s, scale(edge, 0.6), (lx - 1, ly + lh), (lx + lw, ly + lh))
+    # torres de refletor nos 4 cantos (glow estatico) + lampadas
+    if st["lights"]:
+        g = _glow(80, (64, 74, 66))
+        for gx, gy in ((0, 96), (W, 96), (0, H - 40), (W, H - 40)):
+            s.blit(g, (gx - 80, gy - 80), special_flags=pygame.BLEND_RGB_ADD)
+    return s
+
+
 def _build_tarja():
     """Tarja translucida do rodape: so atras dos textos/botoes da UI; no meio a torcida aparece."""
     s = pygame.Surface((W, H - TARJA_Y), pygame.SRCALPHA)
@@ -879,7 +1155,7 @@ def _puff(col, r, a):
     return s.convert_alpha()
 
 
-def _build_extras(b, v, ex, home, away, level):
+def _build_extras(b, v, ex, home, away, level, lay=PERTO):
     """Sprites e posicoes dos extras (sem texto): bandeiras, sinalizadores, fumaca, flash, confete,
     ancoras das onomatopeias e a moldura do telao."""
     hs, aws = _shirt(home), _shirt(away)
@@ -895,7 +1171,7 @@ def _build_extras(b, v, ex, home, away, level):
     # bandeiras: so nas laterais (a frente fica com faixas/UI); MEDIA = metade
     flags = []
     n = ex["flags"] if level == "ALTA" else ex["flags"] // 2
-    ys = (112, 232, 492, 612, 172, 552)
+    ys = lay.flag_ys
     for zone in v["sides"]:
         per = (n + (1 if zone == "L" else 0)) // 2 if len(v["sides"]) == 2 else n
         fid = "home" if zone == "L" else "away"
@@ -906,17 +1182,22 @@ def _build_extras(b, v, ex, home, away, level):
                 c = hs if fid == "home" else aws
                 stripes = (c, _light(c), c)
             imgs = _flag_imgs(stripes, k * 1.3 + (zone == "R"))
-            x = 20 if zone == "L" else W - 20 - 22
+            x = lay.flag_x[0] if zone == "L" else lay.flag_x[1]
+            if lay.wide:                                    # ESTADIO: na coluna mais de fora que existe
+                xo = W_SIDE_X[v["wscols"] - 1] - 3
+                x = xo if zone == "L" else W - xo - 22
             flags.append((imgs, x, ys[k % len(ys)] - 11, fid, (k * 0.11) % 0.25))
     b.flags = flags
     # sinalizadores: 2 na frente + 2 na lateral por torcida
     flares = {"home": [], "away": []}
     if ex["flares"]:
-        for fid, sx in (("home", 30), ("away", W - 30)):
+        fy = lay.flare_front_y
+        sy0, sy1 = lay.flare_side[1]
+        for fid, sx in (("home", lay.flare_side[0][0]), ("away", lay.flare_side[0][1])):
             ax = anchors[fid]
-            flares[fid] += [(ax - 80, 657), (ax + 80, 657)]
+            flares[fid] += [(ax - 80, fy), (ax + 80, fy)]
             if ("L" if fid == "home" else "R") in v["sides"]:
-                flares[fid] += [(sx, 180), (sx, 560)]
+                flares[fid] += [(sx, sy0), (sx, sy1)]
     glow = {}
     for fid in ("home", "away"):
         c = mix(b.colors[fid], (255, 90, 40), 0.55)
@@ -984,15 +1265,15 @@ def _banner(txt, text, cloth, seed, angle=0):
     return s
 
 
-def _side_banners(txt, texts, home, away):
+def _side_banners(txt, texts, home, away, lay=PERTO):
     """Faixas de pano penduradas atras dos gols (coluna de fora das laterais, no bolsao do gol): a
     primeira na esquerda (casa), a segunda na direita (fora). Area visivel: fora de toda a UI."""
     out = []
     for k, (text, zone) in enumerate(zip(texts, "LR")):
         cloth = _shirt(home) if zone == "L" else _shirt(away)
         img = _banner(txt, text, cloth, k * 2.1, 90 if zone == "L" else -90)
-        x = SIDE_COL_X[2] + 2 if zone == "L" else W - SIDE_COL_X[2] - AH + 2
-        out.append((img, (x, CY - img.get_height() // 2)))
+        x = lay.banner_x[0] if zone == "L" else lay.banner_x[1]
+        out.append((img, (x, lay.banner_cy - img.get_height() // 2)))
     return out
 
 
@@ -1015,8 +1296,8 @@ def ensure_text_extras(b, txt):
         return
     b.txt_id = id(owner)
     v = VENUES[b.venue]
-    b.banners = {story: _side_banners(txt, banner_texts(b.venue, b.key[1], b.key[2], story), b.key[1], b.key[2])
-                 for story in (True, False)}
+    b.banners = {story: _side_banners(txt, banner_texts(b.venue, b.key[1], b.key[2], story), b.key[1], b.key[2],
+                                      b.lay) for story in (True, False)}
     b.led_ads = b.led_goal = None
     if STYLES[v["style"]]["board"]:
         head = LED_HEAD.get(b.venue)
@@ -1026,16 +1307,23 @@ def ensure_text_extras(b, txt):
                       for fid in ("home", "away")}
 
 
-def _build(venue, home, away, level, base):
+def _build(venue, home, away, level, base, camera="PERTO"):
     t0 = time.perf_counter()
+    lay = LAYOUTS[camera]
     v = dict(VENUES[venue])
     v["_level"] = level
     ex = EXTRAS[venue]
     dens = LEVELS[level]["density"]
-    rng = random.Random(_seed(venue, home, away, level))
-    seats = _seats(v)
+    if lay.wide:                                    # ESTADIO: geometria larga (mesma semente por local/cores)
+        wv = VENUES_WIDE[venue]
+        v.update(far=wv["far"], people=wv["people"], sides="LR", wscols=wv["scols"])
+        rng = random.Random(_seed(venue, home, away, level, camera))
+        seats = _seats_wide(wv)
+    else:
+        rng = random.Random(_seed(venue, home, away, level))
+        seats = _seats(v)
     n = min(len(seats), int(round((v["people"] - v["far"]) * dens)))
-    chosen = _pick(v, seats, n, rng)
+    chosen = _pick(v, seats, n, rng, lay)
     looks = _looks(v, venue, seats, chosen, home, away, rng)
     atoms = {}
     mosaic = None
@@ -1044,20 +1332,24 @@ def _build(venue, home, away, level, base):
             mosaic = {"home": ((24, 24, 28), (232, 182, 52)), "away": ((24, 24, 28), (232, 182, 52))}
         else:
             mosaic = {f: (c, _light(c)) for f, c in (("home", _shirt(home)), ("away", _shirt(away)))}
-    segs, nbytes = _build_segments(v, venue, seats, looks, atoms, mosaic)
+    segs, nbytes = _build_segments(v, venue, seats, looks, atoms, mosaic, lay)
     if base is None:
         base = pygame.Surface((W, H)).convert()
         base.fill((8, 12, 26))
     b = _Bundle()
-    b.key = (venue, home, away, level)
+    b.key = (venue, home, away, level) if camera == "PERTO" else (venue, home, away, level, camera)
     b.venue, b.level = venue, level
+    b.camera, b.lay = camera, lay
     b.ex = ex
-    b.static = _draw_static(v, venue, base, seats, chosen, home, away, rng)
+    if lay.wide:
+        b.static = _draw_static_wide(v, wv, base, seats, home, away, rng)
+    else:
+        b.static = _draw_static(v, venue, base, seats, chosen, home, away, rng)
     b.tarja = _build_tarja()
     b.segs = segs
     b.people = len(chosen) + int(round(v["far"] * dens))
     b.nbytes = nbytes
-    _build_extras(b, v, ex, home, away, level)
+    _build_extras(b, v, ex, home, away, level, lay)
     b.txt_id = None
     b.banners = {True: [], False: []}
     b.led_ads = b.led_goal = None
@@ -1066,28 +1358,33 @@ def _build(venue, home, away, level, base):
     return b
 
 
-def warm_crowd(venue=None, home=(50, 120, 255), away=(235, 65, 65), level="ALTA", base=None, txt=None):
-    """Pacote pronto (atlas + arena composta + tarja + extras) do local/cores/nivel. LRU de 3 chaves.
+def warm_crowd(venue=None, home=(50, 120, 255), away=(235, 65, 65), level="ALTA", base=None, txt=None,
+               camera="PERTO"):
+    """Pacote pronto (atlas + arena composta + tarja + extras) do local/cores/nivel/camera. LRU de 3 chaves.
 
     Chamar no inicio da partida (nunca no meio). `base` = pitch_surf do jogo; `txt` = Game.text_img
-    (faixas de pano e placas de LED; sem ele o pacote fica sem textos)."""
+    (faixas de pano e placas de LED; sem ele o pacote fica sem textos). camera "ESTADIO": arquibancadas
+    largas em volta de CAM_RECT (o campo vem do mundo reduzido; `static` nao contem o campo)."""
     venue = resolve_venue(venue)
     level = resolve_level(level)
+    camera = resolve_camera(camera)
     key = (venue, tuple(int(c) for c in home[:3]), tuple(int(c) for c in away[:3]), level)
+    if camera != "PERTO":
+        key += (camera,)
     b = _CACHE.get(key)
     if b is not None:
         _CACHE.move_to_end(key)
     else:
-        b = _CACHE[key] = _build(venue, key[1], key[2], level, base)
+        b = _CACHE[key] = _build(venue, key[1], key[2], level, base, camera)
         while len(_CACHE) > CACHE_MAX:
             _CACHE.popitem(last=False)
     ensure_text_extras(b, txt)
     return b
 
 
-def stands_static(venue, home_color, away_color, level="ALTA", base=None):
-    """Arena composta (1100x700) do local: pitch + arquibancadas + torcida distante."""
-    return warm_crowd(venue, home_color, away_color, level, base).static
+def stands_static(venue, home_color, away_color, level="ALTA", base=None, camera="PERTO"):
+    """Arena composta (1100x700) do local: pitch + arquibancadas + torcida distante (ESTADIO: sem o campo)."""
+    return warm_crowd(venue, home_color, away_color, level, base, camera=camera).static
 
 
 def clear_cache():
@@ -1136,6 +1433,9 @@ class Crowd:
         self.offs = [(0, 0)] * len(self.segs)
         self.blits = []
         self.fid_segs = {f: [s for s in self.segs if s.fid == f] for f in FIDS}
+        self.lay = bundle.lay
+        # fim da ola: a ultima faixa do perimetro (PERTO: o mesmo limite de sempre)
+        self.wave_end = max([(PITCH.h * 2 + W)] + [s.wave for s in self.segs])
         self.has_mosaic = any(len(s.imgs) > MOSAIC for s in self.segs)
         # extras
         self.last_t = now
@@ -1206,7 +1506,7 @@ class Crowd:
         other = FIDS[1 - team] if team in (0, 1) else None
         ex = self.ex
         if kind == "goal" and mine:
-            origin = PITCH.right if team == 0 else PITCH.left
+            origin = self.lay.goal_x[1] if team == 0 else self.lay.goal_x[0]
             self._set(mine, "jump", 3.0, 3, now, origin)
             self._set(other, "sad", 2.5, 3, now)
             self._set("neutral", "up", 1.5, 3, now, origin)
@@ -1284,7 +1584,7 @@ class Crowd:
         while len(onos) >= limit:
             onos.pop(0)
         x = self.b.anchors[fid] + dx
-        y = ONO_Y
+        y = self.lay.ono_y
         for o in onos:                              # nao empilha no mesmo lugar
             if abs(o[1] - x) < 120:
                 y = o[2] - 40
@@ -1462,7 +1762,7 @@ class Crowd:
             now = self.clock()
         n = len(self.segs)
         if self.waves and self.lod >= 2 and n:
-            if self.ola is not None and now > self.ola[0] + (PITCH.h * 2 + W) * WAVE_S_PER_PX + 0.6:
+            if self.ola is not None and now > self.ola[0] + self.wave_end * WAVE_S_PER_PX + 0.6:
                 self.ola = None
             if (self.ola_on and self.ola is None and now - self.last_react >= OLA_QUIET
                     and now - self.last_ola >= OLA_EVERY):
@@ -1541,7 +1841,8 @@ class Crowd:
             else:
                 strip, period = b.led_ads
                 off = int(now * LED_SPEED) % period
-            scr.blit(strip, (LED_X, LED_Y), (off, 0, LED_W, LED_H))
+            lx, ly, lw, lh = self.lay.led
+            scr.blit(strip, (lx, ly), (off, 0, lw, lh))
         if self.telao_on:
             self._draw_telao(scr, now)
 

@@ -103,6 +103,25 @@ Onomatopeias e letreiros no lugar de áudio, sempre via `text_img` (cache) em ta
 ### 2.7 Telão (HUD de estádio)
 Mostrador pré-renderizado de ~450x34 px na tarja do rodapé (x 270..720, y 658..692), só em partidas assistidas (`career_match`). Conteúdo: linha 1 placar compacto + minuto; linha 2 legenda do locutor (Tonho/Cleide) por evento ("Que lance, Cleide!", "O chinelo ainda está no lugar, Tonho."), até 3 variações por tipo escolhidas por `event_index % n`. Textos pré-renderizados via `text_img`. Placas de LED no campo mostram a marca do local (Limpex, Santa Faísca, Superliga, Copa dos Campeões) em uma tira longa scrollada com `blit(..., area=Rect(off, 0, 980, 10))`.
 
+### 2.8 Câmera de estádio (ESTADIO x PERTO)
+O campo ocupa quase toda a tela, então a torcida da geometria 2.1 (câmera **PERTO**) fica em faixas de ~60 px. Na câmera **ESTADIO** o "mundo" (campo, gols, robôs, bola e FX do jogo: tudo que usa coordenadas do jogo) é desenhado como sempre numa Surface fora da tela, **pré-alocada** (`Game.world`, 1100x700, criada uma vez), e reduzido para a tela; em volta sobram arquibancadas largas, desenhadas pela torcida em resolução cheia. Física, IA e coordenadas não mudam (goldens 80/80; `test_camera.test_scores_identical_estadio_perto_off`).
+
+| Item | Valor |
+|---|---|
+| Recorte do mundo | `crowd.CAM_CROP` = x 16..1084, y 72..668 (campo + gols + folga para halo/barra dos robôs na borda) |
+| Fator | `CAM_SCALE` = 0,80 → `CAM_SIZE` 854x477 em `CAM_RECT` = x 123..977, y 128..605 (campo na tela: `CAM_PITCH` = 158,142 784x448) |
+| Arquibancada de cima (zona `T`, de frente para a câmera) | até 4 fileiras (topo das caixas y 100/89/78/67; a de y 67 fica meio sob o placar) |
+| Laterais (`L`/`R`, giradas como em PERTO) | até 6 colunas (x 103/84/65/46/27/8 e o espelho), y 128..604; coluna 0 com o vão da faixa de pano atrás do gol (y 270..462) |
+| Arquibancada de baixo (`F`, de costas, lado da câmera) | até 6 fileiras (y 610..670; as 4 primeiras acima do rodapé) |
+| Placa de LED | colada ao muro do campo, em cima (y 118..126, largura do campo reduzido) |
+| Fica fora do mundo (resolução cheia, por cima) | placar/HUD, rodapé (P: pausa, telão, velocidade), faixas GOL/PAUSADO/fim, onomatopeias, confete, flashes, sinalizadores, bandeiras, faixas de pano, LED |
+
+**Lotação (`crowd.VENUES_WIDE`, pessoas desenhadas incl. as distantes estáticas)**: bairro 200 < quadra 280 < ginásio 430 < arena 640 < estádio/superliga 1000 < mundial/coliseu 1180 (laboratório/fábrica 300, dojo/aeroporto 210). Os pequenos têm arquibancadas curtas (`sspan`, `top`/`bottom` com vão) e muro de tijolos no resto. Visíveis fora da UI (ALTA, `test_visible_estadio_much_more_than_perto`): bairro 176 (PERTO 85), quadra 275 (100), ginásio 423 (138), arena 634 (166), estádio 832 (190), mundial 925 (213). Casa à esquerda/visitante à direita (laterais, frente e cima pelo `x`).
+
+**Regra da câmera (prefs `camera`)**: campo opcional; ausente = **AUTO** → partidas assistidas (campanha, Modo Robôs, carreira) em ESTADIO e o Amistoso com humano (modos 1/2) em PERTO. Escolhida (ESTADIO ou PERTO), vale para todas. Tecla **C**: no menu gira AUTO → ESTÁDIO → PERTO → AUTO (rótulo ao lado de "F11: tela cheia | T: torcida ..."); na pausa (partidas com torcida) alterna a câmera da partida, grava e aplica na hora (re-warm no evento). Sem torcida (OFF) não há ESTADIO.
+
+**Técnica e desempenho**: por quadro, 4 blits da arena composta só FORA de `CAM_RECT` (`CAM_STRIPS`), faixas da torcida, repintura parcial do mundo (só os retângulos desenhados no quadro anterior: robôs, bola/rastro, partículas; `Game.world_restore/world_mark`; o campo inteiro só após warm/troca de câmera), escala com destino pronto `pygame.transform.scale(src, CAM_SIZE, dest)` e 1 blit. A assinatura `f(src, size, dest)` de `scale` e `smoothscale` foi conferida no pygame 2.6.1 e no pygame-ce 2.5.7. Medido (desktop): `smoothscale` 1,1-1,7 ms (ce 0,8-0,9) contra `scale` 0,25-0,3 ms (ce 0,12-0,2); com `smoothscale` o quadro passava de 3,5 ms, e o WASM não tem o caminho SIMD, então o padrão é `scale` (vizinho mais próximo, coerente com o visual pixelado; `soccer.CAM_SCALER`). `draw_ms` (gol em curso, `sim_harness.py draw --crowd ALTA ESTADIO`): 1,9-2,5 ms por local (mundial 2,4-2,5; PERTO 1,0-1,3). Build do pacote ESTADIO 16-55 ms; atlas até ~5,5 MB por chave (acima dos 4 MB do PERTO), LRU de 3 chaves (a câmera entra na chave). **MAX**: desenha o mínimo (campo cheio `pitch_surf`, sem torcida e sem escala). **LOD da câmera**: média do quadro em janelas de 60 (`CAM_LOD_WINDOW`) acima de `CAM_LOD_MS` = 8 ms → a partida cai para PERTO até o fim (um re-warm; nada é gravado nas prefs; C na pausa volta). O LOD da torcida (2.3) continua valendo nas duas câmeras.
+
 ## 3. Robôs em campo
 
 Hoje o robô é um disco 64x64 (chassis só muda detalhes). Plano (arquivo novo `game/robot_art.py`; `Game.build_robot_sprite` vira uma chamada para ele, mantendo o nome para os testes):

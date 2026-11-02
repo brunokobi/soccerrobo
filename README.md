@@ -29,7 +29,11 @@ Ela reage a gol, chance, defesa e trave (pula, levanta os braços, faz ola e
 mosaico), com confete, flashes, sinalizadores, bandeiras, placas de LED,
 onomatopeias e um telão com os locutores Tonho Vassoura e Cleide. Tecla **T**
 (no menu ou na pausa) alterna a torcida entre ALTA, MÉDIA e DESLIGADA; ela some
-no modo MAX. **F11** abre a tela cheia.
+no modo MAX. **Câmera de estádio:** nas partidas assistidas (campanha, Modo Robôs,
+carreira) o campo aparece reduzido (80%) com arquibancadas largas em volta, em cima,
+nas laterais e embaixo; no Amistoso com humano a câmera fica PERTO (campo em tela
+cheia). Tecla **C** no menu gira AUTO / ESTÁDIO / PERTO e na pausa troca a câmera da
+partida (fica gravado). **F11** abre a tela cheia.
 
 **Robôs e cenas:** cada chassi tem desenho próprio (o Orbital com satélites, o
 Titã octogonal), as peças equipadas aparecem no robô (turbina, canhão, para-choque
@@ -161,6 +165,7 @@ export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy
 .venv/bin/python tests/test_portraits.py               # retratos e cenários desenhados por código
 .venv/bin/python tests/test_prefs.py                   # preferências do jogador (store, valor inválido -> padrão)
 .venv/bin/python tests/test_crowd.py                   # torcida: locais, reações, extras, LOD, zero Surface por quadro
+.venv/bin/python tests/test_camera.py                  # câmera de estádio: prefs/tecla C, layout largo, LOD, zero Surface
 .venv/bin/python tests/test_robot_art.py               # robôs: chassis, peças visíveis, cache, FX, local da torcida por modo
 .venv/bin/python tests/test_campaign_balance.py        # balanço da campanha por simulação (~1,5 min)
 .venv/bin/python tests/sim_harness.py golden --check   # regressão: 80 placares do modo legado
@@ -189,8 +194,8 @@ Utilitários do harness (`tests/sim_harness.py`): `golden`/`golden-new` com
 - `game/robot_league.py`: liga de 6 times (calendário, tabela, simulação estatística, premiação)
 - `game/robot_art.py`: arte dos robôs em campo (sprites pré-renderizados e cache); `Game` delega a ele
 - `game/store.py`: armazenamento de texto (`localStorage` no navegador, arquivo em `~` no desktop)
-- `game/prefs.py`: preferências do jogador (`soccerpy_prefs_v1`: torcida ALTA/MEDIA/OFF, tecla T), com sanitize e padrão
-- `game/crowd.py`: torcida (locais, espectadores pré-renderizados, reações, confete/LED/telão, LOD)
+- `game/prefs.py`: preferências do jogador (`soccerpy_prefs_v1`: torcida ALTA/MEDIA/OFF, tecla T; câmera ESTADIO/PERTO, tecla C, ausente = AUTO), com sanitize e padrão
+- `game/crowd.py`: torcida (locais, espectadores pré-renderizados, reações, confete/LED/telão, LOD) e a geometria das câmeras PERTO/ESTÁDIO
 - `game/robots_ui.py`: telas do Modo Robôs (hub, garagem, banco, loja, liga)
 - `game/career.py` / `game/career_ui.py`: carreira de clubes (liga, mercado, finanças, save) e suas telas
 - `game/story.py`: dados da campanha (personagens, times, cenas/diálogos, torneios, capítulos, recompensas); módulo puro, sem pygame
