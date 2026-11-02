@@ -302,6 +302,7 @@ class CampaignUI(RobotsUI):
         d = self.dlg
         if self.screen_id == "dialog" and d is not None and not d["paused"] and not d["confirm"]:
             d["t"] += dt
+            d["clk"] = d.get("clk", 0.0) + dt         # relogio continuo das animacoes (piscar/cenario)
         if self.toast_t > 0:
             self.toast_t = max(0.0, self.toast_t - dt)
 
@@ -452,7 +453,7 @@ class CampaignUI(RobotsUI):
         d = {"sid": sid, "bg": sc.get("bg"), "cast": [c for c in sc.get("cast", ()) if c in story.CHARACTERS],
              "main": main, "choice": choice, "list": main, "i": 0, "mode": "say", "reply": False,
              "choice_idx": None, "fx": "", "final": False, "paused": False, "confirm": False,
-             "t": 0.0, "moods": {}, "who": "narrador", "mood": "neutro", "lines": [], "imgs": [],
+             "t": 0.0, "clk": 0.0, "moods": {}, "who": "narrador", "mood": "neutro", "lines": [], "imgs": [],
              "widths": [], "total": 0, "q": "", "col": TEXT}
         self.dlg = d
         portraits.get_background(d["bg"])           # pre-render fora do draw (uma Surface por cenario)
@@ -608,7 +609,9 @@ class CampaignUI(RobotsUI):
                      color=(60, 80, 130))
             return
         scr.blit(portraits.get_background(d["bg"]), (0, 0))
+        portraits.draw_scene_anim(scr, d["bg"], d.get("clk", 0.0))
         self.draw_stage(d)
+        portraits.draw_foreground(scr, d["bg"])
         self.draw_dlg_box(d)
         modal = d["paused"] or d["confirm"]
         if not modal:
@@ -647,7 +650,8 @@ class CampaignUI(RobotsUI):
                 pygame.draw.ellipse(scr, portraits.lerp((14, 26, 52), col, 0.55), (xs[i] - 86, 452, 172, 26))
                 pygame.draw.ellipse(scr, col, (xs[i] - 86, 452, 172, 26), 2)
             bob = -abs(int(4 * math.sin(d["t"] * 13))) if (on and talking) else 0
-            portraits.draw_character(scr, cid, mood, xs[i], 466, 40, k, bob)
+            portraits.draw_character(scr, cid, mood, xs[i], 466, 40, k, bob, t=d.get("clk", 0.0),
+                                     talking=on and talking)
 
     def draw_dlg_box(self, d):
         scr = self.g.screen
@@ -665,7 +669,7 @@ class CampaignUI(RobotsUI):
         self.text(name, 26, DARK, center=tag.center)
         if d["mode"] == "choice":
             return self.draw_choice(d)
-        portraits.draw_bust(scr, PORTRAIT_RECT, d["who"], d["mood"])
+        portraits.draw_bust(scr, PORTRAIT_RECT, d["who"], d["mood"], t=d.get("clk", 0.0), talking=self.dlg_typing())
         rem = self.dlg_chars()
         for i, img in enumerate(d["imgs"]):
             ln = d["lines"][i]

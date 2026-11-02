@@ -198,6 +198,24 @@ def test_characters_and_vocab():
         assert b in st.BGS
 
 
+def test_fase4_visual_vocab():
+    """A12/A13: humores, estilos e cenarios novos registrados (sem repetir) e so ids ASCII."""
+    for m in ("determinado", "maravilhado", "malicioso", "sonolento", "chorando", "gritando", "piscando",
+              "euforico"):
+        assert m in st.MOODS, m
+    for h in ("trancas", "coque", "moicano"):
+        assert h in st.HAIR_STYLES, h
+    for a in ("bone", "bengala", "avental", "tiara", "cachecol"):
+        assert a in st.ACCESSORIES, a
+    for o in ("avental", "colete"):
+        assert o in st.OUTFITS, o
+    for b in ("praca", "laboratorio", "aeroporto", "dojo", "fabrica", "coliseu", "lanchonete", "cabine"):
+        assert b in st.BGS, b
+    for vocab in (st.MOODS, st.HAIR_STYLES, st.ACCESSORIES, st.OUTFITS, st.BGS):
+        assert len(set(vocab)) == len(vocab)
+        assert all(ID_RE.match(v) for v in vocab), vocab
+
+
 def test_text_fits_box():
     f = font()
     worst = 0

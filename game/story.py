@@ -37,10 +37,13 @@ PITY_STEP = 1      # -1 de Forca do chefe por derrota seguida
 PITY_MAX = 3       # ate -3; zera ao vencer
 
 # --- personagens --------------------------------------------------------------------------------
-HAIR_STYLES = ("espetado", "calvo", "longo", "curto", "ondulado", "raspado", "none")
+HAIR_STYLES = ("espetado", "calvo", "longo", "curto", "ondulado", "raspado", "none",
+               "trancas", "coque", "moicano")
 ACCESSORIES = ("oculos_redondos", "oculos_testa", "oculos_grandes", "headset", "bandana", "bigode",
-               "luvas", "canetas", "graxa", "chinelo", "fita", "capacete", "apito", "kimono")
-OUTFITS = ("moletom", "blazer", "jaleco", "terno", "uniforme", "camiseta", "kimono", "robo")
+               "luvas", "canetas", "graxa", "chinelo", "fita", "capacete", "apito", "kimono",
+               "bone", "bengala", "avental", "tiara", "cachecol")
+OUTFITS = ("moletom", "blazer", "jaleco", "terno", "uniforme", "camiseta", "kimono", "robo",
+           "avental", "colete")
 
 CHARACTERS = {
     "teo": {"name": "TÉO", "color": (255, 90, 80), "skin": (240, 200, 160),
@@ -49,7 +52,7 @@ CHARACTERS = {
                  "hair": ("calvo", (170, 170, 175)), "acc": ["oculos_redondos", "bigode", "canetas"],
                  "outfit": ("jaleco", (230, 230, 235))},
     "vivi": {"name": "VIVI", "color": (80, 130, 255), "skin": (245, 215, 190),
-             "hair": ("longo", (20, 30, 80)), "acc": [], "outfit": ("blazer", (245, 245, 250))},
+             "hair": ("longo", (20, 30, 80)), "acc": ["tiara"], "outfit": ("blazer", (245, 245, 250))},
     "bia": {"name": "BIA", "color": (255, 160, 40), "skin": (200, 150, 110),
             "hair": ("curto", (40, 25, 20)), "acc": ["bandana", "oculos_testa", "graxa"],
             "outfit": ("camiseta", (90, 90, 100))},
@@ -63,7 +66,7 @@ CHARACTERS = {
     "rodolfo": {"name": "CAP. RODOLFO", "color": (150, 160, 170), "skin": (215, 170, 135),
                 "hair": ("raspado", (50, 50, 55)), "acc": [], "outfit": ("uniforme", (60, 70, 80))},
     "helena": {"name": "DRA. HELENA", "color": (190, 130, 255), "skin": (225, 185, 150),
-               "hair": ("curto", (70, 50, 90)), "acc": ["oculos_redondos"],
+               "hair": ("curto", (70, 50, 90)), "acc": ["oculos_redondos", "cachecol"],
                "outfit": ("blazer", (80, 60, 120))},
     "kenji": {"name": "KENJI", "color": (255, 120, 160), "skin": (240, 205, 170),
               "hair": ("espetado", (20, 20, 25)), "acc": ["bandana"], "outfit": ("kimono", (240, 240, 240))},
@@ -74,10 +77,13 @@ CHARACTERS = {
 }
 
 MOODS = ("neutro", "feliz", "susto", "triste", "bravo", "pensando", "convencida", "convencido",
-         "corada", "suor", "espirro", "calmo", "cansado", "robo")
+         "corada", "suor", "espirro", "calmo", "cansado", "robo",
+         "determinado", "maravilhado", "malicioso", "sonolento", "chorando", "gritando", "piscando",
+         "euforico")
 
 BGS = ("garagem", "oficina", "escola", "cantina", "quadra", "ginasio", "arena", "camarim",
-       "federacao", "estadio", "mundial")
+       "federacao", "estadio", "mundial",
+       "praca", "laboratorio", "aeroporto", "dojo", "fabrica", "coliseu", "lanchonete", "cabine")
 
 # --- times --------------------------------------------------------------------------------------
 _CH = ["Goleiro", "Tanque", "Disco", "Disco", "Velocista"]
