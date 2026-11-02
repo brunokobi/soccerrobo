@@ -20,6 +20,8 @@ O campo ocupa quase toda a tela; só sobram faixas de margem:
 | Lateral direita | x 1044..1100, y 90..650 (idem) | idem |
 | Fundo distante | x 0..1100, y 0..90 (sob o HUD) | arquibancada distante estática, pessoas de 10 px; o HUD (alpha 215/165) deixa 16-35% aparecer, efeito de profundidade sem custo |
 
+**Visibilidade (correção pós-A8):** a UI da partida cobre o topo (placar, y 0..88) e quase toda a fileira frontal (rodapé: "P: pausa", telão, "Velocidade (1-4):" + botões; no amistoso, a linha de dicas). Os retângulos estão em `crowd.UI_HUD/UI_PAUSE/UI_TELAO/UI_SPEED/UI_HINT` (`crowd.ui_rects(assisted)`), conferidos contra o desenho real em `test_ui_rects_cover_the_drawn_ui`. A escolha de lugares (`_pick`) enche primeiro os lugares visíveis — as **laterais, que agora existem em todos os locais** (os pequenos com 2 colunas, `scols=2`) — e a frente fica só com o excedente. Estádio/superliga e mundial/coliseu apertam o passo das laterais (`spitch` 12 e 11 px) para caber mais gente visível. `test_crowd_visible_outside_the_ui_every_venue` desenha cada local e conta quem fica fora da UI (mínimo por local, crescente, e gente nos dois lados).
+
 Placas de publicidade LED: faixa de 12 px colada ao campo, em baixo (y 652..664) e em cima (y 78..90). O rodapé de UI (botões de velocidade e dica) fica sobre uma tarja translúcida pré-renderizada (30 px, y 670..700), que cobre a fileira frontal da torcida onde a UI precisa de legibilidade. Em partidas assistidas (campanha, Modo Robôs, carreira) o centro dessa tarja vira o **telão** (ver 2.7). Os modos 1 e 2 (amistoso) mantêm o texto de dicas.
 
 ### 2.2 Técnica (sem Surface por frame)
@@ -35,7 +37,7 @@ Placas de publicidade LED: faixa de 12 px colada ao campo, em baixo (y 652..664)
 
 | Item | Desktop | WASM (estim. x4-6) | Observação |
 |---|---|---|---|
-| Espectadores visíveis | quadra 30 / ginásio 90 / arena 220 / estádio 360 / mundial e coliseu 520 | idem | todos pré-renderizados |
+| Espectadores desenhados | bairro 85 / quadra 110 / ginásio 140 / arena 220 / estádio 360 / mundial e coliseu 520 (visíveis fora da UI em ALTA: 85 / 100 / ~138 / ~165 / ~190 / ~210) | idem | todos pré-renderizados |
 | Blits dinâmicos por frame | <= 90 (faixas) + 16 (extras) | idem | pequenas Surfaces de ~128x18 |
 | Custo de desenho da torcida | <= 0,35 ms | <= 1,5 ms | meta de desenho total <= 1,5 ms desktop, <= 3 ms WASM |
 | Placas LED | 0,05 ms | 0,2 ms | 2 blits com `area=` de uma tira longa |
@@ -61,23 +63,23 @@ Estado: `crowd.mood` por fidelidade (home/away/neutral) com `level` (0-1) e `tim
 | Ola | agendada a cada ~25 s de jogo se ninguém reagiu há 10 s (arena+) | onda que percorre os segmentos com defasagem de 0,12 s |
 | Pré-jogo | `kickoff` | pose 1 e bandeiras balançando |
 
-Faixas e cartazes: tiras de pano pré-renderizadas pendem da fileira frontal ("VAI, ZÉ POEIRA!", "SANTA FAÍSCA 4 EVER", "LIMPEX: LIMPA, MAS NÃO GANHA"), com texto por capítulo e a faixa personalizada do jogador. Bandeiras: 2 quadros de uma mini-bandeira (listras) no Mundial/Coliseu, alternando a cada 0,25 s. Mosaico de torcida (cartões): imagem de ~120x40 px na arquibancada distante (estádio e acima) com 2 estados; troca no gol. Sinalizadores: 6 sprites de glow aditivo pré-renderizados (vermelho, branco, azul). Flashes de câmera: sprite de estrela 7x7 aditivo em até 8 posições aleatórias por ~0,1 s.
+Faixas e cartazes: duas tiras de pano pré-renderizadas penduradas na vertical atrás dos gols (coluna de fora das laterais, no bolsão do gol: fora de toda a UI), uma do lado da casa e outra do visitante. Na campanha usam as frases do local (`EXTRAS[...]["banners"]`; a primeira, do lado do jogador, pode citar o Zé Poeira: "VAI, ZÉ POEIRA!", "SANTA FAÍSCA 4 EVER"...); no Modo Robôs, Amistoso e Carreira usam frases genéricas da torcida (`GENERIC_BANNERS`, sem nomes de personagens/marcas). `crowd.banner_texts(venue, casa, fora, story)`. Bandeiras: 2 quadros de uma mini-bandeira (listras) no Mundial/Coliseu, alternando a cada 0,25 s. Mosaico de torcida (cartões): imagem de ~120x40 px na arquibancada distante (estádio e acima) com 2 estados; troca no gol. Sinalizadores: 6 sprites de glow aditivo pré-renderizados (vermelho, branco, azul). Flashes de câmera: sprite de estrela 7x7 aditivo em até 8 posições aleatórias por ~0,1 s.
 
 ### 2.5 Densidade e tipo por capítulo/local
 
 | Local (`venue`) | Capítulos | Estrutura | Pessoas | Extras |
 |---|---|---|---|---|
-| `bairro` | Amistoso, Modo Robôs (padrão) | só fundo, 2 fileiras | 30 | 2 faixas |
-| `quadra` | P, 1 | arquibancada de madeira, cadeiras, crianças | 30 | cartazes de papel, tambor |
-| `ginasio` | 2 | fundo + 1 lateral | 90 | bandeirinhas, LED simples |
-| `arena` | 3, 6 | fundo + 2 laterais | 220 | LED Limpex, flashes |
-| `estadio` / `superliga` | 4, 7, 8 | fundo + laterais + distante | 360 | LED, sinalizadores, mosaico, flashes, confete |
+| `bairro` | Amistoso, Modo Robôs tier 1 | fundo (2 fileiras) + 2 laterais de 2 colunas | 85 | 2 faixas |
+| `quadra` | P, 1 | arquibancada de madeira, cadeiras, crianças; laterais de 2 colunas | 110 | cartazes de papel, tambor |
+| `ginasio` | 2, Modo Robôs tier 2 | fundo + 2 laterais | 140 | bandeirinhas, LED simples |
+| `arena` | 3, 6, Modo Robôs tier 3 | fundo + 2 laterais | 220 | LED Limpex, flashes |
+| `estadio` / `superliga` | 4, 7, 8, Modo Robôs tier 4 | fundo + laterais + distante | 360 | LED, sinalizadores, mosaico, flashes, confete |
 | `mundial` | 5, 10 | estádio cheio | 520 | bandeiras de 4 nações, LED completo, confete |
 | `laboratorio` / `fabrica` | 9, 11 | robôs-fã (sprites de robôs pequenos, olhos LED piscando) | 80-120 | luzes de alerta, sem confete |
 | `coliseu` | 12, 13 | estádio lotado + modo apagão no 13 (sem refletores, só LEDs) | 520 | mosaico "OMEGA", confete preto/dourado |
-| `dojo` / `aeroporto` | 10 | tatames com aprendizes sentados / passageiros com malas | 40 | faixas em japonês simulado ("GANBARE" em Latin-1) |
+| `dojo` / `aeroporto` | 10 | tatames com aprendizes sentados / passageiros com malas; laterais de 2 colunas | 90 | faixas em japonês simulado ("GANBARE" em Latin-1) |
 
-Campo novo `venue` na ação de partida da campanha (derivado do `bg` do torneio, com tabela em `crowd.py`) e parâmetro opcional `venue=None` em `Game.start_robot_match(...)` e `_begin_match(...)` (padrão `None` = nenhuma torcida, mantendo goldens e carreira de clubes). O Modo Robôs usa `venue="bairro"` por padrão.
+Campo novo `venue` na ação de partida da campanha (derivado do `bg` do torneio, com tabela em `crowd.py`) e parâmetro opcional `venue=None` em `Game.start_robot_match(...)` e `_begin_match(...)` (padrão `None` = nenhuma torcida, mantendo goldens e carreira de clubes). O Modo Robôs escolhe o local pelo tier da liga (bairro no tier 1).
 
 **Implementado (A8)** - tabela única em `crowd.py` (`BG_VENUE`, `ROBOTS_VENUE`, `FRIENDLY_VENUE`, `CAREER_DIV_VENUE`). A ação de partida/treino da campanha traz `bg` (o do torneio; no treino, o do torneio do capítulo) e a UI converte com `crowd.venue_for_bg`. `venue=None` continua valendo `DEFAULT_VENUE` ("arena"), que é o caminho dos goldens.
 
@@ -91,7 +93,7 @@ Campo novo `venue` na ação de partida da campanha (derivado do `bg` do torneio
 | Campanha: `laboratorio`, `fabrica`, `dojo`, `aeroporto`, `coliseu` | o próprio |
 | Campanha: `garagem`, `oficina`, `praca`, `lanchonete` | `bairro` |
 | Treino da campanha | local do torneio do capítulo |
-| Modo Robôs | `bairro` |
+| Modo Robôs | pelo tier da liga (`crowd.venue_for_tier`, `ROBOTS_TIER_VENUE`): tier 1 `bairro`, 2 `ginasio`, 3 `arena`, 4 `estadio` (internamente `league["tier"]` 0..3) |
 | Carreira de clubes | Div. 1 `estadio`, Div. 2 `arena`, Div. 3 `ginasio` |
 | Amistoso (modos 1/2, pelo menu) | `bairro` leve, só se prefs TORCIDA != OFF (T na pausa alterna); sem telão |
 

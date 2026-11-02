@@ -216,6 +216,7 @@ class Game:
         self.crowd = None                         # torcida da partida assistida (crowd.Crowd) ou None
         self.crowd_clock = None                   # relogio injetavel da torcida (testes); None = perf_counter
         self.crowd_venue = None                   # local da partida assistida atual (re-warm na pausa)
+        self.crowd_story = False                  # partida da campanha: faixas da torcida citam o Ze Poeira
         self.pitch_surf = self.build_arena()
         self.glows = self.build_glows()
         self.hud_panel = self.build_hud_panel()
@@ -288,6 +289,7 @@ class Game:
         self.paused = False
         self.reset_fx()
         self.crowd_venue = None
+        self.crowd_story = False
         if venue is not None:
             self.warm_crowd(venue)
         self.kickoff(0)
@@ -295,7 +297,7 @@ class Game:
     def start_career_match(self, home, away, venue=None):
         """Partida automática (CPU x CPU) do modo carreira. home/away = match_cfg()."""
         self.match_sink = None
-        self._begin_match(home, away, venue=venue)
+        self._begin_match(home, away, venue=venue, story=False)
 
     def start_robot_match(self, home, away, on_done, tuning=robots.TUNING_ROBOTS, return_state="robots",
                           venue=None):
@@ -304,11 +306,12 @@ class Game:
         Ao terminar chama on_done(score, events) e volta ao estado return_state ("robots" por padrao).
         venue: local da torcida (crowd.VENUES); None = crowd.DEFAULT_VENUE.
         """
-        self._begin_match(home, away, tuning, venue=venue)
+        self._begin_match(home, away, tuning, venue=venue, story=return_state == "campaign")
         self.match_sink = (return_state, on_done)
 
-    def _begin_match(self, home, away, tuning=None, venue=None):
+    def _begin_match(self, home, away, tuning=None, venue=None, story=False):
         self.mode = 0
+        self.crowd_story = bool(story)
         c1 = tuple(away["color"])
         if sum(abs(a - b) for a, b in zip(led_color(home["color"]), led_color(c1))) < 130:
             c1 = (235, 235, 235) if sum(home["color"]) < 600 else (0, 230, 255)
@@ -1053,7 +1056,8 @@ class Game:
             return None
         c0, c1 = (led_color(t.color) for t in self.teams)
         bundle = crowd.warm_crowd(venue, c0, c1, level, base=self.pitch_surf, txt=self.text_img)
-        self.crowd = crowd.Crowd(bundle, clock=self.crowd_clock, txt=self.text_img, telao=self.career_match)
+        self.crowd = crowd.Crowd(bundle, clock=self.crowd_clock, txt=self.text_img, telao=self.career_match,
+                                 story=self.crowd_story)
         return self.crowd
 
     def crowd_level(self):

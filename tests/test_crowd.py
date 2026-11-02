@@ -105,13 +105,20 @@ class SurfaceCounter:
 
 # --- A1: locais, atomo, segmentos, atlas -----------------------------------------------------------
 def test_venues_from_spec():
-    spec = {"bairro": 30, "quadra": 30, "ginasio": 90, "arena": 220, "estadio": 360, "superliga": 360,
-            "mundial": 520, "coliseu": 520, "laboratorio": 100, "fabrica": 100, "dojo": 40, "aeroporto": 40}
+    # contagens da spec 2.5 revistas na correcao de visibilidade: os locais pequenos subiram (bairro 30 -> 85,
+    # quadra 30 -> 110, ginasio 90 -> 140, dojo/aeroporto 40 -> 90) porque agora ocupam as laterais visiveis
+    # (antes so a frente, quase toda atras do rodape). Hierarquia mantida.
+    spec = {"bairro": 85, "quadra": 110, "ginasio": 140, "arena": 220, "estadio": 360, "superliga": 360,
+            "mundial": 520, "coliseu": 520, "laboratorio": 100, "fabrica": 100, "dojo": 90, "aeroporto": 90}
     assert set(crowd.VENUES) == set(spec)
     for v, n in spec.items():
         assert crowd.people_count(v, "ALTA") == n, (v, crowd.people_count(v, "ALTA"))
         assert crowd.people_count(v, "MEDIA") < n
         assert crowd.VENUES[v]["style"] in crowd.STYLES
+        assert crowd.VENUES[v]["sides"] == "LR", v           # todo local tem as duas laterais (visiveis)
+    pc = crowd.people_count
+    assert pc("bairro") < min(pc("quadra"), pc("ginasio")) <= max(pc("quadra"), pc("ginasio")) < pc("arena")
+    assert pc("arena") < pc("estadio") < pc("mundial") == pc("coliseu")
     assert crowd.resolve_venue(None) == crowd.DEFAULT_VENUE == "arena"
     assert crowd.resolve_venue("nao-existe") == crowd.DEFAULT_VENUE
 
@@ -569,7 +576,7 @@ def test_extras_zero_surface_every_venue_level_and_lod():
             assert (seen["confetti"] > 0) == ex["confetti"], (v, level, seen)
             assert (seen["flashes"] > 0) == ex["flashes"], (v, level, seen)
             assert (seen["smoke"] > 0) == (ex["flares"] and level == "ALTA"), (v, level, seen)
-            assert len(cr.b.banners) == len(ex["banners"]), v
+            assert len(cr.b.banners[True]) == len(cr.b.banners[False]) == 2, v      # uma faixa por lateral
             assert (cr.b.led_ads is not None) == crowd.STYLES[crowd.VENUES[v]["style"]]["board"], v
 
 
@@ -599,7 +606,9 @@ def test_particle_caps_and_decay():
             clk.t += 1 / 60
             cr.draw(screen)
             cr.draw_over(screen)
-        assert not cr.confetti and not cr.flashes and not cr.smoke and not cr.onos
+        # flashes: so os raros da calmaria (0,6/s, vida <= 0,14 s) podem estar acesos; nada sobra dos gols
+        assert not cr.confetti and not cr.smoke and not cr.onos
+        assert all(f[2] - clk.t <= 0.15 for f in cr.flashes), (clk.t, cr.flashes)
 
 
 def _hud_key(k):
@@ -829,6 +838,157 @@ def test_draw_ms_all_extras_mundial():
     ms = (time.perf_counter() - t) / n * 1000
     print("   draw_ms mundial ALTA com todos os extras %.3f ms (meta <= 1,5 ms; duro 6 ms)" % ms)
     assert ms <= 6.0, ms
+
+
+# --- visibilidade (a torcida nao pode ficar escondida atras da UI) --------------------------------------
+VIS_MIN = {"bairro": 40, "dojo": 40, "aeroporto": 40, "quadra": 60, "ginasio": 90, "laboratorio": 60,
+           "fabrica": 60, "arena": 120, "estadio": 140, "superliga": 140, "mundial": 150, "coliseu": 150}
+VIS_ORDER = ("bairro", "quadra", "ginasio", "arena", "estadio", "mundial")
+
+
+def _text_rect(s, size, **pos):
+    return g.text_img(s, size, (255, 255, 255)).get_rect(**pos)
+
+
+def test_ui_rects_cover_the_drawn_ui():
+    """crowd.ui_rects (usados por _pick e pelo teste de visibilidade) cobrem a UI que soccer.py desenha."""
+    H, W = soccer.H, soccer.W
+    assisted = [_text_rect("P: pausa", 24, midleft=(24, H - 22)),
+                _text_rect("Velocidade (1-4):", 24, midright=(W - 342, H - 22)), crowd.TELAO] + g.speed_rects()
+    union = crowd.ui_rects(True)
+    for r in assisted:
+        assert crowd.visible_frac(r, union) == 0.0, r
+    hints = [_text_rect(h, 24, center=(W // 2, H - 22)) for h in (
+        "WASD / Setas: mover   |   ESPAÇO (segure): chutar   |   SHIFT / X: passar   |   P: pausa",
+        "J1: WASD + ESPAÇO chuta + SHIFT passa   |   J2: Setas + ENTER chuta + SHIFT DIR passa")]
+    for r in hints:
+        assert crowd.visible_frac(r, crowd.ui_rects(False)) == 0.0, r
+    assert crowd.visible_frac(pygame.Rect(0, 0, W, 78), union) == 0.0              # placar (hud_panel)
+    assert crowd.visible_frac(pygame.Rect(0, 600, 10, 10)) == 1.0
+    assert abs(crowd.visible_frac(pygame.Rect(0, 652, 20, 20), (pygame.Rect(0, 662, 20, 10),
+                                                                 pygame.Rect(0, 660, 20, 4))) - 0.4) < 1e-9
+
+
+def _visible_people(cr, rects):
+    """(visiveis, por zona, pixels) dos espectadores desenhados AGORA na tela: caixa >= 50% fora da UI e
+    a maioria dos pixels opacos da faixa batendo com a tela (nada desenhado por cima)."""
+    vis, by_zone, pixels = 0, {"L": 0, "R": 0, "F": 0}, 0
+    for s, (img, (x, y)) in zip(cr.segs, cr.blits):
+        key = img.get_colorkey()
+        dx, dy = x - s.x, y - s.y
+        for box in s.boxes:
+            r = box.move(dx, dy)
+            if crowd.visible_frac(r, rects) < 0.5:
+                continue
+            opaque = same = 0
+            for py in range(r.top, r.bottom):
+                for px in range(r.left, r.right):
+                    if any(u.collidepoint(px, py) for u in rects):
+                        continue
+                    c = img.get_at((px - x, py - y))
+                    if key is not None and c == key:
+                        continue
+                    opaque += 1
+                    same += screen.get_at((px, py)) == c
+            if opaque and same >= opaque * 0.5:
+                vis += 1
+                by_zone[s.zone] += 1
+                pixels += same
+    return vis, by_zone, pixels
+
+
+def test_crowd_visible_outside_the_ui_every_venue():
+    """Cada local, partida assistida desenhada (apos o warm): gente suficiente fora da UI e nas DUAS
+    laterais (casa e visitante). A frente (atras do rodape) so recebe o excedente."""
+    rows = {}
+    for level in LEVELS:
+        dens = crowd.LEVELS[level]["density"]
+        for v in crowd.VENUES:
+            cr = start(v, level, seed=4)
+            for _ in range(30):
+                g.step(1 / 60)
+            g.state = "play"
+            cr.react.clear()
+            cr.next_upd = 0
+            g.draw()
+            g.draw()
+            vis, zones, px = _visible_people(cr, crowd.ui_rects(True))
+            total = sum(s.n for s in cr.segs)
+            assert vis >= int(VIS_MIN[v] * dens), (v, level, vis, VIS_MIN[v])
+            assert zones["L"] >= 15 * dens and zones["R"] >= 15 * dens, (v, level, zones)
+            fids = {s.fid for s in cr.segs if s.zone in "LR"}
+            assert fids == {"home", "away"}, (v, fids)
+            side_cap = sum(1 for se in crowd._seats(dict(crowd.VENUES[v])) if se[0] != "F"
+                           and not crowd._banner_zone(se))
+            hidden_front = sum(1 for s in cr.segs if s.zone == "F" for r in s.boxes
+                               if crowd.visible_frac(r, crowd.UI_ALL) < 0.5)
+            sides = sum(s.n for s in cr.segs if s.zone != "F")
+            # gente escondida na frente so quando as laterais visiveis ja estao cheias (excedente)
+            if hidden_front:
+                assert sides >= side_cap, (v, level, sides, side_cap, hidden_front)
+            rows[(v, level)] = (total, vis, px)
+    for a, b in zip(VIS_ORDER, VIS_ORDER[1:]):                # cresce com o local
+        assert rows[(a, "ALTA")][1] <= rows[(b, "ALTA")][1], (a, b, rows[(a, "ALTA")], rows[(b, "ALTA")])
+    for v in crowd.VENUES:
+        t, vis, px = rows[(v, "ALTA")]
+        print("   %-11s ALTA: %3d desenhados, %3d visiveis (%5d px); MEDIA: %3d / %3d" % (
+            v, t, vis, px, rows[(v, "MEDIA")][0], rows[(v, "MEDIA")][1]))
+
+
+def test_friendly_crowd_visible_with_hints():
+    """Amistoso (bairro leve, sem telao, com a linha de dicas): torcida visivel nas laterais."""
+    set_level("ALTA")
+    random.seed(1)
+    g.new_match(1, crowd.FRIENDLY_VENUE)
+    g.state = "play"
+    cr = g.crowd
+    cr.react.clear()
+    cr.next_upd = 0
+    g.draw()
+    g.draw()
+    vis, zones, _ = _visible_people(cr, crowd.ui_rects(False))
+    assert vis >= VIS_MIN["bairro"] and zones["L"] >= 15 and zones["R"] >= 15, (vis, zones)
+    g.state = "menu"
+
+
+def test_banners_visible_and_generic_outside_campaign():
+    """Faixas de pano: fora de toda a UI; fora da campanha frases genericas (sem Ze Poeira); na campanha
+    as do local (a 1a, do lado da casa = jogador, pode citar o Ze Poeira)."""
+    assert crowd.GENERIC_BANNERS and not any("ZÉ" in t for t in crowd.GENERIC_BANNERS)
+    for t in crowd.GENERIC_BANNERS:
+        t.encode("latin-1")
+    for v in crowd.VENUES:
+        for story in (False, True):
+            texts = crowd.banner_texts(v, (50, 120, 255), (235, 65, 65), story)
+            assert len(texts) == 2 and texts[0] != texts[1], (v, texts)
+            if story:
+                assert texts[0] == crowd.EXTRAS[v]["banners"][0] and texts[1] in crowd.EXTRAS[v]["banners"]
+            else:
+                assert all(t in crowd.GENERIC_BANNERS for t in texts) and not any("ZÉ" in t for t in texts)
+        b = crowd.warm_crowd(v, (50, 120, 255), (235, 65, 65), "ALTA", base=g.pitch_surf, txt=g.text_img)
+        for story in (False, True):
+            for img, pos in b.banners[story]:
+                r = img.get_rect(topleft=pos)
+                assert crowd.visible_frac(r, crowd.UI_ALL) == 1.0, (v, r)
+                assert not r.colliderect(soccer.PITCH) and r.h > r.w, (v, r)       # vertical, fora do campo
+                nets = [pygame.Rect(soccer.PITCH.left - soccer.GOAL_DEPTH, soccer.CY - soccer.GOAL_HALF,
+                                    soccer.GOAL_DEPTH, soccer.GOAL_HALF * 2),
+                        pygame.Rect(soccer.PITCH.right, soccer.CY - soccer.GOAL_HALF, soccer.GOAL_DEPTH,
+                                    soccer.GOAL_HALF * 2)]
+                assert not any(r.colliderect(n) for n in nets), (v, r)
+    # partidas reais: Modo Robos / carreira = genericas; campanha (return_state "campaign") = do local
+    set_level("ALTA")
+    g.start_robot_match(cfg("A", (50, 120, 255)), cfg("B", (235, 65, 65)), lambda s, e: None, venue="bairro")
+    assert g.crowd.story is False
+    g.start_robot_match(cfg("A", (50, 120, 255)), cfg("B", (235, 65, 65)), lambda s, e: None,
+                        return_state="campaign", venue="bairro")
+    assert g.crowd.story is True
+    g.toggle_crowd()                                      # ALTA -> MEDIA: re-warm mantem as faixas da campanha
+    assert g.crowd.story is True
+    start("arena")
+    assert g.crowd.story is False
+    g.match_sink = None
+    set_level("ALTA")
 
 
 def test_screenshots_optional():

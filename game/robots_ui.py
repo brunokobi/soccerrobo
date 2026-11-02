@@ -505,7 +505,9 @@ class RobotsUI(CareerUI):
             return
         self.pending = fx
         home, away = self.side_cfgs(fx)
-        self.g.start_robot_match(home, away, on_done=self.match_done, venue=crowd.ROBOTS_VENUE)
+        # local da torcida pelo tier da liga (0 bairro, 1 ginasio, 2 arena, 3 estadio)
+        venue = crowd.venue_for_tier(lg.get("tier", gg.tier()))
+        self.g.start_robot_match(home, away, on_done=self.match_done, venue=venue)
 
     def do_sim(self):
         gg = self.garage

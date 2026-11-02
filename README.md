@@ -22,7 +22,9 @@ anel de LED e barra de bateria, bola com brilho, rastro e faíscas, e HUD e menu
 novos.
 
 **Torcida:** arquibancadas ao redor do campo com espectadores nas cores dos times,
-de uma quadra de escola ao Mundial lotado (o local muda com o capítulo e o modo).
+de uma quadra de escola ao Mundial lotado (o local muda com o capítulo e o modo; no
+Modo Robôs, com o tier da liga: bairro, ginásio, arena e estádio). A torcida ocupa
+primeiro as arquibancadas laterais, que a interface não cobre.
 Ela reage a gol, chance, defesa e trave (pula, levanta os braços, faz ola e
 mosaico), com confete, flashes, sinalizadores, bandeiras, placas de LED,
 onomatopeias e um telão com os locutores Tonho Vassoura e Cleide. Tecla **T**

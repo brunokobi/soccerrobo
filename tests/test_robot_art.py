@@ -142,6 +142,9 @@ def test_bg_venue_covers_every_bg_and_tournament():
     assert crowd.venue_for_bg("escola") == "quadra" and crowd.venue_for_bg("praca") == "bairro"
     assert crowd.venue_for_bg(None) == crowd.DEFAULT_VENUE
     assert crowd.ROBOTS_VENUE == "bairro" and crowd.FRIENDLY_VENUE == "bairro"
+    assert [crowd.venue_for_tier(t) for t in range(4)] == ["bairro", "ginasio", "arena", "estadio"]
+    assert crowd.venue_for_tier(9) == "estadio" and crowd.venue_for_tier(None) == crowd.ROBOTS_VENUE
+    assert len(crowd.ROBOTS_TIER_VENUE) == len(gm.TIER_OVR)
     assert len(crowd.CAREER_DIV_VENUE) == len(career.DIV_NAMES)
     assert [crowd.venue_for_div(d) for d in range(3)] == ["estadio", "arena", "ginasio"]
     assert crowd.venue_for_div(9) == "ginasio" and crowd.venue_for_div("x") == crowd.DEFAULT_VENUE
@@ -196,6 +199,12 @@ def test_robots_mode_and_career_use_their_venues():
         rui.do_watch()
         assert calls[-1] == ("robots", "bairro")
         rui.pending = None
+        for tier, want in enumerate(("bairro", "ginasio", "arena", "estadio")):   # local pelo tier da liga
+            RL.new_league(gg, tier, random.Random(6 + tier))
+            assert gg.league["tier"] == tier
+            rui.do_watch()
+            assert calls[-1] == ("robots", want), (tier, calls[-1])
+            rui.pending = None
         cui = g.career_ui
         c = career.Career.new()
         for div in range(3):
