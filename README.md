@@ -120,10 +120,10 @@ uv venv --python 3.12 .venv && . .venv/bin/activate && uv pip install pygame pyg
 cd game && python main.py
 
 # navegador (servidor do pygbag em http://localhost:8000)
-cd game && pygbag .
+cd game && pygbag --template ../web/copaaspirador.tmpl --width 1100 --height 700 --title "Copa Aspirador" .
 
 # gerar build estático para publicar (itch.io, GitHub Pages...): game/build/web/
-cd game && pygbag --build .
+cd game && pygbag --template ../web/copaaspirador.tmpl --width 1100 --height 700 --title "Copa Aspirador" --build .
 ```
 
 ## Testes
@@ -176,6 +176,7 @@ Utilitários do harness (`tests/sim_harness.py`): `golden`/`golden-new` com
 
 ## Notas
 - O pygbag exige Python >= 3.9 e só detecta dependências lendo `main.py`.
+- `web/copaaspirador.tmpl` é o template da página (fundo escuro nas laterais, para o jogo parecer ocupar a tela toda; F11 abre tela cheia no navegador). Passe sempre as flags `--template/--width/--height/--title` acima ao gerar o build.
 - Testando em `localhost`, use o servidor do `pygbag .` (porta 8000); um
   `http.server` comum não serve o runtime/wheel do pygame.
 - Na primeira vez o navegador pede um clique na página para liberar o jogo.

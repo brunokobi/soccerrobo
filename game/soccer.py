@@ -1340,6 +1340,7 @@ class Game:
                   (225, 210, 250), center=(r.centerx, r.centery + 18), shadow=False)
         self.text("clique ou aperte 1 / 2 / 3 / 4 / 5 / 6" if self.has_save else "clique ou aperte 1 / 2 / 3 / 5 / 6",
                   28, (200, 225, 235), center=(cx, 640))
+        self.text("F11: tela cheia", 22, (120, 160, 185), center=(cx, 672), shadow=False)
 
 
 async def main():
