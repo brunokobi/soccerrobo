@@ -103,7 +103,10 @@ O jogador controlado troca sozinho (o mais perto da bola).
 | 1 | Robôs com chassis e 8 atributos, bateria, arena tecnológica (neon) | pronta |
 | 2 | Garagem e laboratório: peças, upgrades, XP, evolução, loja e liga (Modo Robôs) | pronta e jogável |
 | 3 | **Campanha** "A Garagem do Vô": história, diálogos, torneios, chefes e treino (escola -> mundial) | pronta e jogável |
-| 4 | Editor de firmware (regras da IA em blocos) | planejada |
+| 4 | **Campanha Expandida**: torcida realista e desenhos mais detalhados, ~36 peças + sets/relíquias/consumíveis, 16 skills dos robôs, Atos 2 e 3 (14 capítulos), missões secundárias e 3 finais | planejada ([docs/roadmap.md](docs/roadmap.md)) |
+| 5 | Editor de firmware (regras da IA em blocos) | planejada |
+
+O planejamento detalhado fica em [`docs/`](docs/INDEX.md).
 
 **Robôs (Fase 1):** 6 chassis (Disco, Tanque, Velocista, Goleiro, Orbital, Titã) e 8 atributos
 (velocidade, aceleração, chute, controle/sucção, defesa, visão, bateria, QI) que
