@@ -1557,7 +1557,7 @@ def test_garage_shows_recommended_force_line_and_training_button():
     assert len(line) == 1, line
     assert line[0].startswith("Capítulo %s:" % ch["id"]) and "Sua Força %d" % int(round(ui.info()["rating"])) in line[0]
     assert ui.g.font(20).size(line[0])[0] <= 700
-    assert click_label_rect(lambda r: r == pygame.Rect(510, 82, 150, 40))        # TREINO na garagem
+    assert click_label_rect(lambda r: r == pygame.Rect(660, 82, 150, 40))        # TREINO na garagem
     assert ui.screen_id == "training"
     assert click_label_rect(lambda r: r == pygame.Rect(250, 610, 600, 42))       # VOLTAR
     assert ui.screen_id == "garage"
@@ -1674,6 +1674,184 @@ def test_campaign_garage_never_replaced_and_only_campaign_key_written():
     assert not FORBIDDEN
     assert g.robots_ui.garage is not mine
     ui.to_menu()
+
+
+# ================================================================== Fase 4 / Onda B: B10-B12 na campanha
+import skills as SK  # noqa: E402
+import robots_ui as rui  # noqa: E402
+
+SK_TAB = [t for t, _ in cui.TABS].index("skills")
+
+
+def unlock_mod(cp):
+    """Liga mod_on como a campanha faz ao fechar o Ato 1 (rw_5)."""
+    key_ = "reward:%s" % cm.UNLOCK_REWARD
+    if key_ not in cp.done:
+        cp.done.append(key_)
+    cm.sync_unlocks(cp.garage, cp.done)
+    ui.cache = None
+    assert cp.garage.mod_on()
+
+
+def count_surfaces(n=60):
+    real = pygame.Surface
+    count = [0]
+
+    class Counting(real):
+        def __init__(self, *a, **k):
+            count[0] += 1
+            super().__init__(*a, **k)
+
+    for _ in range(5):
+        frame()
+    g.text_cache.clear()
+    keys = set()
+    pygame.Surface = Counting
+    try:
+        for _ in range(n):
+            frame()
+            keys.update(g.text_cache.keys())
+    finally:
+        pygame.Surface = real
+    return count[0], keys
+
+
+def test_campaign_skills_tab_locked_then_learn_and_save_only_campaign():
+    fresh_campaign(13)
+    cp = ui.campaign
+    frame()
+    click_tab(SK_TAB)
+    frame()
+    assert ui.screen_id == "skills"
+    n, keys = count_surfaces(60)
+    assert n == 0 and len(keys) < 150, (n, len(keys))
+    assert text_cache_has("HABILIDADES BLOQUEADAS") and text_cache_has("Ato 1")
+    shot("b10_campanha_habilidades_bloqueada")
+    unlock_mod(cp)
+    hero = cp.hero_robot()
+    hero["skills"]["pts"] = 3
+    ui.sk_pick_robot(hero["id"])
+    n, keys = count_surfaces(60)
+    assert n == 0 and len(keys) < 150, (n, len(keys))
+    node = SK.TREE["CTR"][0]
+    frame()
+    click(ui.sk_node_rects()[node["id"]].center)
+    frame()
+    r = rui.SK_INFO
+    click((r.x + 30, r.bottom - 30))                                     # APRENDER
+    assert hero["skills"]["learned"].get(node["skill"]) == node["rank"]
+    assert hero["skills"]["pts"] == 3 - node["cost"]
+    frame()
+    click((r.x + 30, r.bottom - 30))                                     # EQUIPAR
+    assert node["skill"] in hero["skills"]["equipped"]
+    saved = json.loads(CAMP["save"])
+    rb = next(x for x in saved["garage"]["robots"] if x["id"] == hero["id"])
+    assert rb["skills"]["equipped"] == [node["skill"]] and not FORBIDDEN
+    assert ui.garage.match_cfg()["squad"][[i for i in ui.garage.lineup].index(hero["id"])].get("skills")
+    shot("b10_campanha_habilidades")
+    key(pygame.K_ESCAPE)
+    assert ui.screen_id == "map" and not FORBIDDEN
+    ui.to_menu()
+
+
+def test_campaign_backpack_tourney_and_training_consumed_and_shown():
+    fresh_campaign(17)
+    drive_until(at_match("t_c1", "G1"))
+    cp = ui.campaign
+    gg = cp.garage
+    unlock_mod(cp)
+    gg.items = {"cera_turbo": 2, "cafe": 2, "spray": 1}
+    ui.go("tourney")
+    frame()
+    assert text_cache_has("MOCHILA")
+    click((380 + 20, 556 + 20))                                          # caixa 1 da faixa da Mochila
+    frame()
+    assert ui.bp_open
+    m = rui.BP_MODAL
+    rows = {iid: (m.x + 40, m.y + 134 + k * 44 + 20) for k, iid in enumerate(SK.ITEMS)}
+    click(rows["cera_turbo"])
+    frame()
+    click(rows["spray"])
+    frame()
+    assert gg.backpack_items() == ["cera_turbo", "spray"]
+    act = ui.map_act
+    assert abs(act["user_F"] - gg.match_F()) < 1e-9 and act["user_F"] > gg.rating()
+    assert act["home"].get("items") == ("cera_turbo", "spray")
+    n, keys = count_surfaces(60)
+    assert n == 0 and len(keys) < 150, (n, len(keys))
+    shot("b12_campanha_mochila")
+    key(pygame.K_ESCAPE)                                                 # fecha só a Mochila
+    assert not ui.bp_open and ui.screen_id == "tourney"
+    shot("b12_campanha_torneio_mochila")
+    SIMQ.append((2, 0))
+    click_rect(BTN_SIM)
+    assert ui.screen_id == "round"
+    assert ui.round_info["items"] == [SK.ITEMS["cera_turbo"]["name"], SK.ITEMS["spray"]["name"]]
+    assert gg.items == {"cera_turbo": 1, "cafe": 2} and gg.backpack_items() == []
+    frame()
+    assert text_cache_has("Mochila usada")
+    assert json.loads(CAMP["save"])["garage"]["items"] == {"cera_turbo": 1, "cafe": 2}
+    click_rect(ROUND_CONT)
+    # treino: Mochila na tela de treino, config do treino atualizada e item gasto no SIMULAR TREINO
+    drive_until(at_match("t_c1", "G2"))
+    click_rect(BTN_TRAIN)
+    assert ui.screen_id == "training"
+    frame()
+    click((560 + 20, 302 + 15))
+    frame()
+    click(rows["cafe"])
+    frame()
+    assert gg.backpack_items() == ["cafe"] and ui.train["home"].get("items") == ("cafe",)
+    key(pygame.K_ESCAPE)
+    n, keys = count_surfaces(30)
+    assert n == 0 and len(keys) < 150
+    SIMQ.append((1, 0))
+    click_rect(TR_SIM)
+    assert ui.screen_id == "round" and ui.round_info["items"] == [SK.ITEMS["cafe"]["name"]]
+    assert gg.items == {"cera_turbo": 1, "cafe": 1}
+    assert not FORBIDDEN
+    ui.to_menu()
+
+
+def test_fx_skill_pts_rewards_recruit_and_training_ph():
+    """B11: fx/REWARDS com `skill`/`pts`, PH retroativo do recruta e PH de treino (1 a cada 5, max 5)."""
+    cp = cm.new_campaign(random.Random(3))
+    hero = cp.hero_robot()
+    others = [r for r in cp.garage.robots if r is not hero]
+    p0 = hero["skills"]["pts"]
+    cp.apply_fx({"skill": {"robot": "hero", "id": "arrancada", "rank": 2}, "pts": 2})
+    assert hero["skills"]["learned"] == {"arrancada": 2} and hero["skills"]["pts"] == p0 + 2
+    assert all(not r["skills"]["learned"] for r in others)
+    cp.apply_fx({"skill": [{"robot": "team", "id": "poupanca"}], "pts": {"robot": "team", "n": 1}})
+    assert all(r["skills"]["learned"].get("poupanca") == 1 for r in cp.garage.robots)
+    assert hero["skills"]["pts"] == p0 + 3 and all(r["skills"]["pts"] >= 1 for r in others)
+    cp.apply_fx({"skill": {"id": "nao_existe"}})                       # lixo: ignorado
+    assert "habilidade nova" in cui.fx_text({"skill": {"id": "curva"}, "pts": 2})
+    assert "+2 PH" in cui.fx_text({"pts": 2})
+    # REWARDS com skill/pts (dados sinteticos; o roteiro do Ato 1 nao muda)
+    orig = story.REWARDS
+    try:
+        story.REWARDS = dict(orig)
+        story.REWARDS["rw_P"] = dict(orig["rw_P"], skill={"robot": "hero", "id": "leitura", "rank": 1}, pts=2)
+        cp2 = cm.new_campaign(random.Random(4))
+        h2 = cp2.hero_robot()
+        rep = cp2.apply_chapter_rewards("P")
+        assert rep["applied"] and rep["skills"] == ["Leitura de Jogo 1"] and rep["pts"] == 2
+        assert h2["skills"]["learned"].get("leitura") == 1 and h2["skills"]["pts"] >= 2
+    finally:
+        story.REWARDS = orig
+    # recruta entra com os PH do nivel inicial
+    warn = cp._recruit({"name": "Testinho", "role": "DEF", "chassis": "Tanque", "base_ovr": 50, "level": 4,
+                        "paint": [10, 20, 30]})
+    rec = next(r for r in cp.garage.robots if r["name"] == "Testinho")
+    assert rec["skills"]["pts"] == SK.ph_for_level(4) == 3, warn
+    # treino: +1 PH para todos a cada TRAIN_PH_EVERY, no maximo TRAIN_PH_MAX
+    before = {r["id"]: r["skills"]["pts"] for r in cp.garage.robots}
+    got = [cp.record_training(1, 0)["ph"] for _ in range(SK.TRAIN_PH_EVERY * (SK.TRAIN_PH_MAX + 2))]
+    assert sum(got) == SK.TRAIN_PH_MAX and got[SK.TRAIN_PH_EVERY - 1] == 1 and got[0] == 0
+    for r in cp.garage.robots:
+        lv_ph = r["skills"]["pts"] - before[r["id"]]
+        assert lv_ph >= SK.TRAIN_PH_MAX                                   # treino (+ niveis ganhos)
 
 
 if __name__ == "__main__":

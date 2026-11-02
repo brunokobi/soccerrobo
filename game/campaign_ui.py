@@ -36,14 +36,15 @@ import crowd
 import garage as G
 import parts as P
 import portraits
+import skills as SK
 import story
 from career_ui import BG, DIM, GOLD, GREEN, LINE, PANEL, RED, TEXT, W
 from robots_ui import RobotsUI
 
-TABS = [("map", "HISTÓRIA"), ("garage", "GARAGEM"), ("shop", "LOJA")]
+TABS = [("map", "HISTÓRIA"), ("garage", "GARAGEM"), ("shop", "LOJA"), ("skills", "HABILIDADES")]
 FRAME_SCREENS = tuple(t for t, _ in TABS)
 STUB_SCREENS = ("tourney", "training", "round", "chapter_end", "ending")   # Esc = volta ao mapa
-SCREENS = ("menu", "map", "garage", "shop", "bench", "dialog") + STUB_SCREENS
+SCREENS = ("menu", "map", "garage", "shop", "skills", "bench", "dialog") + STUB_SCREENS
 FRAME_EXTRA = ("tourney", "training")          # telas com cabecalho + abas (HISTORIA fica ativa)
 NODE_X0, NODE_DX = 110, 176
 NODE_Y = (200, 262)
@@ -92,6 +93,11 @@ def fx_text(fx):
         out.append("XP da equipe %+d" % fx["xp_team"])
     if fx.get("piece"):
         out.append("peça nova")
+    if fx.get("skill"):
+        out.append("habilidade nova")
+    if fx.get("pts"):
+        n = fx["pts"].get("n", 0) if isinstance(fx["pts"], dict) else fx["pts"]
+        out.append("%+d PH" % int(n))
     return "   ".join(out)
 
 
@@ -120,6 +126,8 @@ def force_text(lo, hi):
 class CampaignUI(RobotsUI):
     SHOP_EMPTY_TEXT = "Sem peças nesse slot. A loja é reposta a cada partida."
     SHOP_STOCK_FMT = "Estoque: %d peça(s). Reposta a cada partida."
+    SKILLS_LOCKED_TEXT = ("Vença o Ato 1 (capítulo 5) para liberar o slot Módulo, as habilidades e os itens "
+                          "da Mochila.")
 
     def __init__(self, game):
         self.campaign = None            # antes do super: a propriedade `garage` o consulta
@@ -266,8 +274,19 @@ class CampaignUI(RobotsUI):
         line = "Capítulo %s: Força recomendada %s | Sua Força %d" % (ch["id"], force_text(
             ch["F_start"], ch["F_end"]), mine)
         self.text(self.fit(line, 20, 700), 20, GREEN if mine >= low else GOLD, midleft=(24, 131))
-        self.btn((510, 82, 150, 40), "TREINO", lambda: self.open_training("garage"), size=26,
+        self.btn((660, 82, 150, 40), "TREINO", lambda: self.open_training("garage"), size=26,
                  color=(60, 80, 130))
+
+    # ------------------------------------------------------------ mochila (B12)
+    def on_backpack_change(self):
+        """A Mochila mudou: atualiza a Força/config da partida já montada (torneio e treino) sem
+        recalcular a acao (training_cfg consome o RNG da campanha)."""
+        super().on_backpack_change()
+        gg = self.garage
+        for act in (self.map_act if self.screen_id == "tourney" else None, self.train):
+            if isinstance(act, dict) and "user_F" in act:
+                act["user_F"] = gg.match_F()
+                act["home"] = gg.match_cfg()
 
     # ------------------------------------------------------------ mapa
     def do_story(self):
@@ -284,6 +303,8 @@ class CampaignUI(RobotsUI):
 
     # ------------------------------------------------------------ eventos
     def handle_event(self, e):
+        if self.modal_escape(e):
+            return
         if self.screen_id == "dialog":
             return self.dialog_event(e)
         if e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE and not self.editing:
@@ -293,7 +314,7 @@ class CampaignUI(RobotsUI):
             if sid == "shop" and self.confirm_sell is not None:
                 self.confirm_sell = None            # 1o Esc cancela a confirmacao de venda
                 return
-            if sid in STUB_SCREENS or (sid in ("garage", "shop") and not self.place_mode):
+            if sid in STUB_SCREENS or (sid in ("garage", "shop", "skills") and not self.place_mode):
                 return self.go("map")
         return super().handle_event(e)
 
@@ -779,12 +800,13 @@ class CampaignUI(RobotsUI):
         if act is None:
             return
         self.pending = None
+        used = self.garage.backpack_items()             # a Mochila e gasta dentro de record_match
         try:
             out = self.campaign.simulate_current()
         except (RuntimeError, ValueError, KeyError):
             self.go("map")
             return
-        self.finish_result(out, act, [], True)
+        self.finish_result(out, act, [], True, items=used)
 
     def match_done(self, score, events):
         """Callback de Game.start_robot_match (o Game ja voltou ao estado "campaign")."""
@@ -794,12 +816,13 @@ class CampaignUI(RobotsUI):
             if cp is not None:
                 self.go("map")
             return
+        used = cp.garage.backpack_items()
         try:
             out = cp.record_match(int(score[0]), int(score[1]), events=events, simulated=False)
         except (RuntimeError, ValueError, KeyError):
             self.go("map")
             return
-        self.finish_result(out, pend["act"], events, False)
+        self.finish_result(out, pend["act"], events, False, items=used)
 
     # ---- treino
     def open_training(self, back):
@@ -822,8 +845,9 @@ class CampaignUI(RobotsUI):
         if cp is None or tr is None:
             return
         my, opp = C.sim_match(cp.garage.match_F(), tr["O"], cp._rng("trainsim"))
+        used = cp.garage.backpack_items()
         out = cp.record_training(my, opp, simulated=True)
-        self.finish_result(out, tr, [], True, training=True)
+        self.finish_result(out, tr, [], True, training=True, items=used)
 
     def train_done(self, score, events):
         pend, self.pending = self.pending, None
@@ -833,11 +857,12 @@ class CampaignUI(RobotsUI):
         if not isinstance(pend, dict) or not pend.get("training"):
             self.go("map")
             return
+        used = cp.garage.backpack_items()
         out = cp.record_training(int(score[0]), int(score[1]), events=events, simulated=False)
-        self.finish_result(out, pend["act"], events, False, training=True)
+        self.finish_result(out, pend["act"], events, False, training=True, items=used)
 
     # ---- resultado (tela "round" herdada: draw_round_body + cabecalho proprio)
-    def finish_result(self, out, act, events, simulated, training=False):
+    def finish_result(self, out, act, events, simulated, training=False, items=None):
         cp = self.campaign
         gg = self.garage
         rew = out["rewards"]
@@ -864,7 +889,8 @@ class CampaignUI(RobotsUI):
             "goals": goals, "equipped": eq, "rating": self.info()["rating"], "base": base,
             "stage": out.get("stage"), "tname": cp.chapter()["subtitle"], "pen": out.get("pen"),
             "outcome": out.get("outcome"), "boss": bool(out.get("boss")), "group_pos": out.get("group_pos"),
-            "pity": cp.pity, "single": out.get("outcome") == "done"}
+            "pity": cp.pity, "single": out.get("outcome") == "done",
+            "items": [SK.ITEMS[i]["name"] for i in (items or ()) if i in SK.ITEMS], "ph": out.get("ph", 0)}
         self.persist()
         self.go("round")
 
@@ -1048,6 +1074,8 @@ class CampaignUI(RobotsUI):
         self.text("Força recomendada: %d" % int(round(act["F_rec"])), 26, TEXT, topleft=(40, 546))
         if act.get("boss") and act.get("pity", 0) > 0:
             self.text("Ajuda do chefe: -%d de Força" % (act["pity"] * C.PITY_STEP), 24, GREEN, topleft=(40, 580))
+        if gg.mod_on():
+            self.draw_backpack_strip(pygame.Rect(380, 538, 300, 64))
         self.text(self.fit("Robôs: " + ", ".join(v["names"]), 20, 640), 20, DIM, topleft=(40, 614))
         if v["single"]:
             self.text("Peneira: qualquer resultado conclui.", 20, DIM, topleft=(40, 640))
@@ -1082,8 +1110,10 @@ class CampaignUI(RobotsUI):
         pygame.draw.rect(scr, tuple(opp["color"]), (290, 222, 14, 50), border_radius=3)
         self.text(self.fit(opp["name"], 36, 500), 36, TEXT, topleft=(316, 218), shadow=True)
         self.text("Força do rival: %d" % tr["O"], 26, DIM, topleft=(316, 256))
-        mine = int(round(self.info()["rating"]))
+        mine = int(round(self.info()["match_F"]))
         self.text("Sua Força: %d" % mine, 28, GREEN if mine >= tr["O"] else GOLD, topleft=(290, 306))
+        if self.garage.mod_on():
+            self.draw_backpack_strip(pygame.Rect(560, 284, 270, 58))
         for k, line in enumerate(self.wrap(
                 "Partida livre: não avança o torneio nem a história. A recompensa é menor que a de "
                 "uma partida valendo.", 22, 540)):
@@ -1115,6 +1145,12 @@ class CampaignUI(RobotsUI):
         if eq:
             v["equip"] = (rep.get("equip") or "%s %s" % (eq["model"], P.RAR_NAMES[eq["rar"]]),
                           P.RAR_COLORS[eq["rar"]])
+        sk = rw.get("skill")
+        v["skills"] = list(rep.get("skills") or [
+            "%s %d" % (SK.SKILLS[x["id"]]["name"], int(x.get("rank", 1)))
+            for x in (sk if isinstance(sk, list) else [sk] if sk else []) if x.get("id") in SK.SKILLS])
+        pts = rw.get("pts") or 0
+        v["pts"] = int(pts.get("n", 0) if isinstance(pts, dict) else pts)
         for sp in rw.get("recruits", ()):
             v["recruits"].append((sp["name"], sp["chassis"], int(sp.get("level", 1)),
                                   tuple(sp.get("paint") or (200, 200, 200))))
@@ -1163,6 +1199,13 @@ class CampaignUI(RobotsUI):
                 parts.append("equipe +%d XP" % v["xp_team"])
             self.text("Experiência: " + "   ".join(parts), 26, (0, 210, 240), topleft=(x, y + 2))
             y += 38
+        if v.get("skills") or v.get("pts"):
+            bits = list(v.get("skills") or [])
+            if v.get("pts"):
+                bits.append("+%d PH" % v["pts"])
+            self.text("Habilidades:", 24, DIM, topleft=(x, y + 4))
+            self.text(self.fit(", ".join(bits), 28, 600), 28, (0, 230, 255), topleft=(x + 150, y), shadow=True)
+            y += 40
         if v["unlocked"]:
             self.text("Chassis desbloqueados:", 24, DIM, topleft=(x, y + 4))
             self.text(self.fit(", ".join(v["unlocked"]), 30, 500), 30, GREEN, topleft=(x + 250, y), shadow=True)

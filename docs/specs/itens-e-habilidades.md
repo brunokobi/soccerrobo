@@ -179,6 +179,17 @@ Mudanças em `soccer.py` (todas guardadas por flag):
 
 **Estado (B6-B9, 02/11/2026).** Motor: `Game.sk_setup/tick_skills/sk_eval/sk_start/sk_stop/sk_pre_shot/sk_on_kick/on_steal/ball_curve` em `soccer.py`, atrás de `sk_on` (só liga com `skills`, aura ou `items` no elenco: Modo Robôs com `mod_on` e campanha a partir de `rw_5`); goldens 80/80. Custo medido: ~0,0023 ms/step (10 robôs x 3 skills; meta 0,006). Diferenças da spec: o gatilho de chute (Curva/Chinelada) é avaliado em `ai_shoot` antes do erro de mira (para `shot_err` valer) e interrompe a ativa atual; a saída do Chute em Curva é pré-girada pela corda do arco (integrada com a física da bola) para a curva terminar no alvo. `SKILL_FORCE` calibrada por `tests/calib_skills.py` (tabela no docstring); `ROBOT_SK_CAP` = 20 (o teto que vale é o do time, 4,0). `calib_campaign --skills` (caps. 3 e 5): |SIM - motor| 2,8 pontos, `sim_bias` mantido. Skills sem efeito mensurável no motor atual: Lançador (nenhum), Curva, Muralha r1, Drible, Choque, Instinto Matador, Recarga, Calor de Forno, Mente Zen, Sobrecarga, Chinelada (candidatas a rebalanceamento na B14).
 
+**Estado B14/B15/B16 (02/11/2026).** Segunda passada: todas as skills mudam o lance (teste
+`test_every_skill_changes_the_play`). Mudanças de dados/motor (sempre atrás de `sk_on`, RNG `sk_rng`): Lançador
+(lança por cima o mais adiantado, chance 0,12/reposição, bola `air`), Choque (paralisa 0,15 s, cd 20), Drible
+(0,8 s, marcador fica `evade` 0,5 s sem desarmar), Matador (220 px, mira `aim` +0,02), Curva (`kick_pow` x1,2,
+`aim` +0,15), Muralha (GK ganha `gk_save` +0,08), Recarga (bat < 0,6 parado: +0,10 e arranque), Elástica
+(+0,07/x1,08), Líder (x1,014/x0,98), Sucção (ímã move bola parada), Pressão (bat 0,05, `tk_ext` 4), e as
+especiais Calor de Forno, Faro de Meia, Mente Zen, Instinto do Vô, Sobrecarga (passiva de velocidade) e
+Chinelada (mira). FX de evento: "DRIBLE!", "LANÇOU!", "ZZT!", bola alta, faixa de capitão. SKILL_FORCE nova no
+docstring de `tests/calib_skills.py`. B16: com `mod_on` a loja traz 1 Módulo e 25% dos drops viram Módulo
+(RNG derivado: sem `mod_on` nada muda).
+
 ## 10. Garage v2 (save)
 - `garage.VERSION` 1 -> 2. `MIGRATIONS[1] = fn(dict) -> dict`: para cada robô, `slots["modulo"] = None`, `skills = {"learned": {}, "equipped": [], "pts": 0}`, `look = {}`; no topo, `items = {}`, `cosmetics = []`, `cap = 10`; `v = 2`. `FIELDS` ganha `items`, `cosmetics`, `cap`. A chave de armazenamento continua `soccerpy_robots_v1`.
 - `_robot()` (sanitize): `skills.learned` é dict `{id: rank}` só com ids conhecidos e rank 1-3; `equipped` é subconjunto de `learned` (e de módulos equipados), sem duplicatas, com soma de `load` <= `LOAD_MAX`; `pts` int 0..99; `look` só com ids conhecidos; `level` 1..15 (e <= `cap`). `slots` aceita `modulo` (peça existente do slot certo).

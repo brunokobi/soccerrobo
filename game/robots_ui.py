@@ -15,10 +15,11 @@ import garage as G
 import parts as P
 import robot_league as RL
 import robots
+import skills as SK
 from career_ui import (BG, BTN, DIM, GOLD, GREEN, LINE, PANEL, RED, TEXT, W,
                        CareerUI, ovr_color)
 
-TABS = [("hub", "LIGA"), ("garage", "GARAGEM"), ("shop", "LOJA")]
+TABS = [("hub", "LIGA"), ("garage", "GARAGEM"), ("shop", "LOJA"), ("skills", "HABILIDADES")]
 FRAME_SCREENS = tuple(t for t, _ in TABS)          # telas com cabeçalho + abas
 END_SCREENS = ("round", "league_end")
 SCREENS = ("menu",) + FRAME_SCREENS + ("bench",) + END_SCREENS
@@ -50,6 +51,132 @@ NAME_FIELD = pygame.Rect(748, 482, 185, 34)
 NAME_MAX = G.NAME_MAX_ROBOT
 
 
+# ---- textos de habilidades/itens (B10/B12): linguagem simples, Latin-1
+KIND_PT = {"A": "Ativa", "P": "Passiva", "C": "Condicional"}
+ROLE_SHORT = {"GK": "GOL", "DEF": "DEF", "MID": "MEI", "ATT": "ATA"}
+FACTOR_PT = {"speed": "velocidade", "accel": "aceleração", "stop": "frenagem", "kick_pow": "força do chute",
+             "shot_err": "erro de chute", "pass_err": "erro de passe", "reach": "alcance",
+             "catch_speed": "domínio de bola rápida", "fumble": "bola escapando", "tackle": "desarme",
+             "shield": "perda de bola", "gk_save": "defesa do goleiro", "gk_speed": "velocidade do goleiro",
+             "gk_lead": "antecipação do goleiro", "pass_range": "alcance do passe",
+             "lane_margin": "folga para passar", "shoot_range": "distância de chute",
+             "think_mul": "tempo para decidir", "dec_err": "erro de decisão",
+             "bat_drain_mul": "gasto de bateria", "bat_regen_mul": "recarga de bateria"}
+TRIGGER_PT = {"always": "Sempre ligada.",
+              "carry_free_lane": "Com a bola e caminho livre à frente.",
+              "loose_ball_near": "Bola solta e lenta perto dele.",
+              "curve_shot": "Ao chutar a gol com o goleiro fora da linha.",
+              "curve_shot_any": "Ao chutar a gol.",
+              "goal_threat": "Rival com a bola perto do nosso gol.",
+              "low_bat_still": "Bateria abaixo de %d%% e quase parado.",
+              "late_or_charged": "Sem vencer depois dos 60 min, ou bateria cheia no ataque.",
+              "shielded_carry": "Com a bola e um rival colado.",
+              "pressed": "Com a bola e pressionado de perto.",
+              "shot_incoming": "Chute forte vindo para o gol.",
+              "high_press": "Rival com a bola no campo de defesa dele.",
+              "won_ball": "Logo depois de roubar a bola.",
+              "lost_ball": "Logo depois de perder a bola.",
+              "near_goal": "Perto do gol adversário.",
+              "carry_any": "Com a bola."}
+TACTIC_PT = {"ofensivo": "Prioriza as habilidades de ataque quando várias estão prontas.",
+             "equilibrado": "Sem prioridade: usa a primeira habilidade que ficar pronta.",
+             "defensivo": "Prioriza as habilidades de defesa quando várias estão prontas."}
+SET_COLORS = {"Faxineiro": (110, 230, 120), "Plasma": (255, 130, 70), "Titã": (175, 190, 210),
+              "Dojo": (190, 140, 255), "Limpex": (0, 200, 255)}
+NODE_COLORS = {"learned": (20, 110, 70), "open": (16, 60, 95), "locked": (22, 30, 40)}
+NODE_EDGE = {"learned": GREEN, "open": (0, 230, 255), "locked": (70, 85, 95)}
+SKILLS_LOCKED_TEXT = ("Conclua o tier 1 da liga (termine em 3º ou melhor) para liberar o slot Módulo, "
+                      "as habilidades e os itens da Mochila.")
+SK_PANEL = pygame.Rect(20, 172, 640, 300)
+SK_INFO = pygame.Rect(672, 172, 408, 300)
+SK_EQ = pygame.Rect(20, 482, 640, 210)
+SK_TAC = pygame.Rect(672, 482, 408, 210)
+BP_MODAL = pygame.Rect(180, 110, 740, 490)
+
+
+def fnum(v, d=1):
+    """Número com vírgula decimal ("63,2")."""
+    return ("%.*f" % (d, v)).replace(".", ",")
+
+
+def trigger_text(trig):
+    """Gatilho em linguagem simples (limiares lidos de skills.py quando existem)."""
+    t = TRIGGER_PT.get(trig, "Automático, decidido pelo motor.")
+    if "%d%%" in t:
+        t = t % int(round(getattr(SK, "RECHARGE_BELOW", 0.25) * 100))
+    return t
+
+
+def mod_text(fac, op, v):
+    """'velocidade +35%' / 'defesa do goleiro +0,25' / 'alcance +10 px'."""
+    name = FACTOR_PT.get(fac, fac)
+    if op == "mul":
+        return "%s %+d%%" % (name, int(round((v - 1.0) * 100)))
+    if fac == "reach":
+        return "%s %+d px" % (name, int(round(v)))
+    return "%s %s" % (name, ("+" if v >= 0 else "") + fnum(v, 2))
+
+
+def extra_text(ex):
+    out = []
+    if ex.get("pull"):
+        out.append("puxa a bola como ímã")
+    if ex.get("tk_ext"):
+        out.append("desarme +%d px de raio" % int(round(ex["tk_ext"])))
+    if ex.get("curve"):
+        out.append("bola faz curva")
+    if ex.get("stun"):
+        out.append("rival fica %s s sem dominar" % fnum(ex["stun"]))
+    if ex.get("fatigue"):
+        fat = ex["fatigue"]
+        out.append("depois cansa %d s" % int(round(fat[0] if isinstance(fat, (tuple, list)) else fat)))
+    if ex.get("restore_below"):
+        out.append("recarrega a bateria quando acaba")
+    if ex.get("bat_add"):
+        out.append("bateria +%d%% na hora" % int(round(ex["bat_add"] * 100)))
+    if ex.get("evade"):
+        out.append("escapa do marcador")
+    if ex.get("aim"):
+        out.append("mira no canto")
+    if ex.get("uses"):
+        out.append("%d vez por jogo" % int(ex["uses"]))
+    return out
+
+
+def skill_effect(sid, rank=1, up=0):
+    """Efeito da skill (no rank) em linguagem simples."""
+    if sid not in SK.ALL:
+        return ""
+    bits = [mod_text(f, op, v) for f, (op, v) in SK.scaled_mods(sid, rank, up).items()]
+    bits += extra_text(SK.scaled_extra(sid, rank, up))
+    if SK.ALL[sid].get("aura"):
+        bits.append("vale para o time todo")
+    return ", ".join(bits) + "." if bits else "Sem efeito numérico."
+
+
+def skill_timing(sid, rank=1):
+    s = SK.ALL[sid]
+    if s["kind"] != "A":
+        return "Sempre ligada, sem custo." if s["kind"] == "P" else "Vale enquanto a condição vale."
+    bits = []
+    if s["dur"]:
+        bits.append("Dura %s s" % fnum(s["dur"]))
+    if s["cd"]:
+        bits.append("recarga %s s" % fnum(SK.cooldown(sid, rank)))
+    bits.append("bateria %d%%" % int(round(s["bat"] * 100)) if s["bat"] else "sem custo")
+    return " | ".join(bits)
+
+
+def item_effect(iid):
+    it = SK.ITEMS.get(iid)
+    if it is None:
+        return ""
+    bits = [mod_text(f, op, v) for f, (op, v) in it["mods"].items()]
+    bits += extra_text(it.get("extra", {}))
+    where = {"team": "time", "gk": "goleiro", "one": "1 robô"}.get(it.get("scope"), "time")
+    return "%s (%s)" % (", ".join(bits), where)
+
+
 def attr_color(v):
     """Cor da barra de atributo por faixa."""
     if v >= 75:
@@ -67,6 +194,7 @@ class RobotsUI(CareerUI):
     # textos da loja (subclasses, como a Campanha, trocam por atributo)
     SHOP_EMPTY_TEXT = "Sem peças nesse slot. A loja é reposta a cada rodada da liga."
     SHOP_STOCK_FMT = "Estoque: %d peça(s). Reposto a cada rodada da liga."
+    SKILLS_LOCKED_TEXT = SKILLS_LOCKED_TEXT
 
     def __init__(self, game):  # noqa: super().__init__ intencionalmente não chamado
         self.g = game
@@ -107,6 +235,11 @@ class RobotsUI(CareerUI):
         self.round_info = None     # tela "round": resumo da rodada
         self.end_info = None       # tela "league_end": resumo da liga
         self.pending = None        # jogo do usuário em andamento (rodada, casa, fora)
+        self.sk_rid = None         # HABILIDADES: robô selecionado
+        self.sk_sel = None         # HABILIDADES: ("node", id) | ("skill", id)
+        self.item_sel = None       # loja/itens: id do consumível selecionado
+        self.bp_open = False       # Mochila (modal) aberta
+        self.cmp_cache = None      # bancada: (chave, dados) do ANTES/DEPOIS
 
     def open(self):
         """Entra no Modo Robôs (tela de menu do modo)."""
@@ -133,6 +266,7 @@ class RobotsUI(CareerUI):
         self.screen_id = screen
         self.place_mode = False
         self.editing = False
+        self.bp_open = False
         self.msg = ""
         if screen == "garage" and self.garage is not None and self.garage.robot(self.sel) is None:
             self.sel = self.garage.lineup[0] if self.garage.lineup else None
@@ -163,7 +297,7 @@ class RobotsUI(CareerUI):
             for r in gg.robots:
                 a = G.effective_attrs(r, pb)
                 per[r["id"]] = (a, int(round(robots.mean_attr(a) * 100)))
-            self.cache = {"per": per, "rating": gg.rating()}
+            self.cache = {"per": per, "rating": gg.rating(), "match_F": gg.match_F()}
         return self.cache
 
     # --------------------------------------------------------------- menu
@@ -201,7 +335,16 @@ class RobotsUI(CareerUI):
         self.confirm_new = False
 
     # -------------------------------------------------------------- eventos
+    def modal_escape(self, e):
+        """Esc com a Mochila aberta só fecha a Mochila. True se consumiu o evento."""
+        if self.bp_open and e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE:
+            self.bp_open = False
+            return True
+        return False
+
     def handle_event(self, e):
+        if self.modal_escape(e):
+            return
         if self.screen_id == "bench" and self.editing:
             if e.type == pygame.KEYDOWN:
                 return self.edit_key(e)
@@ -238,6 +381,9 @@ class RobotsUI(CareerUI):
         if self.screen_id in self.frame_screens or self.screen_id == "bench":
             self.draw_frame()
         getattr(self, "draw_" + self.screen_id)()
+        if self.bp_open and self.garage is not None:
+            self.buttons = []                    # modal: só os botões da Mochila valem
+            self.draw_backpack_modal()
 
     # ---- menu do modo
     def draw_menu(self):
@@ -291,8 +437,10 @@ class RobotsUI(CareerUI):
         self.text("Força do time: %d" % int(round(self.info()["rating"])), 24, DIM,
                   midright=(W - 20, 55))
         for i, (tid, label) in enumerate(self.tabs):
+            locked = tid == "skills" and not gg.mod_on()
             self.btn((20 + i * 160, 82, 150, 40), label, lambda t=tid: self.go(t),
-                     color=(50, 160, 220) if self.tab_active(tid) else (16, 44, 70), size=26)
+                     color=(50, 160, 220) if self.tab_active(tid) else ((30, 34, 44) if locked else (16, 44, 70)),
+                     size=26)
         self.btn((W - 210, 82, 190, 40), "SALVAR E SAIR", self.to_menu, color=(70, 60, 60), size=24)
 
     def tab_active(self, tid):
@@ -302,6 +450,7 @@ class RobotsUI(CareerUI):
     # ================================================================ LOJA
     def set_shop_tab(self, t):
         self.shop_tab = t
+        self.item_sel = None
         self.shop_sel = None
         self.confirm_sell = None
         self.model_sel = None
@@ -375,29 +524,33 @@ class RobotsUI(CareerUI):
     def draw_shop(self):
         gg = self.garage
         scr = self.g.screen
-        for i, (tid, lab) in enumerate((("parts", "PEÇAS"), ("models", "MODELOS"))):
+        for i, (tid, lab) in enumerate((("parts", "PEÇAS"), ("models", "MODELOS"), ("items", "ITENS"))):
             self.btn((20 + i * 120, 132, 110, 36), lab, lambda t=tid: self.set_shop_tab(t),
                      color=(50, 160, 220) if self.shop_tab == tid else (16, 44, 70), size=24)
         self.text("Sucata: %d" % gg.scrap, 28, GOLD, midright=(W - 24, 150))
         if self.shop_tab == "models":
             return self.draw_shop_models()
+        if self.shop_tab == "items":
+            return self.draw_shop_items()
         for i, (m, lab) in enumerate((("buy", "COMPRAR"), ("sell", "VENDER"))):
-            self.btn((280 + i * 120, 132, 110, 36), lab, lambda m=m: self.set_shop_mode(m),
+            self.btn((400 + i * 120, 132, 110, 36), lab, lambda m=m: self.set_shop_mode(m),
                      color=(0, 140, 110) if (self.shop_mode == m and m == "buy") else (
                          (170, 90, 60) if self.shop_mode == m else (16, 44, 70)), size=24)
-        for i, sl in enumerate((None,) + P.GEAR_SLOTS):
-            self.btn((20 + i * 132, 176, 126, 32), "TODOS" if sl is None else SLOT_LABELS[sl],
+        filters = (None,) + (P.SLOTS if gg.mod_on() else P.GEAR_SLOTS)   # 8 slots + TODOS com o Modulo
+        pitch = 1060 // len(filters)
+        for i, sl in enumerate(filters):
+            self.btn((20 + i * pitch, 176, pitch - 6, 32), "TODOS" if sl is None else SLOT_LABELS[sl],
                      lambda s=sl: self.set_shop_slot(s),
                      color=(50, 160, 220) if self.shop_slot == sl else (16, 44, 70), size=20)
         lst = self.shop_list()
         pages = max(1, (len(lst) + SHOP_ROWS - 1) // SHOP_ROWS)
         self.shop_page = min(self.shop_page, pages - 1)
         if pages > 1:
-            self.btn((540, 132, 40, 36), "<", lambda: self.set_shop_page(self.shop_page - 1),
+            self.btn((660, 132, 40, 36), "<", lambda: self.set_shop_page(self.shop_page - 1),
                      enabled=self.shop_page > 0, size=24)
-            self.btn((590, 132, 40, 36), ">", lambda: self.set_shop_page(self.shop_page + 1),
+            self.btn((710, 132, 40, 36), ">", lambda: self.set_shop_page(self.shop_page + 1),
                      enabled=self.shop_page < pages - 1, size=24)
-            self.text("%d/%d" % (self.shop_page + 1, pages), 22, DIM, midleft=(640, 150))
+            self.text("%d/%d" % (self.shop_page + 1, pages), 22, DIM, midleft=(760, 150))
         sell = self.shop_mode == "sell"
         if self.shop_sel is not None and not any(p["id"] == self.shop_sel for p in lst):
             self.shop_sel = None
@@ -441,6 +594,58 @@ class RobotsUI(CareerUI):
                      self.do_buy_part, enabled=ok, size=26)
             self.text(self.SHOP_STOCK_FMT % len(gg.shop["stock"]), 20, DIM,
                       topleft=(24, 626))
+        for k, line in enumerate(self.wrap(self.msg, 22, 820)[:1]):
+            self.text(line, 22, GOLD, topleft=(24, 656 + k * 24))
+
+    # ---- loja: ITENS (consumíveis, B12)
+    def pick_item(self, iid):
+        self.item_sel = iid
+        self.msg = ""
+
+    def do_buy_item(self):
+        if self.item_sel is not None:
+            self.act(self.garage.buy_item(self.item_sel))
+
+    def draw_shop_items(self):
+        gg = self.garage
+        scr = self.g.screen
+        on = gg.mod_on()
+        for lab, x, right in (("ITEM", 40, False), ("EFEITO NA PARTIDA", 290, False), ("FORÇA", 850, True),
+                              ("ESTOQUE", 950, True), ("PREÇO", 1055, True)):
+            self.text(lab, 20, DIM, **({"midright": (x, 190)} if right else {"midleft": (x, 190)}))
+        bag = gg.backpack_items()
+        for k, iid in enumerate(SK.ITEMS):
+            it = SK.ITEMS[iid]
+            y = 206 + k * 46
+            r = pygame.Rect(20, y, 1060, 42)
+            sel = iid == self.item_sel
+            pygame.draw.rect(scr, (20, 60, 90) if sel else PANEL, r, border_radius=5)
+            pygame.draw.rect(scr, GOLD if sel else LINE, r, 2 if sel else 1, border_radius=5)
+            have = gg.items.get(iid, 0)
+            col = TEXT if on else (110, 125, 120)
+            self.text(it["name"], 26, col, midleft=(40, y + 21))
+            self.text(self.fit(item_effect(iid), 22, 440), 22, DIM, midleft=(290, y + 21))
+            self.text("+%s" % fnum(it["force"]), 22, GREEN if on else DIM, midright=(850, y + 21))
+            self.text("%d/%d" % (have, SK.ITEM_MAX), 22, GOLD if have else DIM, midright=(950, y + 21))
+            if iid in bag:
+                self.text("MOCHILA", 16, (0, 230, 255), midright=(905, y + 8))
+            self.text(str(it["price"]), 24, TEXT if (on and gg.scrap >= it["price"]) else RED,
+                      midright=(1055, y + 21))
+            self.hit(r, lambda i=iid: self.pick_item(i))
+        it = SK.ITEMS.get(self.item_sel)
+        ok = (on and it is not None and gg.scrap >= it["price"]
+              and gg.items.get(self.item_sel, 0) < SK.ITEM_MAX)
+        self.btn((860, 650, 220, 44), "COMPRAR" if it is None else "COMPRAR %d" % it["price"],
+                 self.do_buy_item, enabled=ok, size=26)
+        if on:
+            hint = ("Consumíveis: até %d de cada. Antes da partida, leve até %d na MOCHILA (tela da liga ou do "
+                    "torneio); são gastos ao assistir ou simular." % (SK.ITEM_MAX, SK.BACKPACK))
+            col = DIM
+        else:
+            hint = "Itens bloqueados. " + self.SKILLS_LOCKED_TEXT
+            col = GOLD
+        for k, line in enumerate(self.wrap(hint, 20, 820)[:2]):
+            self.text(line, 20, col, topleft=(24, 494 + k * 24))
         for k, line in enumerate(self.wrap(self.msg, 22, 820)[:1]):
             self.text(line, 22, GOLD, topleft=(24, 656 + k * 24))
 
@@ -499,7 +704,8 @@ class RobotsUI(CareerUI):
         self.persist()
 
     def user_strength(self):
-        return self.info()["rating"]
+        """Força do usuário na próxima partida (com os itens da Mochila)."""
+        return self.info()["match_F"]
 
     def side_cfgs(self, fx):
         """(home_cfg, away_cfg) do jogo do usuário: garage.match_cfg() e robot_league.match_cfg()."""
@@ -555,6 +761,7 @@ class RobotsUI(CareerUI):
         order = [r for r in gg.robots if r["id"] in gg.lineup] + [r for r in gg.robots if r["id"] not in gg.lineup]
         starters = set(gg.lineup)
         rew = G.match_rewards(gg, my, opp, pids, tier, self.rng)
+        used = gg.consume_backpack()                  # Mochila (B12): gasta ao assistir ou simular
         rows = []
         for r in order:
             gained = rew["levels"].get(r["id"], 0)
@@ -572,6 +779,7 @@ class RobotsUI(CareerUI):
             "goals": [(e.get("min", 0), e.get("name", ""), e.get("team", 0), bool(e.get("own")))
                       for e in events],
             "equipped": eq, "rating": self.info()["rating"], "base": base,
+            "items": [SK.ITEMS[i]["name"] for i in used],
         }
         self.persist()
         self.screen_id = "round"
@@ -665,14 +873,138 @@ class RobotsUI(CareerUI):
                 self.text(self.fit(th["name"], 22, 170), 22, GOLD if mine else TEXT, midright=(222, y + 14))
                 self.text("%d x %d" % (hg, ag), 24, TEXT, center=(260, y + 14))
                 self.text(self.fit(ta["name"], 22, 170), 22, GOLD if mine else TEXT, midleft=(298, y + 14))
-        self.panel((520, 450, 560, 230))
+        bag = gg.mod_on() and fx is not None              # Mochila (B12): só com itens liberados
+        self.panel((520, 450, 300 if bag else 560, 230))
         self.text("PREMIAÇÃO DA LIGA", 22, GOLD, topleft=(540, 460))
         mul = G.TIER_MUL[lg["tier"]]
         for k, (lab, v) in enumerate((("1º lugar", RL.PRIZE_BASE[0]), ("2º lugar", RL.PRIZE_BASE[1]),
                                       ("3º lugar", RL.PRIZE_BASE[2]), ("4º ao 6º", RL.PRIZE_BASE[3]))):
             self.text("%s: +%d sucata" % (lab, int(round(v * mul))), 22, TEXT, topleft=(540, 494 + k * 28))
-        self.text("Termine em 3º ou melhor para avançar de tier.", 20, DIM, topleft=(540, 612))
-        self.text("Chassis novos liberam ao concluir o tier.", 20, DIM, topleft=(540, 638))
+        if bag:
+            for k, line in enumerate(self.wrap("3º ou melhor avança de tier e libera chassis novos.", 20, 262)[:2]):
+                self.text(line, 20, DIM, topleft=(540, 612 + k * 24))
+            self.draw_backpack_panel(pygame.Rect(830, 450, 250, 230))
+        else:
+            self.text("Termine em 3º ou melhor para avançar de tier.", 20, DIM, topleft=(540, 612))
+            self.text("Chassis novos liberam ao concluir o tier.", 20, DIM, topleft=(540, 638))
+
+    # ================================================================ MOCHILA (consumíveis, B12)
+    def open_backpack(self):
+        self.bp_open = True
+        self.msg = ""
+
+    def close_backpack(self):
+        self.bp_open = False
+
+    def on_backpack_change(self):
+        """Gancho: a Mochila mudou (subclasses atualizam a Força mostrada / a config da partida)."""
+        self.cache = None
+
+    def bp_toggle(self, iid):
+        gg = self.garage
+        cur = gg.backpack_items()
+        if iid in cur:
+            cur.remove(iid)
+        elif gg.items.get(iid, 0) <= 0:
+            self.msg = "Sem estoque: compre na LOJA > ITENS."
+            return
+        elif len(cur) >= SK.BACKPACK:
+            self.msg = "Mochila cheia (máx %d): tire um item antes." % SK.BACKPACK
+            return
+        else:
+            cur.append(iid)
+        gg.set_backpack(cur)
+        self.msg = ""
+        self.on_backpack_change()
+
+    def bp_clear(self):
+        self.garage.set_backpack([])
+        self.msg = ""
+        self.on_backpack_change()
+
+    def bp_boxes(self, rect, vertical):
+        """Desenha as BACKPACK caixas (item ou "vazio") dentro de rect; clique abre a Mochila."""
+        scr = self.g.screen
+        bag = self.garage.backpack_items()
+        n = SK.BACKPACK
+        for i in range(n):
+            if vertical:
+                r = pygame.Rect(rect.x, rect.y + i * (rect.h // n), rect.w, rect.h // n - 6)
+            else:
+                r = pygame.Rect(rect.x + i * (rect.w // n), rect.y, rect.w // n - 6, rect.h)
+            iid = bag[i] if i < len(bag) else None
+            pygame.draw.rect(scr, (18, 52, 70) if iid else BG, r, border_radius=6)
+            pygame.draw.rect(scr, (0, 230, 255) if iid else LINE, r, 2 if iid else 1, border_radius=6)
+            if iid:
+                self.text(self.fit(SK.ITEMS[iid]["name"], 20, r.w - 12), 20, TEXT, center=r.center)
+            else:
+                self.text("vazio", 18, DIM, center=r.center)
+            self.hit(r, self.open_backpack)
+
+    def draw_backpack_panel(self, rect):
+        """Painel vertical da Mochila (hub da liga)."""
+        gg = self.garage
+        self.panel(rect)
+        self.text("MOCHILA", 22, GOLD, topleft=(rect.x + 18, rect.y + 10))
+        self.text("próxima partida", 18, DIM, midright=(rect.right - 14, rect.y + 20))
+        self.bp_boxes(pygame.Rect(rect.x + 16, rect.y + 42, rect.w - 32, 92), True)
+        f = SK.item_force(gg.backpack_items())
+        self.text("Itens: +%s de Força" % fnum(f) if f else "Nenhum item escolhido.", 18,
+                  GREEN if f else DIM, topleft=(rect.x + 18, rect.y + 140))
+        self.btn((rect.x + 16, rect.bottom - 56, rect.w - 32, 40), "ESCOLHER ITENS", self.open_backpack,
+                 color=(0, 110, 130), size=22)
+
+    def draw_backpack_strip(self, rect):
+        """Faixa compacta da Mochila (torneio/treino da campanha): rótulo + caixas lado a lado."""
+        self.text("MOCHILA (clique para escolher)", 18, GOLD, topleft=(rect.x, rect.y))
+        self.bp_boxes(pygame.Rect(rect.x, rect.y + 18, rect.w, rect.h - 18), False)
+
+    def draw_backpack_modal(self):
+        gg = self.garage
+        scr = self.g.screen
+        m = BP_MODAL
+        pygame.draw.rect(scr, (4, 8, 16), m.inflate(16, 16), border_radius=16)
+        self.panel(m, fill=(8, 18, 36))
+        self.text("MOCHILA DA PRÓXIMA PARTIDA", 32, TEXT, topleft=(m.x + 26, m.y + 16), shadow=True)
+        self.text("Leve até %d itens. São gastos ao jogar (assistir ou simular)." % SK.BACKPACK, 20, DIM,
+                  topleft=(m.x + 26, m.y + 52))
+        bag = gg.backpack_items()
+        for i in range(SK.BACKPACK):
+            r = pygame.Rect(m.x + 26 + i * 250, m.y + 80, 240, 40)
+            iid = bag[i] if i < len(bag) else None
+            pygame.draw.rect(scr, (18, 52, 70) if iid else BG, r, border_radius=6)
+            pygame.draw.rect(scr, (0, 230, 255) if iid else LINE, r, 2, border_radius=6)
+            self.text("%d: %s" % (i + 1, SK.ITEMS[iid]["name"]) if iid else "%d: vazio" % (i + 1), 22,
+                      TEXT if iid else DIM, center=r.center)
+            if iid:
+                self.hit(r, lambda x=iid: self.bp_toggle(x))
+        f = SK.item_force(bag)
+        self.text("Força dos itens: +%s" % fnum(f), 22, GREEN if f else DIM,
+                  midright=(m.right - 26, m.y + 100))
+        for k, iid in enumerate(SK.ITEMS):
+            it = SK.ITEMS[iid]
+            y = m.y + 134 + k * 44
+            r = pygame.Rect(m.x + 20, y, m.w - 40, 40)
+            have = gg.items.get(iid, 0)
+            inb = iid in bag
+            pygame.draw.rect(scr, (18, 52, 70) if inb else PANEL, r, border_radius=6)
+            pygame.draw.rect(scr, (0, 230, 255) if inb else LINE, r, 2 if inb else 1, border_radius=6)
+            col = TEXT if have else (110, 125, 120)
+            self.text(it["name"], 24, col, midleft=(r.x + 14, y + 13))
+            self.text(self.fit(item_effect(iid), 18, 420), 18, DIM, midleft=(r.x + 14, y + 30))
+            self.text("+%s F" % fnum(it["force"]), 20, GREEN if have else DIM, midright=(r.right - 200, y + 20))
+            self.text("x%d" % have if have else "sem estoque", 20, GOLD if have else DIM,
+                      midright=(r.right - 106, y + 20))
+            if inb:
+                self.text("NA MOCHILA", 16, (0, 230, 255), midright=(r.right - 12, y + 20))
+            self.hit(r, lambda x=iid: self.bp_toggle(x), enabled=bool(have) or inb)
+        msg = self.msg or ("Sem itens? Compre na LOJA, aba ITENS." if not gg.items else "")
+        if msg:
+            self.text(self.fit(msg, 20, 420), 20, GOLD, midleft=(m.x + 26, m.bottom - 34))
+        self.btn((m.right - 330, m.bottom - 56, 140, 40), "LIMPAR", self.bp_clear, enabled=bool(bag),
+                 color=(110, 60, 60), size=24)
+        self.btn((m.right - 176, m.bottom - 56, 150, 40), "OK", self.close_backpack, color=(0, 140, 110),
+                 size=26)
 
     def draw_no_league(self):
         gg = self.garage
@@ -755,6 +1087,13 @@ class RobotsUI(CareerUI):
         # XP
         self.panel((20, 404, 1060, 238))
         self.text("EXPERIÊNCIA", 22, GOLD, topleft=(38, 412))
+        extra = []
+        if info.get("items"):
+            extra.append("Mochila usada: " + ", ".join(info["items"]))
+        if info.get("ph"):
+            extra.append("Treino: +%d PH para todos" % info["ph"])
+        if extra:
+            self.text(self.fit("   |   ".join(extra), 20, 760), 20, (0, 230, 255), midright=(1062, 422))
         rows = info["rows"]
         half = (len(rows) + 1) // 2
         for k, (name, starter, xp, lo, hi, up) in enumerate(rows):
@@ -820,6 +1159,308 @@ class RobotsUI(CareerUI):
         self.btn((W // 2 - 230, 480, 460, 64), "PRÓXIMA LIGA" if again else "REPETIR LIGA", self.end_next, size=36)
         self.btn((W // 2 - 110, 560, 220, 44), "VOLTAR AO HUB", lambda: self.go("hub"), color=(60, 60, 70),
                  size=24)
+
+    # ================================================================ HABILIDADES (B10)
+    def sk_robots(self):
+        """Robôs na ordem da tela: titulares (ordem da escalação) e depois reservas."""
+        gg = self.garage
+        lu = [r for r in (gg.robot(i) for i in gg.lineup) if r is not None]
+        return lu + [r for r in gg.robots if r["id"] not in gg.lineup]
+
+    def sk_robot(self):
+        gg = self.garage
+        rb = gg.robot(self.sk_rid) if self.sk_rid is not None else None
+        if rb is None:
+            rb = gg.robot(self.sel) if self.sel is not None else None
+            if rb is None:
+                lst = self.sk_robots()
+                rb = lst[0] if lst else None
+            self.sk_rid = rb["id"] if rb else None
+        return rb
+
+    def sk_pick_robot(self, rid):
+        self.sk_rid = rid
+        self.sel = rid
+        self.sk_sel = None
+        self.msg = ""
+
+    def sk_pick(self, kind, ident):
+        self.sk_sel = (kind, ident)
+        self.msg = ""
+
+    @staticmethod
+    def sk_node_rects():
+        """{no: Rect} da árvore: 1 coluna por ramo (SK.TREE), nós de cima para baixo."""
+        out = {}
+        nb = max(1, len(SK.TREE))
+        cw = (SK_PANEL.w - 24) // nb
+        for i, br in enumerate(SK.TREE):
+            nodes = SK.TREE[br]
+            pitch = min(66, (SK_PANEL.h - 52) // max(1, len(nodes)))
+            for j, n in enumerate(nodes):
+                out[n["id"]] = pygame.Rect(SK_PANEL.x + 12 + i * cw + 6, SK_PANEL.y + 36 + j * pitch, cw - 12,
+                                           pitch - 14)
+        return out
+
+    def sk_module(self, rb, pb):
+        """(skill, rank) do Módulo equipado (ou None)."""
+        pc = pb.get(rb["slots"].get("modulo"))
+        if pc is None or P.part_slot(pc) != "modulo":
+            return None
+        return P.part_skill(pc)
+
+    def do_learn(self):
+        sel = self.sk_sel
+        if sel is None or sel[0] != "node" or self.sk_rid is None:
+            return
+        self.act(self.garage.learn_skill_node(self.sk_rid, sel[1]))
+
+    def do_sk_equip(self, sid):
+        self.act(self.garage.equip_skill(self.sk_rid, sid))
+
+    def do_sk_unequip(self, sid):
+        self.act(self.garage.unequip_skill(self.sk_rid, sid))
+
+    def do_tactic(self, t):
+        self.act(self.garage.set_tactic(t))
+
+    def draw_skills(self):
+        gg = self.garage
+        if not gg.mod_on():
+            return self.draw_skills_locked()
+        rb = self.sk_robot()
+        if rb is None:
+            self.text("Nenhum robô", 30, DIM, center=(W // 2, 300))
+            return
+        scr = self.g.screen
+        pb = gg.pieces_by_id()
+        sk = rb.get("skills") or SK.new_robot_skills()
+        learned, equipped = sk.get("learned", {}), sk.get("equipped", [])
+        # ---- robôs (chips) + PH
+        for k, r in enumerate(self.sk_robots()[:G.MAX_SQUAD]):
+            rr = pygame.Rect(20 + k * 106, 130, 100, 34)
+            on = r["id"] == rb["id"]
+            pygame.draw.rect(scr, (22, 70, 100) if on else PANEL, rr, border_radius=7)
+            pygame.draw.rect(scr, GOLD if on else LINE, rr, 2 if on else 1, border_radius=7)
+            pts = r.get("skills", {}).get("pts", 0)
+            self.text(self.fit(r["name"], 20, 70 if pts else 88), 20, TEXT if on else DIM, midleft=(rr.x + 7, rr.centery))
+            if pts:
+                self.text(str(pts), 20, GOLD, midright=(rr.right - 7, rr.centery))
+            self.hit(rr, lambda i=r["id"]: self.sk_pick_robot(i))
+        self.text("PH disponíveis: %d" % sk.get("pts", 0), 26, GOLD, midright=(W - 20, 140), shadow=True)
+        self.text("%s  Nv %d  -  %s" % (rb["chassis"], rb["level"], ROLE_PT[rb["role"]]), 18, DIM,
+                  midright=(W - 20, 162))
+        # ---- árvore
+        self.panel(SK_PANEL)
+        rects = self.sk_node_rects()
+        mouse = pygame.mouse.get_pos()
+        for br, nodes in SK.TREE.items():
+            r0 = rects[nodes[0]["id"]]
+            self.text(SK.TREE_NAMES.get(br, br).upper(), 22, GOLD, center=(r0.centerx, SK_PANEL.y + 18))
+            for a, b in zip(nodes, nodes[1:]):
+                ra, rb2 = rects[a["id"]], rects[b["id"]]
+                both = SK.node_state(rb, a["id"]) == "learned" and SK.node_state(rb, b["id"]) == "learned"
+                pygame.draw.line(scr, GREEN if both else LINE, (ra.centerx, ra.bottom), (rb2.centerx, rb2.top), 3)
+            for n in nodes:
+                r = rects[n["id"]]
+                st = SK.node_state(rb, n["id"]) or "locked"
+                sel = self.sk_sel == ("node", n["id"])
+                pygame.draw.rect(scr, NODE_COLORS[st], r, border_radius=8)
+                edge = GOLD if sel else NODE_EDGE[st]
+                if not sel and r.collidepoint(mouse):
+                    edge = tuple(min(255, v + 60) for v in edge)
+                pygame.draw.rect(scr, edge, r, 3 if sel or st == "open" else 2, border_radius=8)
+                s_ = SK.SKILLS.get(n["skill"], {})
+                self.text(self.fit(s_.get("name", n["skill"]), 20, r.w - 44), 20,
+                          TEXT if st != "locked" else (140, 155, 150), midleft=(r.x + 10, r.y + 14))
+                self.text(KIND_PT.get(s_.get("kind"), "")[:1], 18, DIM, midright=(r.right - 10, r.y + 14))
+                if st == "learned":
+                    sub, col = "Rank %d  -  APRENDIDA" % n["rank"], GREEN
+                else:
+                    sub, col = "Rank %d  -  %d PH" % (n["rank"], n["cost"]), (0, 230, 255) if st == "open" else DIM
+                self.text(sub, 18, col, midleft=(r.x + 10, r.bottom - 12))
+                self.hit(r, lambda i=n["id"]: self.sk_pick("node", i))
+        # ---- detalhes
+        self.draw_skill_info(rb, learned, equipped, pb)
+        # ---- equipadas + aprendidas
+        self.draw_skill_loadout(rb, learned, equipped, pb)
+        # ---- tática
+        self.draw_tactic_panel(rb, pb)
+
+    def draw_skill_info(self, rb, learned, equipped, pb):
+        scr = self.g.screen
+        self.panel(SK_INFO)
+        x = SK_INFO.x + 18
+        sel = self.sk_sel
+        node = SK.NODES.get(sel[1]) if sel and sel[0] == "node" else None
+        sid = node["skill"] if node else (sel[1] if sel and sel[0] == "skill" else None)
+        mod = self.sk_module(rb, pb)
+        if sid not in SK.ALL:
+            self.text("DETALHES", 22, GOLD, topleft=(x, SK_INFO.y + 12))
+            for k, line in enumerate(self.wrap(
+                    "Clique num nó da árvore ou numa habilidade para ver o que ela faz. Cada nível a partir "
+                    "do 2 dá 1 PH; gaste os PH para aprender e depois EQUIPE até %d habilidades "
+                    "(carga máxima %d)." % (SK.MAX_EQUIPPED, SK.LOAD_MAX), 20, SK_INFO.w - 36)[:6]):
+                self.text(line, 20, DIM, topleft=(x, SK_INFO.y + 46 + k * 24))
+            for k, line in enumerate(self.wrap(self.msg, 20, SK_INFO.w - 36)[:2]):
+                self.text(line, 20, GOLD, topleft=(x, SK_INFO.bottom - 60 + k * 22))
+            return
+        s = SK.ALL[sid]
+        if node:
+            rank = node["rank"]
+        elif sid in learned:
+            rank = learned[sid]
+        elif mod and mod[0] == sid:
+            rank = mod[1]
+        else:
+            rank = 1
+        y = SK_INFO.y + 10
+        self.text(self.fit(s["name"], 30, SK_INFO.w - 40), 30, GOLD, topleft=(x, y), shadow=True)
+        y += 34
+        self.text("%s  |  Rank %d/3  |  Carga %d" % (KIND_PT.get(s["kind"], s["kind"]), rank, SK.load_of(sid, rank)),
+                  20, TEXT, topleft=(x, y))
+        y += 22
+        roles = ", ".join(ROLE_SHORT.get(r_, r_) for r_ in s.get("roles", ()))
+        fit_role = rb["role"] in s.get("roles", ())
+        self.text("Papéis: %s%s" % (roles, "" if fit_role else "  (fora do papel dele)"), 18,
+                  DIM if fit_role else GOLD, topleft=(x, y))
+        y += 24
+        for label, body in (("Quando", trigger_text(s["trigger"])),
+                            ("Efeito", skill_effect(sid, rank))):
+            lines = self.wrap("%s: %s" % (label, body), 20, SK_INFO.w - 36)[:3]
+            for line in lines:
+                self.text(line, 20, TEXT, topleft=(x, y))
+                y += 21
+            y += 3
+        self.text(skill_timing(sid, rank), 18, (0, 210, 240), topleft=(x, y))
+        y += 22
+        self.text(self.fit(s.get("text", ""), 18, SK_INFO.w - 36), 18, DIM, topleft=(x, y))
+        # estado / mensagem
+        st_line, st_col = "", DIM
+        btn = None
+        if node:
+            st = SK.node_state(rb, node["id"])
+            if st == "learned":
+                st_line, st_col = "Já aprendida (rank %d)." % learned.get(sid, rank), GREEN
+            else:
+                miss = [SK.NODES[q] for q in node["needs"]
+                        if learned.get(SK.NODES[q]["skill"], 0) < SK.NODES[q]["rank"]]
+                if miss:
+                    st_line = "Antes: %s %d." % (SK.SKILLS[miss[0]["skill"]]["name"], miss[0]["rank"])
+                    st_col = RED
+                elif st != "open":
+                    st_line, st_col = "Faltam PH: custa %d, tem %d." % (node["cost"], rb["skills"]["pts"]), RED
+                else:
+                    st_line, st_col = "Pronta para aprender: custa %d PH." % node["cost"], (0, 230, 255)
+                btn = ("APRENDER (%d PH)" % node["cost"], self.do_learn, st == "open", (0, 140, 110))
+        if btn is None and sid in learned:
+            if sid in equipped:
+                btn = ("DESEQUIPAR", lambda: self.do_sk_unequip(sid), True, (120, 90, 40))
+            else:
+                btn = ("EQUIPAR", lambda: self.do_sk_equip(sid), True, (0, 140, 110))
+        elif btn is None and mod and mod[0] == sid:
+            st_line, st_col = "Vem do Módulo equipado (rank %d)." % mod[1], (0, 230, 255)
+        elif btn is None and sid in SK.SPECIAL:
+            st_line, st_col = "Passiva de relíquia/set: sempre ativa, sem carga.", (0, 230, 255)
+        if self.msg:
+            st_line, st_col = self.msg, GOLD
+        if st_line:
+            self.text(self.fit(st_line, 20, SK_INFO.w - 36), 20, st_col, topleft=(x, SK_INFO.bottom - 72))
+        if btn is not None:
+            self.btn((x, SK_INFO.bottom - 48, SK_INFO.w - 36, 38), btn[0], btn[1], enabled=btn[2], color=btn[3],
+                     size=24)
+
+    def draw_skill_loadout(self, rb, learned, equipped, pb):
+        scr = self.g.screen
+        self.panel(SK_EQ)
+        x0, y0 = SK_EQ.x + 18, SK_EQ.y + 8
+        eff = SK.effective_skills(rb, pb, True)
+        main = [(sid, r_) for sid, r_, _u in eff if sid in SK.SKILLS]
+        eff_ids = {sid for sid, _r in main}
+        mod = self.sk_module(rb, pb)
+        load = sum(SK.load_of(sid, r_) for sid, r_ in main)
+        self.text("EQUIPADAS NA PARTIDA", 22, GOLD, topleft=(x0, y0))
+        self.text("Carga %d/%d   Vagas %d/%d" % (load, SK.LOAD_MAX, len(main), SK.MAX_EQUIPPED), 20,
+                  RED if load > SK.LOAD_MAX else TEXT, midright=(SK_EQ.right - 18, y0 + 9))
+        boxes = []
+        if mod and mod[0] in eff_ids:
+            boxes.append((mod[0], dict(main)[mod[0]], "MÓDULO"))
+        for sid in equipped:
+            if sid in eff_ids and not (mod and sid == mod[0]):
+                boxes.append((sid, learned.get(sid, 1), "EQUIPADA"))
+        bw = (SK_EQ.w - 36 - (SK.MAX_EQUIPPED - 1) * 10) // SK.MAX_EQUIPPED
+        for i in range(SK.MAX_EQUIPPED):
+            r = pygame.Rect(x0 + i * (bw + 10), y0 + 28, bw, 54)
+            if i < len(boxes):
+                sid, rk, tag = boxes[i]
+                sel = self.sk_sel == ("skill", sid)
+                pygame.draw.rect(scr, (18, 60, 60), r, border_radius=8)
+                pygame.draw.rect(scr, GOLD if sel else ((0, 230, 255) if tag == "MÓDULO" else GREEN), r,
+                                 3 if sel else 2, border_radius=8)
+                self.text(self.fit(SK.SKILLS[sid]["name"], 22, bw - 16), 22, TEXT, midleft=(r.x + 10, r.y + 17))
+                self.text("%s  r%d  carga %d" % (tag, rk, SK.load_of(sid, rk)), 16, DIM,
+                          midleft=(r.x + 10, r.y + 39))
+                self.hit(r, lambda i_=sid: self.sk_pick("skill", i_))
+            else:
+                pygame.draw.rect(scr, BG, r, border_radius=8)
+                pygame.draw.rect(scr, LINE, r, 1, border_radius=8)
+                self.text("vaga livre", 20, DIM, center=r.center)
+        ignored = [sid for sid in equipped if sid not in eff_ids]
+        y = y0 + 88
+        if ignored:
+            names = ", ".join(SK.SKILLS[sid]["name"] for sid in ignored if sid in SK.SKILLS)
+            self.text(self.fit("Fora da partida (sem vaga/carga): " + names, 18, SK_EQ.w - 36), 18, RED,
+                      topleft=(x0, y))
+        else:
+            self.text("APRENDIDAS: clique para ver, equipar ou desequipar.", 18, DIM, topleft=(x0, y))
+        lst = [sid for sid in SK.SKILLS if sid in learned]
+        cols, cw = 5, (SK_EQ.w - 36 - 4 * 6) // 5
+        for k, sid in enumerate(lst[:15]):
+            r = pygame.Rect(x0 + (k % cols) * (cw + 6), y + 20 + (k // cols) * 30, cw, 26)
+            on = sid in equipped
+            sel = self.sk_sel == ("skill", sid)
+            pygame.draw.rect(scr, (18, 60, 60) if on else PANEL, r, border_radius=6)
+            pygame.draw.rect(scr, GOLD if sel else (GREEN if on else LINE), r, 2 if (sel or on) else 1,
+                             border_radius=6)
+            self.text(self.fit("%s %d" % (SK.SKILLS[sid]["name"], learned[sid]), 18, cw - 10), 18,
+                      TEXT if on else DIM, center=r.center)
+            self.hit(r, lambda i_=sid: self.sk_pick("skill", i_))
+        if not lst:
+            self.text("Nenhuma ainda: aprenda na árvore acima.", 20, DIM, topleft=(x0, y + 24))
+
+    def draw_tactic_panel(self, rb, pb):
+        gg = self.garage
+        self.panel(SK_TAC)
+        x0, y0 = SK_TAC.x + 18, SK_TAC.y + 8
+        self.text("TÁTICA DO TIME", 22, GOLD, topleft=(x0, y0))
+        bw = (SK_TAC.w - 36 - 2 * 8) // 3
+        for i, t in enumerate(SK.TACTICS):
+            on = gg.tactic == t
+            self.btn((x0 + i * (bw + 8), y0 + 28, bw, 38), SK.TACTIC_NAMES.get(t, t).upper(),
+                     lambda t_=t: self.do_tactic(t_), color=(0, 140, 110) if on else (16, 44, 70), size=20)
+        for k, line in enumerate(self.wrap(TACTIC_PT.get(gg.tactic, ""), 20, SK_TAC.w - 36)[:2]):
+            self.text(line, 20, TEXT, topleft=(x0, y0 + 76 + k * 22))
+        pas = [SK.SPECIAL[sid]["name"] for sid, _r, _u in SK.effective_skills(rb, pb, True) if sid in SK.SPECIAL]
+        self.text("Passivas de relíquia/set:", 18, DIM, topleft=(x0, y0 + 128))
+        txt = ", ".join(pas) if pas else "nenhuma (monte um set de 4 ou use uma relíquia)"
+        for k, line in enumerate(self.wrap(txt, 18, SK_TAC.w - 36)[:2]):
+            self.text(line, 18, (0, 230, 255) if pas else DIM, topleft=(x0, y0 + 148 + k * 20))
+
+    def draw_skills_locked(self):
+        gg = self.garage
+        cx = W // 2
+        self.panel((150, 150, 800, 500))
+        self.text("HABILIDADES BLOQUEADAS", 40, GOLD, center=(cx, 196), shadow=True)
+        for k, line in enumerate(self.wrap(self.SKILLS_LOCKED_TEXT, 24, 700)[:3]):
+            self.text(line, 24, TEXT, center=(cx, 244 + k * 28))
+        self.text("Seus robôs já juntam pontos de habilidade (PH): 1 por nível a partir do 2.", 20, DIM,
+                  center=(cx, 344))
+        for k, r in enumerate(self.sk_robots()[:G.MAX_SQUAD]):
+            col, row = k % 2, k // 2
+            x, y = 240 + col * 330, 380 + row * 40
+            self.text(self.fit(r["name"], 24, 170), 24, TEXT, midleft=(x, y + 14))
+            self.text("Nv %d" % r["level"], 22, DIM, midleft=(x + 180, y + 14))
+            self.text("%d PH" % r.get("skills", {}).get("pts", 0), 24, GOLD, midright=(x + 300, y + 14))
 
     # ---- garagem
     def pick_robot(self, rid):
@@ -1092,19 +1733,29 @@ class RobotsUI(CareerUI):
         self.btn((735, 132, 70, 36), "ANT", lambda: self.bench_nav(-1), color=(60, 80, 130), size=24)
         self.btn((815, 132, 70, 36), "PROX", lambda: self.bench_nav(1), color=(60, 80, 130), size=24)
         self.btn((895, 132, 185, 36), "VOLTAR", self.bench_back, color=(60, 60, 70), size=26)
-        # ---- coluna esquerda: 7 slots (8 com o Modulo liberado: mod_on; layout final no passo B10)
-        for i, (sl, r) in enumerate(bench_slot_rects(gg.mod_on())):
+        # ---- coluna esquerda: 7 slots (8 a 42 px com o Modulo liberado: mod_on) + resumo dos sets
+        mouse = pygame.mouse.get_pos()
+        hover = None
+        rects = bench_slot_rects(gg.mod_on())
+        for i, (sl, r) in enumerate(rects):
             y = r.y
             pygame.draw.rect(scr, (16, 50, 75) if sl == slot else PANEL, r, border_radius=6)
             pygame.draw.rect(scr, SEL_COLOR if sl == slot else LINE, r, 2, border_radius=6)
-            self.text(SLOT_LABELS[sl], 18, DIM, topleft=(30, y + (5 if r.h > 40 else 3)))
+            ty = y + (5 if r.h > 40 else 3)
+            self.text(SLOT_LABELS[sl], 18, DIM, topleft=(30, ty))
             pc = pb.get(rb["slots"].get(sl))
             if pc is None:
                 self.text("vazio", 24, DIM, midleft=(30, y + r.h - 13))
             else:
                 self.text(self.fit(P.part_name(pc), 24, 262), 24, P.RAR_COLORS[pc["rar"]],
                           midleft=(30, y + r.h - 13))
+                tag = self.piece_tag(pc)
+                if tag:
+                    self.text(self.fit(tag[0], 16, 120), 16, tag[1], midright=(r.right - 8, ty + 6))
+                if r.collidepoint(mouse):
+                    hover = pc
             self.hit(r, lambda s=sl: self.pick_slot(s))
+        self.draw_set_summary(rb, pb, rects[-1][1].bottom + 4)
         # ---- coluna central: peças livres + ANTES/DEPOIS
         cx, cw = 312, 410
         self.panel((cx - 6, 178, cw + 12, 470))
@@ -1130,6 +1781,8 @@ class RobotsUI(CareerUI):
                 self.text(self.fit(P.part_name(pc), 22, 215), 22, P.RAR_COLORS[pc["rar"]], midleft=(cx + 8, y + 15))
                 self.text(self.fit(P.bonus_text(pc), 18, 175), 18, DIM, midright=(cx + cw - 6, y + 15))
                 self.hit(r, lambda i=pc["id"]: self.pick_piece(i))
+                if r.collidepoint(mouse):
+                    hover = pc
             self.draw_compare(rb, attrs, pb, cx, cw)
         # ---- coluna direita: robô, nome, pintura, overclock
         self.draw_bench_right(rb, attrs, ovr)
@@ -1146,33 +1799,194 @@ class RobotsUI(CareerUI):
         sell = P.sell_price(pc) if pc else 0
         conf = pc is not None and self.confirm_sell == pc["id"]
         self.btn((165, 598, 135, 44), ("CONFIRMAR +%d" if conf else "VENDER +%d") % sell if pc else "VENDER",
-                 self.do_sell, enabled=pc is not None, color=(170, 60, 50) if conf else (110, 60, 60), size=22)
+                 self.do_sell, enabled=pc is not None and not P.is_unique(pc["model"]), color=(170, 60, 50) if conf else (110, 60, 60), size=22)
         if conf:
             self.text("Clique de novo para vender.", 20, GOLD, topleft=(cx + 8, 652))
         for k, line in enumerate(self.wrap(self.msg, 22, 700)[:1]):
             self.text(line, 22, GOLD, topleft=(24, 664 + k * 24))
+        if hover is not None:
+            self.draw_tooltip(self.piece_lines(hover, rb, pb), mouse)
 
-    def draw_compare(self, rb, attrs, pb, cx, cw):
+    # ---- detalhes de peça (painel e tooltip)
+    @staticmethod
+    def piece_tag(pc):
+        """(texto, cor) curto no canto do slot: relíquia, habilidade do módulo ou set."""
+        m = P.PARTS[pc["model"]]
+        if m.get("unique"):
+            return "RELÍQUIA", GOLD
+        if m.get("skill") in SK.SKILLS:
+            return SK.SKILLS[m["skill"]]["name"], (0, 230, 255)
+        if m.get("set"):
+            return m["set"], SET_COLORS.get(m["set"], DIM)
+        return None
+
+    @staticmethod
+    def set_bits(sname, tier):
+        bits = " ".join("%s+%d" % (a.upper(), v) for a, v in P.SETS[sname][tier].items())
+        if tier >= P.SET_TIERS[-1]:
+            ps = SK.SPECIAL.get(P.SETS[sname]["passive"], {})
+            bits += " + passiva %s" % ps.get("name", P.SETS[sname]["passive"])
+        return bits
+
+    def piece_lines(self, pc, rb, pb):
+        """[(texto, tamanho, cor)] com os detalhes da peça: bônus, set (faixa atual neste robô), relíquia,
+        habilidade do módulo. Peça livre: o set conta como se ela fosse equipada neste robô."""
+        gg = self.garage
+        m = P.PARTS[pc["model"]]
+        slot = P.part_slot(pc)
+        out = [(P.part_name(pc), 24, P.RAR_COLORS[pc["rar"]]),
+               ("%s  |  upgrade +%d/%d" % (P.SLOT_NAMES[slot], pc["lvl"], P.MAX_UP), 18, DIM)]
+        bt = P.bonus_text(pc)
+        out.append(("Bônus: " + (bt if bt else "nenhum"), 20, TEXT))
+        sname = m.get("set")
+        if sname:
+            sim = dict(rb)
+            sim["slots"] = dict(rb["slots"])
+            sim["slots"][slot] = pc["id"]
+            n = G.robot_set_counts(sim, pb).get(sname, 0)
+            t = P.set_tier(n)
+            col = SET_COLORS.get(sname, DIM)
+            here = rb["slots"].get(slot) == pc["id"]
+            line = "Set %s %d/%d %s" % (sname, n, P.SET_TIERS[-1], "neste robô" if here else "se equipar")
+            out.append((line + (": faixa %d" % t if t else ""), 20, col))
+            if t:
+                out.append(("  ativo: " + self.set_bits(sname, t), 18, col))
+            nxt = next((k for k in P.SET_TIERS if k > n), None)
+            if nxt is not None:
+                out.append(("  com %d: %s" % (nxt, self.set_bits(sname, nxt)), 18, DIM))
+        if m.get("unique"):
+            out.append(("RELÍQUIA: peça única, não se vende.", 20, GOLD))
+            ps = SK.SPECIAL.get(m.get("passive"))
+            if ps:
+                out.append(("Passiva %s: %s" % (ps["name"], ps.get("text", "")), 18, (0, 230, 255)))
+        sk = P.part_skill(pc)
+        if sk and sk[0] in SK.SKILLS:
+            s_ = SK.SKILLS[sk[0]]
+            out.append(("Habilidade: %s r%d (%s)" % (s_["name"], sk[1], KIND_PT.get(s_["kind"], "")), 20,
+                        (0, 230, 255)))
+            out.append((s_.get("text", ""), 18, DIM))
+            if not gg.mod_on():
+                out.append(("Módulos liberam junto com as habilidades.", 18, RED))
+        return out
+
+    def draw_lines(self, lines, x, y, maxw, bottom):
+        """Desenha [(texto, tamanho, cor)] com quebra por largura; para antes de `bottom`."""
+        for txt, size, col in lines:
+            for ln in self.wrap(txt, size, maxw) or [""]:
+                if y + size * 0.8 > bottom:
+                    return y
+                self.text(ln, size, col, topleft=(x, y))
+                y += int(size * 0.85) + 4
+        return y
+
+    def draw_tooltip(self, lines, pos):
+        """Caixa pré-desenhada (sem Surface) perto do mouse, presa dentro da tela."""
         scr = self.g.screen
-        if self.sel_piece is None or self.sel_slot is None:
-            self.text("Selecione uma peça livre para comparar ANTES/DEPOIS.", 20, DIM,
-                      topleft=(cx + 8, 428))
+        maxw = 360
+        rows = []
+        for txt, size, col in lines:
+            for ln in self.wrap(txt, size, maxw) or [""]:
+                rows.append((ln, size, col))
+        w = min(maxw, max(self.g.font(sz).size(t)[0] for t, sz, _c in rows)) + 24
+        h = sum(int(sz * 0.85) + 4 for _t, sz, _c in rows) + 18
+        r = pygame.Rect(pos[0] + 18, pos[1] + 14, w, h)
+        r.right = min(r.right, W - 6)
+        r.bottom = min(r.bottom, self.g.screen.get_height() - 6)
+        if r.collidepoint(pos):
+            r.right = pos[0] - 12
+        pygame.draw.rect(scr, (6, 14, 28), r, border_radius=8)
+        pygame.draw.rect(scr, GOLD, r, 2, border_radius=8)
+        y = r.y + 9
+        for ln, sz, col in rows:
+            self.text(ln, sz, col, topleft=(r.x + 12, y))
+            y += int(sz * 0.85) + 4
+
+    def draw_set_summary(self, rb, pb, y):
+        """Linha 'Sets: Faxineiro 3/4  Plasma 1/4' sob os slots (verde = faixa ativa)."""
+        counts = G.robot_set_counts(rb, pb)
+        x = 24
+        if not counts:
+            self.text("Sets: nenhum (2+ peças do mesmo set dão bônus)", 18, DIM, topleft=(x, y))
             return
+        self.text("Sets:", 18, DIM, topleft=(x, y))
+        x += 40
+        for sname in P.SET_NAMES:
+            n = counts.get(sname, 0)
+            if not n:
+                continue
+            t = "%s %d/%d" % (sname, n, P.SET_TIERS[-1])
+            on = P.set_tier(n) > 0
+            self.text(t, 18, SET_COLORS.get(sname, GREEN) if on else DIM, topleft=(x, y))
+            x += self.g.font(18).size(t)[0] + 12
+            if x > 290:
+                break
+
+    def robot_force(self, rb, pb):
+        """(Força do robô, parte das skills): média dos atributos x100 + skill_force (com mod_on)."""
+        base = robots.mean_attr(G.effective_attrs(rb, pb)) * 100.0
+        if not self.garage.mod_on():
+            return base, 0.0
+        sk = SK.skill_force(SK.effective_skills(rb, pb, True))
+        return base + sk, sk
+
+    def compare_data(self, rb, pb):
+        """ANTES/DEPOIS da peça livre selecionada (calculado 1 vez por seleção/mudança, não por quadro)."""
+        gg = self.garage
+        key = (rb["id"], self.sel_slot, self.sel_piece, id(self.info()))
+        if self.cmp_cache is not None and self.cmp_cache[0] == key:
+            return self.cmp_cache[1]
         sim = dict(rb)                                   # simula sem equipar nem mutar o garage
         sim["slots"] = dict(rb["slots"])
         sim["slots"][self.sel_slot] = self.sel_piece
         after = G.effective_attrs(sim, pb)
-        self.text("ATRIBUTO", 20, DIM, midleft=(cx + 8, 438))
-        self.text("ANTES", 20, DIM, midright=(cx + 235, 438))
-        self.text("DEPOIS", 20, DIM, midright=(cx + 315, 438))
+        f0, s0 = self.robot_force(rb, pb)
+        f1, s1 = self.robot_force(sim, pb)
+        lu = gg.lineup_robots()
+        on = gg.mod_on()
+        t0 = G.team_rating(lu, pb, on)
+        t1 = G.team_rating([sim if r["id"] == rb["id"] else r for r in lu], pb, on)
+        data = {"after": after, "force": (f0, f1, s1 - s0), "team": (t0, t1), "starter": rb["id"] in gg.lineup}
+        self.cmp_cache = (key, data)
+        return data
+
+    def draw_compare(self, rb, attrs, pb, cx, cw):
+        if self.sel_piece is None or self.sel_slot is None:
+            pc = pb.get(rb["slots"].get(self.sel_slot)) if self.sel_slot else None
+            if pc is not None:                           # detalhes da peça equipada no slot
+                pygame.draw.line(self.g.screen, LINE, (cx + 6, 418), (cx + cw - 6, 418), 1)
+                y = self.draw_lines(self.piece_lines(pc, rb, pb), cx + 8, 426, cw - 16, 626)
+                self.text("Selecione uma peça livre para comparar.", 18, DIM, topleft=(cx + 8, max(y + 4, 612)))
+            else:
+                self.text("Selecione uma peça livre para comparar ANTES/DEPOIS.", 20, DIM,
+                          topleft=(cx + 8, 428))
+            return
+        d = self.compare_data(rb, pb)
+        after = d["after"]
+        self.text("ATRIBUTO", 18, DIM, midleft=(cx + 8, 424))
+        self.text("ANTES", 18, DIM, midright=(cx + 235, 424))
+        self.text("DEPOIS", 18, DIM, midright=(cx + 315, 424))
         for k, a in enumerate(robots.ATTRS):
-            y = 450 + k * 24
-            b, d = attrs[a], after[a]
-            col = GREEN if d > b else (RED if d < b else DIM)
-            self.text(ATT_LABELS[k], 22, TEXT, midleft=(cx + 8, y + 10))
-            self.text(str(b), 22, TEXT, midright=(cx + 235, y + 10))
-            self.text(str(d), 22, col, midright=(cx + 315, y + 10))
-            self.text("%+d" % (d - b) if d != b else "=", 20, col, midright=(cx + cw - 6, y + 10))
+            y = 434 + k * 20
+            b, dd = attrs[a], after[a]
+            col = GREEN if dd > b else (RED if dd < b else DIM)
+            self.text(ATT_LABELS[k], 20, TEXT, midleft=(cx + 8, y + 9))
+            self.text(str(b), 20, TEXT, midright=(cx + 235, y + 9))
+            self.text(str(dd), 20, col, midright=(cx + 315, y + 9))
+            self.text("%+d" % (dd - b) if dd != b else "=", 18, col, midright=(cx + cw - 6, y + 9))
+        # Força do robô e do time (com set e skills quando mod_on)
+        pygame.draw.line(self.g.screen, LINE, (cx + 6, 597), (cx + cw - 6, 597), 1)
+        f0, f1, dsk = d["force"]
+        t0, t1 = d["team"]
+        for k, (lab, b, a) in enumerate((("FORÇA" + (" (skills %s)" % ("%+.1f" % dsk).replace(".", ",")
+                                                    if abs(dsk) >= 0.05 else ""), f0, f1),
+                                         ("TIME" if d["starter"] else "TIME (reserva)", t0, t1))):
+            y = 602 + k * 21
+            df = round(a - b, 1)
+            col = GREEN if df > 0 else (RED if df < 0 else DIM)
+            self.text(lab, 20, GOLD, midleft=(cx + 8, y + 9))
+            self.text(fnum(b), 20, TEXT, midright=(cx + 235, y + 9))
+            self.text(fnum(a), 20, col, midright=(cx + 315, y + 9))
+            self.text(("+" if df > 0 else "") + fnum(df) if df else "=", 18, col, midright=(cx + cw - 6, y + 9))
 
     def draw_bench_right(self, rb, attrs, ovr):
         scr = self.g.screen

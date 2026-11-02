@@ -15,12 +15,13 @@ sys.path.insert(0, os.path.join(ROOT, "game"))
 
 import parts  # noqa: E402
 import robots  # noqa: E402
+import skills  # noqa: E402
 import story as st  # noqa: E402
 
 PASS, FAIL = [], []
 
 BOX_W, MAX_LINES, MAX_TEXT, MAX_OPT, MAX_NAME = 780, 4, 260, 46, 14
-FX_KEYS = {"flag", "scrap", "xp_hero", "xp_team", "piece"}
+FX_KEYS = {"flag", "scrap", "xp_hero", "xp_team", "piece", "skill", "pts"}     # skill/pts: B11
 BAD_CHARS = "‘’“”–—…→←"
 FLAG_RE = re.compile(r"^[A-Za-z0-9_]{1,32}$")
 ID_RE = re.compile(r"^[A-Za-z0-9_]+$")
@@ -281,7 +282,51 @@ def test_effects_valid():
                         assert isinstance(fx[k], int) and 0 <= fx[k] <= 100, (sid, k, fx[k])
                 if "piece" in fx:
                     check_piece(fx["piece"])
+                if "skill" in fx:
+                    check_skill(fx["skill"])
+                if "pts" in fx:
+                    check_pts(fx["pts"], 5)
                 assert o.get("reply", []), "opcao sem reply em %s" % sid
+
+
+def check_skill(sk):
+    """fx/REWARDS `skill` (B11): {"robot": "hero"|"team", "id": skills.SKILLS, "rank": 1..3} ou lista."""
+    lst = sk if isinstance(sk, list) else [sk]
+    assert lst, sk
+    for x in lst:
+        assert isinstance(x, dict) and set(x) <= {"robot", "id", "rank"} and "id" in x, x
+        assert x.get("robot", "hero") in ("hero", "team"), x
+        assert x["id"] in skills.SKILLS, x
+        assert isinstance(x.get("rank", 1), int) and 1 <= x.get("rank", 1) <= 3, x
+
+
+def check_pts(n, hi):
+    """fx/REWARDS `pts` (B11): int 1..hi (heroi) ou {"robot": "hero"|"team", "n": 1..hi}."""
+    if isinstance(n, dict):
+        assert set(n) <= {"robot", "n"} and n.get("robot", "hero") in ("hero", "team"), n
+        n = n.get("n")
+    assert isinstance(n, int) and not isinstance(n, bool) and 1 <= n <= hi, n
+
+
+def test_skill_pts_validators():
+    """As regras novas (B11) aceitam o formato da spec e recusam lixo (o roteiro atual nao usa as chaves)."""
+    check_skill({"robot": "hero", "id": "arrancada", "rank": 1})
+    check_skill([{"id": "leitura"}, {"robot": "team", "id": "poupanca", "rank": 2}])
+    check_pts(2, 5)
+    check_pts({"robot": "team", "n": 3}, 10)
+    bad = [lambda: check_skill({"robot": "vilao", "id": "arrancada"}),
+           lambda: check_skill({"id": "nao_existe"}),
+           lambda: check_skill({"id": "rolando"}),                 # passiva de reliquia: nao se aprende
+           lambda: check_skill({"id": "curva", "rank": 4}),
+           lambda: check_skill([]),
+           lambda: check_pts(0, 5), lambda: check_pts(6, 5), lambda: check_pts(True, 5),
+           lambda: check_pts({"robot": "hero", "n": 99}, 10)]
+    for fn in bad:
+        try:
+            fn()
+        except AssertionError:
+            continue
+        raise AssertionError("validador aceitou lixo")
 
 
 def check_piece(p):
@@ -390,7 +435,12 @@ def test_tournaments():
 def test_rewards():
     recruits = 0
     for rid, r in st.REWARDS.items():
-        assert set(r) <= {"scrap", "piece", "recruits", "unlock", "xp_hero", "xp_team", "equip_hero_piece", "title"}
+        assert set(r) <= {"scrap", "piece", "recruits", "unlock", "xp_hero", "xp_team", "equip_hero_piece", "title",
+                          "skill", "pts"}
+        if r.get("skill"):
+            check_skill(r["skill"])
+        if r.get("pts"):
+            check_pts(r["pts"], 10)
         for k in ("scrap", "xp_hero", "xp_team"):
             assert isinstance(r.get(k, 0), int) and 0 <= r.get(k, 0) <= 1000
         for k in ("piece", "equip_hero_piece"):

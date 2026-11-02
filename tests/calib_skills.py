@@ -11,7 +11,8 @@ Lider so em 1 robo: aura) contra o MESMO adversario (ovr F - GAP, ~50% de V+E/2)
 (mesmas seeds: numeros aleatorios comuns). delta = (V+E/2 com) - (V+E/2 sem), media dos F.
   forca por robo (pontos de F) = delta / SLOPE * 5 / n_robos_com_a_skill     (SLOPE = 1,8 pts/F: o motor e
   ~linear, V+E/2 ~ 34 + 1,8*(F - O); ver tests/calib_campaign.py)
-Ranks nao medidos sao interpolados (r2 = media de r1 e r3); forca >= 0 e monotona no rank. Meta da spec:
+Ranks nao medidos sao interpolados (r2 = media de r1 e r3); forca >= 0 e monotona no rank (r3 < r1 medido e
+ruido: os dois viram a media, regressao isotonica; antes da B15 valia o maximo, que puxava para cima). Meta da spec:
 |delta| 1,5-4,0 pontos de V+E/2 por robo (reliquias/Lendarias ate 6). --write grava SKILL_FORCE em
 game/skills.py (bloco entre os marcadores SKILL_FORCE-BEGIN/END).
 
@@ -19,33 +20,18 @@ Ruido: V+E/2 por partida tem desvio ~0,45; com n partidas por F e k valores de F
 e ~ 45*sqrt(2/(n*k)) pontos (n=200, k=3: ~2,6 pts = ~1,4 F para uma skill dos 5 robos). Os valores sao
 uma ESTIMATIVA ruidosa: a tabela imprime o erro padrao de cada celula.
 
-RESULTADO (02/11/2026; n=200 por F, F = 55/65/75, adversario F-9; base sem skills V+E/2 65,5/67,8/67,5;
-"ep" = erro padrao de delta; F/robo = delta/1,8*5/robos; curva medida de novo depois da correcao da
-pre-rotacao do arco). Gravado em skills.SKILL_FORCE (r2 interpolado; < 0 vira 0; monotono no rank):
-  skill          r | delta(r1) ep  | delta(r3) ep  | robos | SKILL_FORCE r1/r2/r3
-  arrancada        |  +2,7   2,4   |  +5,1   2,3   |  4    | 1,85 / 2,69 / 3,53
-  succao           |  +6,0   2,4   | +11,8   2,2   |  4    | 4,17 / 6,19 / 8,22
-  curva            |  -0,8   2,2   |  -0,1   2,2   |  4    | 0 / 0 / 0
-  muralha          |  -2,0   2,0   |  +0,9   1,9   |  2    | 0 / 0 / 1,27
-  leitura      (P) |  +2,1   2,4   |  +7,9   2,2   |  4    | 1,45 / 3,47 / 5,50
-  poupanca     (P) |  +0,3   0,6   |  +1,4   0,5   |  5    | 0,19 / 0,49 / 0,79
-  recarga          |  +0,2   0,3   |  -0,3   0,2   |  5    | 0,09 / 0,09 / 0,09
-  overclock        |  +3,1   2,3   |  +7,6   2,3   |  5    | 1,71 / 2,96 / 4,21
-  blindagem        |  +3,8   2,2   |  +5,8   2,2   |  3    | 3,55 / 4,44 / 5,32
-  drible           |  -2,2   2,0   |  -1,3   2,1   |  3    | 0 / 0 / 0
-  elastica         |  +5,3   2,0   |  +7,9   2,0   |  1 GK | 14,81 / 18,40 / 20,00
-  pressao          |  +0,5   2,3   |  +1,9   2,3   |  3    | 0,46 / 1,12 / 1,77
-  choque           |  -0,3   0,3   |  -0,2   0,4   |  1    | 0 / 0 / 0
-  matador      (C) |  -1,2   1,3   |  -0,3   1,4   |  1    | 0 / 0 / 0
-  lancador     (P) |   0,0   0,0   |   0,0   0,0   |  1 GK | 0 / 0 / 0   (nao muda NADA no motor)
-  lider     (aura) |  +1,1   2,3   |  +3,8   2,2   |  1    | 3,01 / 6,83 / 10,65
-  especiais (r1): rolando +3,3 (1,85) | instinto_vo +0,4 (0,23) | remendo +1,1 (0,60) | calor_forno 0,0 (0)
-  | chinelada -2,8 (0) | faro_meia +0,2 (0,09) | faxina_total +7,7 (4,26) | sobrecarga -2,6 (0)
-  | muralha_aco +4,9 (2,73) | mente_zen 0,0 (0) | impecavel +3,4 (1,90).
-Fora da meta da spec (|delta| 1,5-4,0 por robo): quase todas abaixo (curva, muralha, drible, choque,
-matador, recarga, poupanca, pressao, lancador ~0 = dentro do ruido) e elastica acima (5,3 num robo so).
-ROBOT_SK_CAP subiu para 20 (= 5 x SK_CAP) para nao cortar skills de 1 robo (elastica, lider); o teto
-que vale e o do time (SK_CAP 4,0).
+RESULTADO B14/B15 (02/11/2026; F = 55/65/75 contra F-9; n=300 por F nas skills de 3-5 robos e n=800 nas de 1
+robo (Elastica n=2000); r3 < r1 medido = ruido -> media isotonica). SKILL_FORCE r1/r2/r3 (antes -> depois):
+  arrancada 1,85/2,69/3,53 -> 1,39/2,47/3,55 | succao 4,17/6,19/8,22 -> 3,67/4,19/4,71 | curva 0 -> 3,24
+  muralha 0/0/1,27 -> 3,09 | leitura 1,45/3,47/5,50 -> 1,50/3,34/5,17 | poupanca 0,19..0,79 -> 0,29
+  recarga 0,09 -> 0,93/1,17/1,42 | overclock 1,71/2,96/4,21 -> 1,14/2,82/4,51 | blindagem 3,55/4,44/5,32 ->
+  4,01/4,42/4,84 | drible 0 -> 4,78/5,97/7,15 | elastica 14,81/18,40/20 -> 4,28/6,04/7,80 | pressao
+  0,46/1,12/1,77 -> 3,70/5,09/6,48 | choque 0 -> 1,77 | matador 0 -> 5,27 | lancador 0 -> 3,12 | lider
+  3,01/6,83/10,65 -> 4,46/5,58/6,71 | especiais: rolando 1,67, instinto_vo 1,08, remendo 0,59, calor_forno
+  0 -> 1,67, chinelada 0 -> 0,83, faro_meia 0,09 -> 2,22, faxina_total 3,86, sobrecarga 0 -> 3,89,
+  muralha_aco 2,84, mente_zen 0 -> 1,67, impecavel 1,64.
+Ruido: ep de delta ~1,8 pts (n=300) / ~0,9 (n=800): ~+-2,5 F por robo nas skills de 1 robo. Abaixo da meta
+(~1): poupanca, remendo, chinelada, recarga r1 (bateria quase nunca abaixo de 0,3 no motor).
 """
 import argparse
 import math
@@ -200,6 +186,8 @@ def build_table(rows):
     for sid, m in by.items():
         f1 = m.get(1, m.get(2, m.get(3, 0.0)))
         f3 = m.get(3, f1)
+        if f3 < f1:                 # fora de ordem = ruido: regressao isotonica (media dos dois), nao o maximo
+            f1 = f3 = (f1 + f3) / 2.0
         f2 = m.get(2, (f1 + f3) / 2.0)
         v = [max(0.0, x) for x in (f1, f2, f3)]
         v[1] = max(v[0], v[1])

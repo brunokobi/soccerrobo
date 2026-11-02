@@ -193,7 +193,7 @@ def test_passives_aura_and_items_compile():
         sp = ref[k].speed * lid["speed"][1] * 1.05
         assert abs(p.f.speed - sp) < 1e-9 and abs(p.spd - p.f.speed) < 1e-12, k   # aura + Cera Turbo
     gk = t.players[GK]
-    assert abs(gk.f.pass_range - min(1600.0, ref[GK].pass_range * 1.4)) < 1e-6
+    assert abs(gk.f.pass_range - min(1600.0, ref[GK].pass_range * S.scaled_mods("lancador", 1)["pass_range"][1])) < 1e-6
     assert abs(gk.f.gk_save - min(0.95, ref[GK].gk_save + 0.10)) < 1e-9          # Fita Isolante: so o GK
     assert abs(t.players[DEF].f.gk_save - ref[DEF].gk_save) < 1e-12
     m = t.players[MID1]
@@ -242,14 +242,15 @@ def test_muralha_raises_tackles_near_goal():
         att = b.players[ATT]
         park(b)
         att.pos = V(a.goal_x + a.dir * 150, soccer.CY)
-        d.pos = att.pos + V(a.dir * -35, 0)                    # 35 px: fora do raio base (32), dentro com +6
+        d.pos = att.pos + V(a.dir * -35, 0)                    # 35 px: fora do raio base (32), dentro com +tk_ext
         g.ball.owner = att
         g.ball.pos = V(att.pos)
         tick_all()
         if sk:
-            assert d.sk_cur == "muralha" and d.tk_ext == 6.0
-            assert abs(d.f.tackle - min(1.0, d.f_base.tackle * 1.5)) < 1e-9
-            assert abs(d.spd - d.spd_base * 0.85) < 1e-9
+            m = S.scaled_mods("muralha", 1)
+            assert d.sk_cur == "muralha" and d.tk_ext == S.scaled_extra("muralha", 1)["tk_ext"] > 3.0
+            assert abs(d.f.tackle - min(1.0, d.f_base.tackle * m["tackle"][1])) < 1e-9
+            assert abs(d.spd - d.spd_base * m["speed"][1]) < 1e-9
         rng_state = random.getstate()
         random.seed(5)
         n = 0
@@ -279,9 +280,10 @@ def test_elastica_more_saves():
         g.ball.vel = V(-a.dir * 700, 0)
         tick_all()
         if sk:
+            m = S.scaled_mods("elastica", 1)
             assert gk.sk_cur == "elastica"
-            assert abs(gk.f.gk_save - min(0.95, gk.f_base.gk_save + 0.25)) < 1e-9
-            assert abs(gk.f.gk_speed - gk.f_base.gk_speed * 1.3) < 1e-9
+            assert abs(gk.f.gk_save - min(0.95, gk.f_base.gk_save + m["gk_save"][1])) < 1e-9
+            assert abs(gk.f.gk_speed - gk.f_base.gk_speed * m["gk_speed"][1]) < 1e-9
         st = random.getstate()
         random.seed(9)
         n = 0
@@ -294,7 +296,7 @@ def test_elastica_more_saves():
             n += g.ball.owner is gk
         random.setstate(st)
         saves["on" if sk else "off"] = n
-    assert saves["on"] > saves["off"] + 60, saves
+    assert saves["on"] > saves["off"] + 15, saves
     g.match_sink = None
 
 
@@ -303,7 +305,7 @@ def test_recarga_recharges_standing_still():
     p = a.players[MID1]
     p.bat, p.vel = 0.2, V()
     tick_all()
-    assert p.sk_cur == "recarga"
+    assert p.sk_cur == "recarga" and abs(p.bat - (0.2 + S.scaled_extra("recarga", 1)["bat_add"])) < 1e-9
     gain = {}
     for k, f in (("on", p.f_var["recarga"]), ("off", p.f_base)):
         q = copy.copy(p)
@@ -315,7 +317,7 @@ def test_recarga_recharges_standing_still():
     g.match_sink = None
     a, b = start({MID2: [("recarga", 1)]})
     p2 = a.players[MID2]
-    p2.bat, p2.vel = 0.2, V(soccer.PLAYER_SPEED * p2.spd, 0)
+    p2.bat, p2.vel = 0.2, V(soccer.PLAYER_SPEED * p2.spd, 0)       # correndo: nao dispara
     tick_all()
     assert p2.sk_cur is None
     g.match_sink = None
@@ -335,7 +337,9 @@ def test_choque_stuns_and_zaps():
     bat0 = d.bat
     g.ball_interactions()
     assert g.ball.owner is d
-    assert abs(o.cd - (0.7 + 0.5)) < 1e-9, o.cd            # 0,5 s a mais sem dominar
+    stun = S.scaled_extra("choque", 1)["stun"]
+    assert abs(o.cd - (0.7 + stun)) < 1e-9, o.cd           # `stun` s a mais sem dominar...
+    assert o.sk_stun > g.sk_t and o.vel.length() == 0.0     # ...nem andar (paralisado)
     assert d.sk_zap is not None and d.sk_zap[0] is o and abs(d.bat - (bat0 - 0.05)) < 1e-9
     assert d.sk_ready["choque"] > g.sk_t                   # recarga: o proximo desarme nao atordoa
     g.ball.owner = o
@@ -358,7 +362,8 @@ def test_curva_bends_ball():
     g.ai_shoot(p)
     b0 = g.ball
     assert b0.curve != 0.0 and p.sk_cur == "curva" and p.bat <= bat0 - 0.06   # custo 0,06 + o do chute
-    assert abs(abs(b0.curve) - 70.0) < 1e-9 and abs(p.f.shot_err - p.f_base.shot_err * 0.6) < 1e-9
+    assert abs(abs(b0.curve) - 70.0) < 1e-9
+    assert abs(p.f.shot_err - p.f_base.shot_err * S.scaled_mods("curva", 1)["shot_err"][1]) < 1e-9
     v0 = V(b0.vel)
     for _ in range(12):
         g.update_ball(1 / 60)
@@ -388,7 +393,7 @@ def test_succao_pulls_loose_ball():
     g.ball.vel = V()
     a.chaser = p
     tick_all()
-    assert p.sk_cur == "succao" and p.f.reach == p.f_base.reach + 10
+    assert p.sk_cur == "succao" and p.f.reach == p.f_base.reach + S.scaled_mods("succao", 1)["reach"][1]
     g.tick_skills(1 / 60)
     assert g.ball.vel.x < 0                               # puxada para o robo
     g.match_sink = None
@@ -495,6 +500,435 @@ def test_pilha_reserva_restores_once():
     g.match_sink = None
 
 
+# ------------------------------------------------------------------------- B14: cada skill MUDA o lance
+# Um cenario deterministico por skill do catalogo (16 + 11 especiais): o mesmo lance COM e SEM a skill; a
+# metrica e a do proprio motor (posse, desarmes, velocidade, mira, bateria...) e precisa mudar a favor de
+# quem tem a skill. Se uma skill voltar a ser no-op (gatilho que nao dispara, fator que a IA nao usa,
+# efeito curto demais) o cenario dela falha. Desarmes/defesas usam random.seed fixo e restauram o estado.
+def _seeded(seed, fn):
+    st = random.getstate()
+    random.seed(seed)
+    try:
+        return fn()
+    finally:
+        random.setstate(st)
+
+
+def _tackles(att, d, n=400, seed=5):
+    """n tentativas de desarme de d em att (motor: ball_interactions); quantas d ganhou."""
+    others = [q for q in d.team.players if q is not d]
+
+    def go():
+        k = 0
+        for _ in range(n):
+            g.ball.owner = att
+            d.tackle_cd = 0.0
+            for q in others:
+                q.tackle_cd = 9.0
+            g.ball_interactions()
+            k += g.ball.owner is d
+        return k
+    return _seeded(seed, go)
+
+
+def _steer_speed(p, steps=30, d=None):
+    q = copy.copy(p)
+    q.vel, q.bat = V(), 1.0
+    for _ in range(steps):
+        g.steer(q, d or V(p.team.dir, 0), soccer.PLAYER_SPEED * soccer.AI_SPEED, 1 / 60)
+    return q.vel.length()
+
+
+def _both(holder, sid, fn, rank=1, ovr=60):
+    """fn(a, b, on) no mesmo lance com a skill (holder) e sem nenhuma skill."""
+    out = {}
+    for on in (True, False):
+        a, b = start({holder: [(sid, rank)]} if on else None, ovr=ovr)
+        out[on] = fn(a, b, on)
+        g.match_sink = None
+    return out[True], out[False]
+
+
+def _carry_vs(a, b, holder, opp_idx, gap):
+    """holder com a bola, o adversario opp_idx a `gap` px a frente; o resto longe."""
+    p = a.players[holder]
+    park(b)
+    p.pos = V(soccer.CX, soccer.CY)
+    o = b.players[opp_idx]
+    o.pos = p.pos + V(a.dir * gap, 0)
+    g.ball.owner = p
+    g.ball.pos = V(p.pos)
+    p.bat = 1.0
+    return p, o
+
+
+def _carry_free(a, b, sid, on):
+    p = a.players[ATT]
+    for q in b.players:
+        q.pos = V(p.pos.x - a.dir * 150, q.pos.y)
+    g.ball.owner = p
+    p.bat = 1.0
+    tick_all()
+    assert (p.sk_cur == sid) == on
+    return _steer_speed(p)
+
+
+def sc_arrancada(a, b, on):
+    return _carry_free(a, b, "arrancada", on)
+
+
+def sc_succao(a, b, on):
+    p = a.players[MID1]
+    park(b)
+    p.pos, p.vel = V(soccer.CX, soccer.CY), V()
+    g.ball.owner, g.ball.pos, g.ball.vel = None, p.pos + V(60, 0), V()
+    a.chaser = p
+    tick_all()
+    for _ in range(60):                       # 1 s: so o ima/alcance mexem (robos parados)
+        g.tick_skills(1 / 60)
+        g.update_ball(1 / 60)
+        if g.ball.owner is p:
+            return 1
+    return 0
+
+
+def _shot_cross(p, a):
+    """Simula a bola (robos parados) ate a linha do gol: (y real, y previsto pela reta inicial, |v0|)."""
+    b = g.ball
+    v0, p0 = V(b.vel), V(b.pos)
+    tx = a.target_x
+    pred = p0.y + v0.y * (tx - p0.x) / v0.x
+    y = None
+    for _ in range(240):
+        if g.state != "play":
+            break
+        prev = V(b.pos)
+        g.update_ball(1 / 60)
+        if (b.pos.x - tx) * a.dir >= 0 or g.state != "play":
+            y = prev.y
+            break
+    return y, pred, v0.length()
+
+
+def sc_curva(a, b, on):
+    p = a.players[ATT]
+    park(b, a.goal_x + a.dir * 60)
+    gk = b.players[GK]
+    gk.pos = V(a.target_x - a.dir * 90, soccer.CY + 40)       # goleiro fora da linha
+    p.pos = V(a.target_x - a.dir * 300, soccer.CY)
+    g.ball.owner = p
+    _seeded(3, lambda: g.ai_shoot(p))
+    gk.pos = V(a.goal_x, soccer.PITCH.top + 20)                # sai do caminho: so a trajetoria importa
+    y, pred, v = _shot_cross(p, a)
+    return abs(y - pred) if y is not None else 0.0            # o goleiro le a reta: erro da leitura
+
+
+def sc_muralha(a, b, on):
+    d, att = a.players[DEF], b.players[ATT]
+    park(b)
+    att.pos = V(a.goal_x + a.dir * 150, soccer.CY)
+    d.pos = att.pos + V(a.dir * -35, 0)
+    g.ball.owner, g.ball.pos = att, V(att.pos)
+    tick_all()
+    return _tackles(att, d)
+
+
+def _lane_case(a, b, holder):
+    """holder com a bola, ATT a frente e um adversario a meio caminho, a margem (m_sem + m_com)/2 da
+    linha: so a margem menor (lane_margin da skill) enxerga o passe."""
+    p, t = a.players[holder], a.players[ATT]
+    park(b)
+    for q in a.players:
+        if q not in (p, t):
+            q.pos = V(a.goal_x + a.dir * 20, soccer.PITCH.top + 20)
+    p.pos = V(soccer.CX - a.dir * 100, soccer.CY)
+    t.pos = p.pos + V(a.dir * 220, 0)
+    ref = robots.factors(cfg("A", 60, 11)["squad"][holder]["attrs"], robots.TUNING_ROBOTS).lane_margin
+    m = (ref + p.f.lane_margin) / 2 if p.f.lane_margin < ref else ref * 0.9
+    b.players[MID1].pos = (p.pos + t.pos) / 2 + V(0, m)
+    g.ball.owner = p
+    return 1 if g.best_pass_target(p) is t else 0
+
+
+def sc_leitura(a, b, on):
+    return _lane_case(a, b, MID1)
+
+
+def sc_poupanca(a, b, on):
+    p = a.players[MID1]
+    q = copy.copy(p)
+    q.bat, q.vel = 1.0, V(soccer.PLAYER_SPEED * q.spd, 0)
+    for _ in range(600):
+        g.tick_battery(q, 1 / 60)
+    return q.bat
+
+
+def sc_recarga(a, b, on):
+    p = a.players[MID1]
+    p.bat, p.vel = 0.3, V()
+    tick_all()
+    for _ in range(60):
+        g.tick_skills(1 / 60)
+        g.tick_battery(p, 1 / 60)
+    return p.bat
+
+
+def sc_overclock(a, b, on):
+    p = a.players[ATT]
+    p.bat = 0.9
+    g.ball.pos = V(a.target_x - a.dir * 100, soccer.CY)       # bola no terco de ataque
+    tick_all()
+    assert (p.sk_cur == "overclock") == on
+    return _steer_speed(p)
+
+
+def _shielded(a, b, sid, on):
+    p, o = _carry_vs(a, b, MID1, MID1, 30)
+    tick_all()
+    if sid == "blindagem":
+        assert (p.sk_cur == "blindagem") == on
+    return -_tackles(p, o)
+
+
+def sc_blindagem(a, b, on):
+    return _shielded(a, b, "blindagem", on)
+
+
+def sc_drible(a, b, on):
+    """Marcacao colada por 3 s (so o marcador o alcanca): passos ate perder a bola."""
+    p, o = _carry_vs(a, b, ATT, DEF, 30)
+    tick_all()
+    assert (p.sk_cur == "drible") == on
+    for q in b.players:
+        q.tackle_cd = 0.0 if q is o else 99.0
+
+    def go():
+        for k in range(180):
+            o.pos = p.pos + V(a.dir * 20, 0)
+            g.ball_interactions()
+            if g.ball.owner is not p:
+                return k
+            if on and k == 0:
+                assert o.tackle_cd >= S.scaled_extra("drible", 1)["evade"] - 1e-9 and p.sk_ev[0] == "evade"
+            g.tick_timers(1 / 60)
+            g.tick_skills(1 / 60)
+        return 180
+    return _seeded(13, go)
+
+
+def sc_elastica(a, b, on):
+    gk = a.players[GK]
+    park(b)
+    gk.pos = V(a.goal_x + a.dir * 30, soccer.CY)
+    g.ball.owner, g.ball.pos, g.ball.vel = None, V(a.goal_x + a.dir * 200, soccer.CY), V(-a.dir * 700, 0)
+    tick_all()
+
+    def go():
+        n = 0
+        for _ in range(400):
+            g.ball.owner = None
+            g.ball.pos = gk.pos + V(a.dir * 12, 0)
+            g.ball.vel = V(-a.dir * 700, 0)
+            gk.cd = 0.0
+            g.ball_interactions()
+            n += g.ball.owner is gk
+        return n
+    return _seeded(9, go)
+
+
+def sc_pressao(a, b, on):
+    p, o = a.players[MID1], b.players[DEF]
+    park(b)
+    o.pos = V(a.target_x - a.dir * 200, soccer.CY)            # adversario com a bola no terco dele
+    p.pos = o.pos + V(-a.dir * 34, 0)                          # 34 px: fora do raio base (32)
+    g.ball.owner, g.ball.pos = o, V(o.pos)
+    p.bat = 1.0
+    tick_all()
+    assert (p.sk_cur == "pressao") == on
+    return _tackles(o, p)
+
+
+def sc_choque(a, b, on):
+    d, o = a.players[DEF], b.players[ATT]
+    park(b)
+    o.pos = V(soccer.CX, soccer.CY)
+    d.pos = o.pos + V(20, 0)
+    g.ball.owner = o
+    d.f = S.apply_mods(d.f, {"tackle": ("add", 1.0)})
+    o.f = S.apply_mods(o.f, {"shield": ("add", 5.0)})
+    for q in a.players:
+        q.tackle_cd = 0.0 if q is d else 9.0
+    g.ball_interactions()
+    assert g.ball.owner is d
+    p0 = V(o.pos)
+    for _ in range(40):                       # 2/3 s: o desarmado persegue a bola (IA) e tenta de novo
+        g.tick_timers(1 / 60)
+        g.tick_skills(1 / 60)
+        o.team.chaser = o
+        g.ai_player(o, 1 / 60)
+        o.pos += o.vel / 60
+    return -(o.pos - p0).length()             # paralisado: nao sai do lugar
+
+
+def _shot(a, b, holder, dist, seed=3):
+    p = a.players[holder]
+    park(b, a.goal_x + a.dir * 60)
+    gk = b.players[GK]
+    gk.pos = V(a.target_x - a.dir * 30, soccer.CY)
+    p.pos = V(a.target_x - a.dir * dist, soccer.CY + 5)
+    tick_all()
+    g.ball.owner = p
+    _seeded(seed, lambda: g.ai_shoot(p))
+    v = g.ball.vel
+    y = g.ball.pos.y + v.y * (a.target_x - g.ball.pos.x) / v.x  # onde a reta cruza a linha do gol
+    return p, abs(y - gk.pos.y), v.length()
+
+
+def sc_matador(a, b, on):
+    p, off_gk, v = _shot(a, b, ATT, 200)
+    assert (getattr(p, "sk_condon", None) == "matador") == on
+    return off_gk + v * 0.05
+
+
+def sc_lancador(a, b, on):
+    """12 reposicoes com todas as linhas de passe fechadas (pressao): quantas chegam ao atacante."""
+    gk, t = a.players[GK], a.players[ATT]
+    hits = launched = 0
+    for k in range(12):
+        park(b)
+        gk.pos, gk.cd = V(a.goal_x + a.dir * 30, soccer.CY), 0.0
+        xs = {DEF: 200, MID1: 330, MID2: 330, ATT: 520}
+        ys = {DEF: soccer.CY, MID1: soccer.CY - 120, MID2: soccer.CY + 120, ATT: soccer.CY}
+        for i, x in xs.items():
+            a.players[i].pos, a.players[i].vel, a.players[i].cd = V(a.goal_x + a.dir * x, ys[i]), V(), 0.0
+        for kk, i in enumerate((DEF, MID1, MID2, ATT)):       # um adversario fechando cada linha
+            b.players[kk + 1].pos = gk.pos + (a.players[i].pos - gk.pos) * 0.3
+            b.players[kk + 1].cd = 0.0
+        b.players[0].pos = V(a.target_x, soccer.CY)
+        g.ball.owner, g.ball.air, gk.hold = gk, 0.0, 0.0
+        _seeded(4 + k, lambda: g.ai_gk(gk, 1 / 60))
+        if g.ball.air > 0:
+            launched += 1
+            assert g.ball.air_to is t and gk.sk_ev[0] == "launch"
+        for _ in range(150):                  # robos parados: a bola chega ao alvo?
+            g.update_ball(1 / 60)
+            if g.ball.owner is not None:
+                break
+        hits += g.ball.owner is t
+    assert (launched > 0) == on, launched
+    return hits
+
+
+def sc_lider(a, b, on):
+    if on:
+        assert a.players[MID1].sk_badge
+    return _steer_speed(a.players[DEF]) + 1000 * (1.0 - a.players[ATT].f.think_mul)
+
+
+def _bad_decisions(p, n=400, seed=21):
+    """n decisoes da IA com a bola (ai_with_ball com think zerado): quantas foram decisoes ruins."""
+    cnt = [0]
+    real = g.ai_bad_decision
+    g.ai_bad_decision = lambda q: cnt.__setitem__(0, cnt[0] + 1)
+
+    def go():
+        for _ in range(n):
+            g.ball.owner = p
+            p.think = 0.0
+            p.pos = V(soccer.CX, soccer.CY)
+            g.ai_with_ball(p, 1 / 60)
+    try:
+        _seeded(seed, go)
+    finally:
+        del g.ai_bad_decision
+    return cnt[0]
+
+
+SCEN = {
+    "arrancada": (ATT, sc_arrancada), "succao": (MID1, sc_succao), "curva": (ATT, sc_curva),
+    "muralha": (DEF, sc_muralha), "leitura": (MID1, sc_leitura), "poupanca": (MID1, sc_poupanca),
+    "recarga": (MID1, sc_recarga), "overclock": (ATT, sc_overclock), "blindagem": (MID1, sc_blindagem),
+    "drible": (ATT, sc_drible), "elastica": (GK, sc_elastica), "pressao": (MID1, sc_pressao),
+    "choque": (DEF, sc_choque), "matador": (ATT, sc_matador), "lancador": (GK, sc_lancador),
+    "lider": (MID1, sc_lider),
+    # especiais (reliquias e sets)
+    "rolando": (ATT, lambda a, b, on: _carry_free(a, b, "rolando", on)), "faro_meia": (MID1, sc_leitura),
+    "calor_forno": (MID1, lambda a, b, on: _steer_speed(a.players[MID1], 8) + sc_recarga(a, b, on)),
+    "chinelada": (ATT, lambda a, b, on: _shot(a, b, ATT, 300)[2]),
+    "sobrecarga": (ATT, lambda a, b, on: _steer_speed(a.players[ATT], 10)),
+    "instinto_vo": (MID1, lambda a, b, on: -_bad_decisions(a.players[MID1])),
+    "mente_zen": (MID1, lambda a, b, on: -_bad_decisions(a.players[MID1])),
+    "faxina_total": (MID1, lambda a, b, on: _tackles(*_carry_vs(b, a, MID1, MID1, 30))),
+    "muralha_aco": (MID1, lambda a, b, on: _shielded(a, b, "muralha_aco", on)), "impecavel": (DEF, lambda a, b, on: _steer_speed(a.players[DEF])),
+    "remendo": (MID1, None),
+}
+
+
+def _remendo(a, b, on):
+    p, o = a.players[MID1], b.players[MID1]
+    park(b)
+    p.pos, o.pos = V(soccer.CX, soccer.CY), V(soccer.CX + 20, soccer.CY)
+    g.on_steal(o, p)                          # p acabou de perder a bola (gatilho lost_ball)
+    assert (p.sk_cur == "remendo") == on
+    return -_tackles(p, o)
+
+
+SCEN["remendo"] = (MID1, _remendo)
+
+
+def test_every_skill_changes_the_play():
+    """B14: para CADA skill do catalogo (e as especiais) o mesmo lance com/sem a skill da resultado
+    diferente, a favor de quem tem a skill (a metrica e a do motor: falha se a skill virar no-op)."""
+    assert set(SCEN) == set(S.ALL), set(S.ALL) ^ set(SCEN)
+    bad = []
+    for sid, (holder, fn) in SCEN.items():
+        try:
+            on, off = _both(holder, sid, fn)
+        except AssertionError as e:
+            g.match_sink = None
+            bad.append((sid, "assert", str(e)))
+            continue
+        if not on > off:
+            bad.append((sid, on, off))
+    assert not bad, bad
+
+
+# Lancador: o lancamento e uma CHANCE (launch, no sk_rng) em cada reposicao sem linha de passe (~3 por
+# partida); com a chance calibrada (0,12 no rank 1, forca ~3 F) ele acontece ~0,1-0,4 vez por partida.
+MIN_FIRES = {"lancador": 0.1}
+
+
+def test_fires_in_typical_matches():
+    """Cada ativa/condicional (e o lancamento do Lancador, e o drible que de fato engana o marcador)
+    dispara >= 1 vez por partida em media, em 10 partidas com o robo do papel certo (holders da calib)."""
+    import calib_skills as CS
+    want = [sid for sid, s in S.ALL.items() if s["kind"] in ("A", "C")] + ["lancador", "drible_evade"]
+    low = {}
+    for sid in want:
+        real = "drible" if sid == "drible_evade" else sid
+        tot = 0
+        for k in range(10):
+            h = cfg("A", 62, 30 + k)
+            for i in CS.holders(real):
+                h["squad"][i]["skills"] = ((real, 1, 0),)
+            random.seed(k)
+            g.start_robot_match(h, cfg("B", 56, 60 + k), lambda s, e: None, tuning=robots.TUNING_ROBOTS)
+            play_out()
+            tot += g.sk_count.get(sid, 0)
+        if tot / 10 < MIN_FIRES.get(sid, 1.0):
+            low[sid] = tot / 10
+    assert not low, low
+
+
+def test_skill_force_within_meta():
+    """SKILL_FORCE (B15): nenhuma dominante; Elastica e Lider dentro do teto; tudo monotono no rank."""
+    for sid, v in S.SKILL_FORCE.items():
+        assert v[0] <= v[1] <= v[2], sid
+        assert v[0] <= S.FORCE_R1_MAX and v[2] <= S.FORCE_R3_MAX, (sid, v)
+    for sid in ("elastica", "lider"):
+        assert S.SKILL_FORCE[sid][2] <= S.FORCE_R3_MAX, S.SKILL_FORCE[sid]
+
+
 # ------------------------------------------------------------------------- MAX, FX, desempenho
 def test_max_runs_skills_without_fx():
     calls = [0]
@@ -580,7 +1014,7 @@ def test_ms_step_within_budget():
     """Custo das skills por passo (10 robos x 3 skills): tick_skills + ganchos <= 0,006 ms/step. Tambem
     imprime o ms_step total do harness (run-skills) com e sem skills (ruido de ~+-0,002 ms)."""
     acc = {"t": 0.0, "n": 0}
-    names = ("tick_skills", "sk_on_kick", "on_steal", "sk_pre_shot", "ball_curve")
+    names = ("tick_skills", "sk_on_kick", "on_steal", "sk_pre_shot", "ball_curve", "on_evade", "sk_gk_launch")
     real = {k: getattr(soccer.Game, k) for k in names}
 
     def wrap(k):
@@ -660,6 +1094,47 @@ def test_match_entry_skills_tactic_items_and_rating():
     assert "arrancada" in p.f_var
     g.match_sink = None
     assert "backpack" not in gm.FIELDS and "backpack" not in gg.to_dict()   # transitoria: nao vai ao save
+
+
+def test_b16_modules_in_shop_and_drops_only_with_mod_on():
+    """B16: com mod_on a loja ganha 1 Modulo e parte dos drops vira Modulo, num RNG derivado: o resto do
+    estoque/drops e IDENTICO ao de sem mod_on (Ato 1 e Modo Robos antes do tier 1 nao mudam)."""
+    for tier in (0, 1, 3, 5):
+        for seed in range(20):
+            out = {}
+            for on in (False, True):
+                gg = gm.new_game(random.Random(seed))
+                if on:
+                    gg.flags[gm.MOD_FLAG] = 1
+                st = gg.refresh_shop(tier, random.Random(100 + seed))
+                out[on] = [(p["model"], p["rar"]) for p in st]
+            mods = [m for m in out[True] if m[0] in parts.MODULE_MODELS]
+            assert not any(m[0] in parts.MODULE_MODELS for m in out[False])
+            assert len(mods) == 1 and out[True][:-1] == out[False], (tier, seed)
+            assert mods[0][1] <= (3 if tier >= gm.LEGEND_MIN_TIER else 2)
+    drops = {False: [], True: []}
+    for on in (False, True):
+        gg = gm.new_game(random.Random(1))
+        if on:
+            gg.flags[gm.MOD_FLAG] = 1
+        rng = random.Random(8)
+        for _ in range(300):
+            r = gm.match_rewards(gg, 2, 0, [], 1, rng)
+            drops[on].append(r["drop"]["model"] if r["drop"] else None)
+            gg.inventory = gg.inventory[:10]
+    n_mod = sum(1 for m in drops[True] if m in parts.MODULE_MODELS)
+    assert [m is None for m in drops[True]] == [m is None for m in drops[False]]   # mesmo stream
+    assert not any(m in parts.MODULE_MODELS for m in drops[False] if m)
+    n_drop = sum(1 for m in drops[True] if m)
+    assert 0.1 * n_drop < n_mod < 0.45 * n_drop, (n_mod, n_drop)
+    # liga do Modo Robos: concluir o tier 1 liga mod_on e a loja do proximo tier ja traz um Modulo
+    gg = gm.new_game(random.Random(2))
+    lg = RL.new_league(gg, 0, random.Random(3))
+    lg["round"] = RL.ROUNDS
+    lg["results"] = [[0, 0, k, 5, 0] for k in range(1, 6)]
+    res = RL.finish_league(gg, random.Random(4))
+    assert res["advanced"] and gg.mod_on()
+    assert sum(1 for p in gg.shop["stock"] if p["model"] in parts.MODULE_MODELS) == 1
 
 
 def test_campaign_act1_unchanged_and_user_F():

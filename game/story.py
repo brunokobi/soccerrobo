@@ -20,14 +20,17 @@ SCENES[id] = {"bg", "cast": [ids], "lines": [...]}. Item de "lines":
     (who, mood, text)  |  (who, mood, text, cond)  |  {"q", "opts": [{"t", "fx", "reply": [linhas]}]}
     who = id de personagem; cond = ("flag", nome) | ("noflag", nome) | ("done", scene_id).
     fx (so estas chaves): flag (str), scrap (int, <=100), xp_hero (int), xp_team (int),
-    piece ({"model": parts.PARTS, "rar": 0..3}). Escolha: opcoes 2-3; "fx" e "reply" opcionais.
+    piece ({"model": parts.PARTS, "rar": 0..3}), skill ({"robot": "hero"|"team", "id": skills.SKILLS,
+    "rank": 1..3}: aprende direto, nao equipa), pts (int 1..5: PH extras do heroi). Escolha: opcoes 2-3;
+    "fx" e "reply" opcionais.
 TOURNAMENTS[id]: ver o bloco proprio (formato, hooks, boss_delta/regular_delta).
 CHAPTERS: lista ordenada; "nodes" em ordem: ("scene", id) | ("tournament", id) | ("chapter_end", cap_id)
     | ("end", scene_id)  [o ultimo capitulo da campanha termina com ("end", cena de epilogo)].
     "draft": True = esqueleto (nodes vazio) que o teste de alcancabilidade ignora.
 REWARDS[id]: aplicado UMA vez ao fechar o capitulo (chave "reward:<id>" em `done`): scrap, piece,
     recruits [{"name","role","chassis","base_ovr","level","paint","piece"?}], unlock [chassis],
-    xp_hero, xp_team, equip_hero_piece ({"model","rar"} ou None).
+    xp_hero, xp_team, equip_hero_piece ({"model","rar"} ou None); B11 (Onda B): skill (como no fx, ou
+    lista) e pts (int 1..10 para o heroi, ou {"robot": "hero"|"team", "n": 1..10}).
 """
 
 STORY_VERSION = 1

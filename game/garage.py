@@ -52,6 +52,13 @@ DROP_CHANCE = 0.20
 SHOP_COMMONS = 6
 EPIC_CHANCE, EPIC_MIN_TIER = 0.25, 1
 LEGEND_CHANCE, LEGEND_MIN_TIER = 0.10, 3
+# B16 (spec 7.3: modulos vem da loja e de drops): com mod_on a loja ganha 1 Modulo e 1 drop em
+# MODULE_DROP_SHARE vira Modulo. Sorteios num RNG DERIVADO (seed ^ sal), nunca no stream da loja/drops:
+# sem mod_on (Ato 1, Modo Robos antes do tier 1) tudo fica identico ao da v1.
+MODULE_SHOP_SALT = 0x6D6F64            # "mod"
+MODULE_SHOP_RAR = ((0, 0.55), (1, 0.30), (2, 0.15))   # raridade do Modulo da loja (Lendaria: tier >= 3)
+MODULE_LEGEND_CHANCE = 0.05
+MODULE_DROP_SHARE = 0.25
 
 ROBOT_NAMES = ("Zumbi", "Faísca", "Bolt", "Turbo", "Mecha", "Pixel", "Sucata", "Raio",
                "Ferrugem", "Cometa", "Chispa", "Rolo", "Gatilho", "Trovão", "Magnus",
@@ -440,6 +447,65 @@ class Garage:
         self.backpack = []
         return used
 
+    # ---------------------------------------------------------------- loja de itens (B12)
+    def buy_item(self, item_id):
+        """Compra 1 consumivel (skills.ITEMS) com sucata; estoque max skills.ITEM_MAX por item. So com
+        mod_on (itens e skills ligam juntos: decisao 6 do plano). (ok, msg)."""
+        it = skills.ITEMS.get(item_id)
+        if it is None:
+            return False, "Item inválido."
+        if not self.mod_on():
+            return False, "Itens ainda bloqueados."
+        have = int(self.items.get(item_id, 0))
+        if have >= skills.ITEM_MAX:
+            return False, "Estoque cheio (máx %d)." % skills.ITEM_MAX
+        if self.scrap < it["price"]:
+            return False, "Sucata insuficiente (precisa de %d)." % it["price"]
+        self.scrap -= it["price"]
+        self.items[item_id] = have + 1
+        return True, "Comprou %s por %d (agora %d)." % (it["name"], it["price"], have + 1)
+
+    # ---------------------------------------------------------------- habilidades (B10, UI)
+    def learn_skill_node(self, rid, node_id):
+        """Compra um no da arvore (skills.learn_node) com os PH do robo. So com mod_on. (ok, msg)."""
+        r = self.robot(rid)
+        if r is None:
+            return False, "Robô não encontrado."
+        if not self.mod_on():
+            return False, "Habilidades ainda bloqueadas."
+        return skills.learn_node(r, node_id)
+
+    def equip_skill(self, rid, sid):
+        """Equipa uma skill aprendida (regras de skills.equip_skill: max MAX_EQUIPPED, carga LOAD_MAX).
+        Com Modulo equipado (que ocupa 1 vaga e carga), so equipa se a skill entra de fato na partida
+        (skills.effective_skills); senao desfaz e explica. (ok, msg)."""
+        r = self.robot(rid)
+        if r is None:
+            return False, "Robô não encontrado."
+        if not self.mod_on():
+            return False, "Habilidades ainda bloqueadas."
+        ok, msg = skills.equip_skill(r, sid)
+        if not ok:
+            return ok, msg
+        eff = {e[0] for e in skills.effective_skills(r, self.pieces_by_id(), True)}
+        if sid not in eff:
+            r["skills"]["equipped"].remove(sid)
+            return False, "Sem vaga: o módulo ocupa 1 vaga e conta na carga."
+        return ok, msg
+
+    def unequip_skill(self, rid, sid):
+        r = self.robot(rid)
+        if r is None:
+            return False, "Robô não encontrado."
+        return skills.unequip_skill(r, sid)
+
+    def set_tactic(self, tactic):
+        """Tatica do time (skills.TACTICS): so muda a prioridade dos gatilhos no motor. (ok, msg)."""
+        if tactic not in skills.TACTICS:
+            return False, "Tática inválida."
+        self.tactic = tactic
+        return True, "Tática: %s." % skills.TACTIC_NAMES.get(tactic, tactic)
+
     def new_id(self):
         i = self.next_id
         self.next_id += 1
@@ -648,6 +714,20 @@ class Garage:
             stock.append(self.new_piece(r.choice(parts.shop_models(tier, 2)), 2))
         if tier >= LEGEND_MIN_TIER and r.random() < LEGEND_CHANCE:
             stock.append(self.new_piece(r.choice(parts.shop_models(tier, 3)), 3))
+        if self.mod_on():                               # B16: 1 Modulo (RNG derivado: o resto nao muda)
+            mr = random.Random(seed ^ MODULE_SHOP_SALT)
+            model = mr.choice(parts.MODULE_MODELS)
+            x, rar = mr.random(), 0
+            if tier >= LEGEND_MIN_TIER and x < MODULE_LEGEND_CHANCE:
+                rar = 3
+            else:
+                acc = 0.0
+                for rr, pr in MODULE_SHOP_RAR:
+                    acc += pr
+                    rar = rr
+                    if x < acc:
+                        break
+            stock.append(self.new_piece(model, rar))
         self.shop = {"stock": stock, "seed": seed}
         return stock
 
@@ -705,6 +785,10 @@ def match_rewards(garage, my_goals, opp_goals, scorer_pids, tier, rng):
     drop = None
     if res == "w" and rng.random() < DROP_CHANCE and len(garage.inventory) < MAX_INVENTORY:
         drop = garage.new_piece(rng.choice(parts.CORE_MODELS), 0)
+        if garage.mod_on():                          # B16: parte dos drops vira Modulo (RNG derivado)
+            dr = random.Random((drop["id"] * 7919) ^ MODULE_SHOP_SALT)
+            if dr.random() < MODULE_DROP_SHARE:
+                drop["model"] = dr.choice(parts.MODULE_MODELS)
         garage.inventory.append(drop)
     st = garage.stats
     st["played"] += 1

@@ -38,11 +38,27 @@ import pygame  # noqa: E402
 
 import robot_league as rl  # noqa: E402
 import robots  # noqa: E402
+import skills  # noqa: E402
 import soccer  # noqa: E402
 
 DT = 1 / 60
 BASE = 50
+# --skills (B16, Modo Robos com mod_on): carga tipica de skills rank 1 do time A (modulo + arvore); o
+# rating de A vira ovr + skills.team_skill_force (como garage.team_rating com mod_on) e a tabela compara o
+# Poisson nessa diferenca de rating com o motor (A joga COM as skills).
+LOADOUT = (
+    (("elastica", 1),),                              # GK
+    (("muralha", 1), ("blindagem", 1)),              # DEF
+    (("leitura", 1), ("arrancada", 1)),              # MID
+    (("succao", 1), ("poupanca", 1)),                # MID
+    (("arrancada", 1), ("matador", 1)),              # ATT
+)
+SKILLS_ON = False
 _g = None
+
+
+def skill_bonus():
+    return skills.team_skill_force(LOADOUT) if SKILLS_ON else 0.0
 
 
 def _game():
@@ -57,6 +73,9 @@ def one(args):
     ovr_a, ovr_b, seed = args
     g = _game()
     a = rl.match_cfg(rl.opponent_team("A", (50, 120, 255), ovr_a, 1000 + seed))
+    if SKILLS_ON:
+        for e, lst in zip(a["squad"], LOADOUT):
+            e["skills"] = tuple((sid, r, 0) for sid, r in lst)
     b = rl.match_cfg(rl.opponent_team("B", (235, 65, 65), ovr_b, 2000 + seed))
     random.seed(seed)
     old = soccer.BATTERY_ON
@@ -76,7 +95,9 @@ def one(args):
 
 
 def engine_cell(pool, diff, n):
-    res = pool.map(one, [(BASE + diff, BASE, s) for s in range(n)], chunksize=4)
+    """Celula do motor; com --skills o ovr de A e BASE + diff - bonus das skills (rating A - B = diff)."""
+    ovr_a = BASE + diff - skill_bonus()
+    res = pool.map(one, [(ovr_a, BASE, s) for s in range(n)], chunksize=4)
     w = sum(x > y for x, y in res)
     l = sum(x < y for x, y in res)
     return w / n, (n - w - l) / n, l / n, sum(x + y for x, y in res) / n
@@ -142,7 +163,12 @@ def main():
     ap.add_argument("--diffs", default="-20,-15,-10,-5,0,5,10,15,20")
     ap.add_argument("--fit", action="store_true")
     ap.add_argument("--procs", type=int, default=4)
+    ap.add_argument("--skills", action="store_true", help="time A com LOADOUT (rating = ovr + forca)")
     a = ap.parse_args()
+    global SKILLS_ON
+    SKILLS_ON = a.skills
+    if SKILLS_ON:
+        print("A com skills (LOADOUT): +%.2f de rating (team_skill_force)" % skill_bonus())
     diffs = [int(x) for x in a.diffs.split(",")]
     eng = {}
     with Pool(a.procs) as pool:

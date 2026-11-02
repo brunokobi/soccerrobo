@@ -20,12 +20,13 @@ import skills as S  # noqa: E402
 PASS, FAIL = [], []
 SPEC_IDS = ("arrancada", "succao", "curva", "muralha", "leitura", "poupanca", "recarga", "overclock",
             "blindagem", "drible", "elastica", "pressao", "choque", "matador", "lancador", "lider")
-# (tipo, dur, cd, bat) da tabela 7.2 da spec
+# (tipo, dur, cd, bat) da tabela 7.2 da spec, com o rebalanceamento da B14 (recarga, drible, pressao,
+# choque: ver docs/specs/itens-e-habilidades.md, nota de estado da B14)
 SPEC_TIMING = {"arrancada": ("A", 1.2, 9, 0.10), "succao": ("A", 1.5, 12, 0.08), "curva": ("A", 0.8, 10, 0.06),
                "muralha": ("A", 2.0, 11, 0.08), "leitura": ("P", 0, 0, 0), "poupanca": ("P", 0, 0, 0),
-               "recarga": ("A", 1.5, 20, 0), "overclock": ("A", 6.0, 25, 0), "blindagem": ("A", 1.5, 10, 0.05),
-               "drible": ("A", 0.5, 8, 0.07), "elastica": ("A", 1.0, 6, 0), "pressao": ("A", 3.0, 15, 0.10),
-               "choque": ("A", 0, 12, 0.05), "matador": ("C", 0, 0, 0), "lancador": ("P", 0, 0, 0),
+               "recarga": ("A", 2.5, 15, 0), "overclock": ("A", 6.0, 25, 0), "blindagem": ("A", 1.5, 10, 0.05),
+               "drible": ("A", 0.8, 8, 0.04), "elastica": ("A", 1.0, 6, 0), "pressao": ("A", 3.0, 15, 0.05),
+               "choque": ("A", 0, 20, 0.05), "matador": ("C", 0, 0, 0), "lancador": ("P", 0, 0, 0),
                "lider": ("P", 0, 0, 0)}
 
 
@@ -110,14 +111,14 @@ def test_passive_and_active_effects():
     assert abs(a.pass_range - b.pass_range) < 1e-9
     # drible: shield x0
     assert S.compile_factors(base, [("drible", 1)])["drible"].shield == 0.0
-    # elastica: gk_save +0,25 com teto 0,95
+    # elastica: gk_save + (valor x rank) com teto 0,95
     gk = base_factors(99, "GK")
     e = S.compile_factors(gk, [("elastica", 3)])["elastica"]
-    assert e.gk_save == min(0.95, gk.gk_save + 0.25 * 1.5)
+    assert e.gk_save == min(0.95, gk.gk_save + S.SKILLS["elastica"]["mods"]["gk_save"][1] * 1.5)
     # lider (aura) nao entra no robo; aura_mods pega 1 so (maior rank)
     assert fdict(S.compile_factors(base, [("lider", 3)])["_base"]) == fdict(base)
     am = S.aura_mods([[("lider", 1)], [("lider", 2)], [("arrancada", 3)]])
-    assert abs(am["speed"][1] - (1 + 0.02 * 1.25)) < 1e-12
+    assert abs(am["speed"][1] - (1 + (S.SKILLS["lider"]["mods"]["speed"][1] - 1) * 1.25)) < 1e-12
     assert S.aura_mods([[("leitura", 1)]]) == {}
     # ids desconhecidos ignorados
     assert set(S.compile_factors(base, [("xyz", 1), ("curva", 9)])) == {"_base", "curva"}
@@ -141,7 +142,8 @@ def test_rank_scales_magnitude_and_cooldown():
     assert S.magnitude(1, 5) > S.magnitude(1, 0) and S.magnitude(1, 99) == S.magnitude(1, parts.MAX_UP)
     m0, m5 = S.scaled_mods("arrancada", 1, 0), S.scaled_mods("arrancada", 1, 5)
     assert m5["speed"][1] > m0["speed"][1]
-    assert S.scaled_extra("succao", 3)["pull"] == 120.0 * 1.5
+    assert S.scaled_extra("succao", 3)["pull"] == S.SKILLS["succao"]["extra"]["pull"] * 1.5
+    assert S.scaled_extra("choque", 2)["stun"] == S.SKILLS["choque"]["extra"]["stun"] * 1.25
     assert S.scaled_extra("overclock", 3)["fatigue"] == (3.0, 0.9)
     assert S.scaled_extra("rolando", 3)["uses"] == 1
 
@@ -167,7 +169,9 @@ def test_triggers():
     assert not T("elastica", {"shot_speed": 400, "ball_goal_dist": 200, "ball_toward_goal": True})
     assert T("pressao", {"opp_has_ball": True, "ball_third": "att"})
     assert T("choque", {"won_ball": True}) and not T("choque", {})
-    assert T("matador", {"dist_opp_goal": 150}) and not T("matador", {"dist_opp_goal": 200})
+    assert T("matador", {"dist_opp_goal": 150}) and not T("matador", {"dist_opp_goal": S.NEAR_GOAL + 1})
+    assert T("recarga", {"bat": S.RECHARGE_BELOW - 0.01, "vel_frac": 0.1})
+    assert not T("recarga", {"bat": S.RECHARGE_BELOW + 0.01, "vel_frac": 0.1})
     assert T("remendo", {"lost_ball": True}) and T("chinelada", {"kicking": True, "dist_opp_goal": 1, "shoot_range": 2})
     # contexto vazio/estranho: neutro, nunca levanta
     for sid in S.ALL:

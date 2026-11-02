@@ -805,7 +805,7 @@ def test_shop_buy_sell_flow():
     # VENDER com confirmação em dois cliques
     gg.scrap = 100
     ui.cache = None
-    click_btn(lambda r: r.x == 400 and r.y == 132)                   # VENDER (modo)
+    click_btn(lambda r: r.x == 520 and r.y == 132)                   # VENDER (modo)
     frame()
     assert ui.shop_mode == "sell"
     free = ui.shop_list()
@@ -1308,6 +1308,306 @@ def test_draw_ms_budget():
         if v >= 3.0:
             print("AVISO: frame lento (informativo):", k, round(v, 2), "ms")
         assert v < 25.0, (k, v)
+    ui.to_menu()
+
+
+# =========================================================== Fase 4 / Onda B: B10 (HABILIDADES/bancada), B12
+import skills as SK  # noqa: E402
+import parts as PT  # noqa: E402
+
+SK_TAB = [t for t, _ in robots_ui.TABS].index("skills")
+
+
+def has_text(sub):
+    return any(isinstance(k[0], str) and sub in k[0] for k in g.text_cache)
+
+
+def mod_game(seed=21, scrap=5000, pts=0):
+    """Garagem nova no hub com mod_on (tier 1 concluído), sucata e PH no 1º titular."""
+    gg = fresh(seed, scrap)
+    gg.flags[gm.MOD_FLAG] = 1
+    rb = gg.robot(gg.lineup[0])
+    rb["skills"]["pts"] = pts
+    ui.cache = None
+    return gg, rb
+
+
+def counting_frames(n=60):
+    """Conta Surfaces e chaves de texto em n quadros (depois de 5 de aquecimento)."""
+    real = pygame.Surface
+    count = [0]
+
+    class Counting(real):
+        def __init__(self, *a, **k):
+            count[0] += 1
+            super().__init__(*a, **k)
+
+    for _ in range(5):
+        frame()
+    g.text_cache.clear()
+    keys = set()
+    pygame.Surface = Counting
+    try:
+        for _ in range(n):
+            frame()
+            keys.update(g.text_cache.keys())
+    finally:
+        pygame.Surface = real
+    return count[0], keys
+
+
+def info_btn():
+    """Botão de ação do painel de detalhes (APRENDER/EQUIPAR/DESEQUIPAR)."""
+    r = robots_ui.SK_INFO
+    return pygame.Rect(r.x + 18, r.bottom - 48, r.w - 36, 38)
+
+
+def test_skills_tab_locked_shows_how_to_unlock():
+    gg = fresh(31)
+    assert not gg.mod_on()
+    gg.robots[0]["skills"]["pts"] = 2
+    tab("skills")
+    n, keys = counting_frames(60)
+    assert n == 0 and len(keys) < 150, (n, len(keys))
+    assert has_text("HABILIDADES BLOQUEADAS") and has_text("tier 1 da liga")
+    assert not ui.sk_node_rects()["atq1"].collidelist([r for r, _f, _e in ui.buttons]) >= 0
+    ok, msg = gg.learn_skill_node(gg.robots[0]["id"], "atq1")
+    assert not ok and "bloqueadas" in msg
+    assert not gg.buy_item("cafe")[0] and not gg.equip_skill(gg.robots[0]["id"], "arrancada")[0]
+    shot("b10_habilidades_bloqueada")
+
+
+def test_skills_tab_tree_learn_equip_tactic_and_save():
+    gg, rb = mod_game(pts=20)
+    rid = rb["id"]
+    tab("skills")
+    assert ui.screen_id == "skills" and ui.sk_robot()["id"] == rid
+    n, keys = counting_frames(60)
+    assert n == 0, "HABILIDADES criou %d Surface em 60 quadros" % n
+    assert len(keys) < 150 and len(g.text_cache) <= soccer.TEXT_CACHE_MAX, len(keys)
+    rects = ui.sk_node_rects()
+    assert len(rects) == sum(len(b) for b in SK.TREE.values()) == 12
+    assert all(robots_ui.SK_PANEL.contains(r) for r in rects.values())
+    assert not any(a.colliderect(b) for i, a in enumerate(rects.values()) for b in list(rects.values())[i + 1:])
+    # aprender o nó 1 do ramo de ataque: gasta PH e libera o seguinte
+    first, second = SK.TREE["ATQ"][0], SK.TREE["ATQ"][1]
+    assert SK.node_state(rb, second["id"]) == "locked"
+    frame()
+    click(rects[first["id"]].center)
+    assert ui.sk_sel == ("node", first["id"])
+    frame()
+    btn = info_btn()
+    click(btn.center)
+    click(btn.center)                                   # 2º clique no mesmo quadro: ignorado
+    assert rb["skills"]["pts"] == 20 - first["cost"], rb["skills"]["pts"]
+    assert SK.node_state(rb, first["id"]) == "learned" and SK.node_state(rb, second["id"]) == "open"
+    assert saved().robot(rid)["skills"]["learned"].get(first["skill"]) == first["rank"]
+    g.text_cache.clear()
+    frame()
+    assert has_text("EQUIPAR") and has_text("APRENDIDA")         # nó aprendido: o botão vira EQUIPAR
+    # aprende mais (sem clique) e equipa pelos chips/botão
+    for nid in ("atq2", "ctr1", "ctr2", "def1"):
+        assert gg.learn_skill_node(rid, nid)[0], nid
+    ui.cache = None
+    want = ["arrancada", "curva", "leitura"]               # carga 2+2+1 = 5 <= 6, 3 vagas
+    for sid in want:
+        ui.sk_pick("skill", sid)
+        frame()
+        click(info_btn().center)
+        frame()
+        assert sid in rb["skills"]["equipped"], (sid, ui.msg)
+    assert SK.equipped_load(rb) <= SK.LOAD_MAX and len(rb["skills"]["equipped"]) == SK.MAX_EQUIPPED
+    ui.sk_pick("skill", "poupanca")
+    frame()
+    click(info_btn().center)
+    assert "poupanca" not in rb["skills"]["equipped"] and "Máximo" in ui.msg, ui.msg
+    assert saved().robot(rid)["skills"]["equipped"] == want
+    # módulo ocupa 1 vaga: com 3 equipadas, a 3ª fica fora da partida e equipar outra é recusado
+    mod = gg.new_piece("Módulo Recarga", 0)
+    gg.inventory.append(mod)
+    assert gg.equip(rid, mod["id"])[0]
+    ui.cache = None
+    eff = [e[0] for e in SK.effective_skills(rb, gg.pieces_by_id(), True)]
+    assert "recarga" in eff and len([e for e in eff if e in SK.SKILLS]) == SK.MAX_EQUIPPED
+    frame()
+    assert has_text("Fora da partida")
+    gg.unequip_skill(rid, "leitura")
+    ok, msg = gg.equip_skill(rid, "leitura")
+    assert not ok and "módulo" in msg and "leitura" not in rb["skills"]["equipped"]
+    # desequipar pelo botão
+    ui.sk_pick("skill", "curva")
+    frame()
+    click(info_btn().center)
+    assert "curva" not in rb["skills"]["equipped"]
+    # tática: DEFENSIVO grava e vai para o match_cfg
+    frame()
+    tac = [r for r, _f, en in ui.buttons if en and robots_ui.SK_TAC.contains(r)]
+    assert len(tac) == len(SK.TACTICS)
+    click(tac[SK.TACTICS.index("defensivo")].center)
+    assert gg.tactic == "defensivo" and saved().tactic == "defensivo"
+    assert gg.match_cfg()["tactic"] == "defensivo"
+    # outro robô pelos chips
+    other = ui.sk_robots()[1]
+    frame()
+    click(pygame.Rect(20 + 1 * 106, 130, 100, 34).center)
+    assert ui.sk_rid == other["id"] and ui.sk_sel is None
+    ui.sk_rid = rid
+    ui.sk_pick("node", "atq3")
+    n, keys = counting_frames(30)
+    assert n == 0 and len(keys) < 150
+    shot("b10_habilidades")
+    # Esc volta ao menu salvando (como as outras abas)
+    key(pygame.K_ESCAPE)
+    assert g.state == "menu"
+
+
+def test_bench_8_slots_set_relic_details_tooltip_and_force_line():
+    gg, rb = mod_game(seed=23, scrap=3000)
+    rid = rb["id"]
+    for m, r in (("Borracha", 1), ("Escova de Sucção", 1), ("Servo Ágil", 2)):
+        p = free_part(gg, m, r)
+        rb["slots"][PT.part_slot(p)] = None
+        assert gg.equip(rid, p["id"])[0]
+    relic = free_part(gg, "Rodinha Esquerda do Zé", 3)
+    mod = free_part(gg, "Módulo Arrancada", 2)
+    assert gg.equip(rid, mod["id"])[0]
+    ui.cache = None
+    ui.sel = rid
+    ui.go("garage")
+    ui.open_bench()
+    rects = robots_ui.bench_slot_rects(True)
+    assert len(rects) == 8 and rects[-1][1].bottom < 548
+    frame()
+    assert has_text("Faxineiro 3/4") and has_text("Arrancada")      # resumo de sets + tag do módulo
+    # slot MOTOR (Servo Ágil, set Faxineiro) sem peça livre selecionada: painel de detalhes
+    click(dict(rects)["motor"].center)
+    frame()
+    assert ui.sel_slot == "motor" and ui.sel_piece is None
+    assert has_text("Set Faxineiro 3/4 neste robô") and has_text("com 4:")
+    n, keys = counting_frames(30)
+    assert n == 0 and len(keys) < 200, (n, len(keys))
+    # relíquia livre: ANTES/DEPOIS com FORÇA e TIME (o set quebra: Força das skills cai)
+    click(piece_rect(0).center)
+    frame()
+    assert ui.sel_piece == relic["id"]
+    d = ui.compare_data(rb, gg.pieces_by_id())
+    f0, f1, dsk = d["force"]
+    assert d["starter"] and abs(f0 - ui.robot_force(rb, gg.pieces_by_id())[0]) < 1e-9
+    assert has_text("FORÇA") and has_text("TIME") and has_text("DEPOIS")
+    assert ui.compare_data(rb, gg.pieces_by_id()) is d                     # cache por seleção
+    # tooltip: mouse sobre a relíquia (lista de peças livres) mostra RELÍQUIA e a passiva
+    real_pos = pygame.mouse.get_pos
+    pygame.mouse.get_pos = lambda: piece_rect(0).center
+    try:
+        frame()
+        assert has_text("RELÍQUIA: peça única") and has_text("Rolando Sozinha")
+        n, keys = counting_frames(30)
+        assert n == 0, n
+        shot("b10_bancada_8slots_reliquia")
+        pygame.mouse.get_pos = lambda: dict(rects)["modulo"].center
+        frame()
+        assert has_text("Habilidade: Arrancada r2")
+        shot("b10_bancada_tooltip_modulo")
+    finally:
+        pygame.mouse.get_pos = real_pos
+    # relíquia não se vende: VENDER desabilitado com ela selecionada
+    frame()
+    assert not any(en for r, _f, en in ui.buttons if r.x == 165 and r.y == 598)
+    gg.flags.pop(gm.MOD_FLAG)
+    ui.cache = None
+    frame()
+    assert len(robots_ui.bench_slot_rects(False)) == 7
+
+
+def test_shop_items_buy_and_limits():
+    gg, _rb = mod_game(seed=25, scrap=1000)
+    tab("shop")
+    assert click_btn(lambda r: r.x == 260 and r.y == 132)            # ITENS
+    frame()
+    assert ui.shop_tab == "items"
+    n, keys = counting_frames(60)
+    assert n == 0 and len(keys) < 150, (n, len(keys))
+    iid = "cera_turbo"
+    k = list(SK.ITEMS).index(iid)
+    frame()
+    click(pygame.Rect(20, 206 + k * 46, 1060, 42).center)
+    assert ui.item_sel == iid
+    sc = gg.scrap
+    frame()
+    btn = pygame.Rect(860, 650, 220, 44)
+    click(btn.center)
+    click(btn.center)                                                # mesmo quadro: 1 compra só
+    assert gg.items.get(iid) == 1 and gg.scrap == sc - SK.ITEMS[iid]["price"]
+    assert saved().items.get(iid) == 1 and saved().scrap == gg.scrap
+    gg.items[iid] = SK.ITEM_MAX
+    ok, msg = gg.buy_item(iid)
+    assert not ok and "cheio" in msg
+    gg.scrap = 0
+    assert not gg.buy_item("cafe")[0]
+    assert not gg.buy_item("nao_existe")[0]
+    gg.scrap = 1000
+    gg.items[iid] = 2
+    frame()
+    shot("b12_loja_itens")
+    # sem mod_on: aviso e COMPRAR desabilitado
+    gg.flags.pop(gm.MOD_FLAG)
+    ui.cache = None
+    frame()
+    assert has_text("Itens bloqueados")
+    assert not any(en for r, _f, en in ui.buttons if r == btn)
+
+
+def test_backpack_league_pick_consume_and_result():
+    gg, _rb = mod_game(seed=27, scrap=1000)
+    gg.items = {"cera_turbo": 2, "cafe": 1}
+    start_league()
+    zero_surface_frames(30)                                          # hub com o painel da Mochila
+    assert has_text("MOCHILA")
+    assert click_btn(lambda r: r.size == (218, 40) and r.x == 846)  # ESCOLHER ITENS
+    frame()
+    assert ui.bp_open
+    m = robots_ui.BP_MODAL
+    rows = {iid: pygame.Rect(m.x + 20, m.y + 134 + k * 44, m.w - 40, 40) for k, iid in enumerate(SK.ITEMS)}
+    click(rows["cera_turbo"].center)
+    frame()
+    click(rows["cafe"].center)
+    frame()
+    click(rows["spray"].center)                                      # sem estoque: botão desabilitado
+    frame()
+    assert gg.backpack_items() == ["cera_turbo", "cafe"]
+    assert abs(gg.match_F() - gg.rating() - SK.item_force(["cera_turbo", "cafe"])) < 1e-9
+    n, keys = counting_frames(60)
+    assert n == 0 and len(keys) < 150, (n, len(keys))
+    shot("b12_mochila")
+    # modal: os botões da tela de trás não respondem; Esc só fecha a Mochila
+    assert not any(r.size == (440, 44) for r, _f, _e in ui.buttons)  # SIMULAR escondido
+    key(pygame.K_ESCAPE)
+    assert not ui.bp_open and ui.screen_id == "hub" and g.state == "robots"
+    frame()
+    assert ui.user_strength() > ui.info()["rating"]
+    # SIMULAR: gasta a Mochila e mostra no resultado
+    assert click_btn(lambda r: r.size == (440, 44))
+    frame()
+    assert ui.screen_id == "round"
+    assert ui.round_info["items"] == [SK.ITEMS["cera_turbo"]["name"], SK.ITEMS["cafe"]["name"]]
+    assert gg.items == {"cera_turbo": 1} and gg.backpack_items() == []
+    assert saved().items == {"cera_turbo": 1}
+    frame()
+    assert has_text("Mochila usada")
+    shot("b12_resultado_mochila")
+    assert click_btn(lambda r: r.size == (260, 42))
+    frame()
+    # ASSISTIR: a config da partida leva os itens e eles são gastos no fim (callback do Game)
+    gg.set_backpack(["cera_turbo"])
+    ui.cache = None
+    assert click_btn(lambda r: r.size == (440, 54))                  # ASSISTIR
+    assert g.state in ("kickoff", "play")
+    ui.match_done([1, 0], [])
+    g.state = "robots"
+    assert ui.screen_id == "round" and ui.round_info["items"] == [SK.ITEMS["cera_turbo"]["name"]]
+    assert "cera_turbo" not in gg.items
+    ui.match_done([1, 0], [])                                        # callback repetido: nada
+    assert ui.screen_id == "hub"
     ui.to_menu()
 
 

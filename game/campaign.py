@@ -39,6 +39,7 @@ import garage as G
 import parts
 import robot_league as RL
 import robots
+import skills
 import store
 import story
 
@@ -322,6 +323,40 @@ class Campaign:
                 G.add_xp(r, fx["xp_team"], g.cap)
         if fx.get("piece"):
             self._give_piece(fx["piece"])
+        if fx.get("skill"):
+            self._give_skill(fx["skill"])
+        if fx.get("pts"):
+            self._give_pts(fx["pts"])
+
+    def _skill_targets(self, who):
+        """Robos alvo de `skill`/`pts` (B11): "hero" (padrao) ou "team" (todo o elenco)."""
+        if who == "team":
+            return list(self.garage.robots)
+        hero = self.hero_robot()
+        return [hero] if hero is not None else []
+
+    def _give_skill(self, spec):
+        """fx/REWARDS `skill` = {"robot": "hero"|"team", "id": skills.SKILLS, "rank": 1..3} (ou lista
+        deles): aprende direto (so sobe o rank; nao equipa). Devolve [nomes] aprendidos agora."""
+        out = []
+        for sp in (spec if isinstance(spec, (list, tuple)) else [spec]):
+            if not isinstance(sp, dict) or sp.get("id") not in skills.SKILLS:
+                continue
+            for r in self._skill_targets(sp.get("robot", "hero")):
+                ok, _msg = skills.learn_skill(r, sp["id"], sp.get("rank", 1))
+                if ok:
+                    out.append("%s %d" % (skills.SKILLS[sp["id"]]["name"], int(sp.get("rank", 1))))
+        return out
+
+    def _give_pts(self, n):
+        """fx/REWARDS `pts` = PH extras para o heroi (int) ou {"robot": "hero"|"team", "n": int}."""
+        who = "hero"
+        if isinstance(n, dict):
+            who, n = n.get("robot", "hero"), n.get("n", 0)
+        n = int(n or 0)
+        for r in self._skill_targets(who):
+            skills.grant_pts(r, n)
+        return n
 
     def _give_piece(self, spec):
         g = self.garage
@@ -625,7 +660,13 @@ class Campaign:
         g.refresh_shop(tier, self._rng("shop"))
         g.consume_backpack()
         self.stats["trained"] += 1
-        return {"result": rew["result"], "my": my, "opp": opp, "rewards": rew, "training": True}
+        ph = 0
+        t = self.stats["trained"]
+        if t % skills.TRAIN_PH_EVERY == 0 and t // skills.TRAIN_PH_EVERY <= skills.TRAIN_PH_MAX:
+            ph = 1                                         # spec 7.3.4: +1 PH a cada 5 treinos (max 5)
+            for r in g.robots:
+                skills.grant_pts(r, ph)
+        return {"result": rew["result"], "my": my, "opp": opp, "rewards": rew, "training": True, "ph": ph}
 
     # ------------------------------------------------------------------ recompensas de capitulo
     def apply_chapter_rewards(self, cid=None):
@@ -638,7 +679,7 @@ class Campaign:
         key = "reward:%s" % rid
         empty = {"applied": False, "scrap": 0, "piece": None, "recruits": [], "unlocked": [],
                  "xp_hero": 0, "xp_team": 0, "equip": None, "tier_done": self.garage.tier_done,
-                 "warnings": []}
+                 "warnings": [], "skills": [], "pts": 0}
         if rid is None or key in self.done:
             rep = dict(self._reports.get(rid) or empty)
             rep["applied"] = False
@@ -647,7 +688,7 @@ class Campaign:
         g = self.garage
         self.done.append(key)
         sync_unlocks(g, self.done)
-        rep = dict(empty, applied=True, recruits=[], unlocked=[], warnings=[])
+        rep = dict(empty, applied=True, recruits=[], unlocked=[], warnings=[], skills=[])
         if rw.get("scrap"):
             g.scrap = G.clamp(g.scrap + rw["scrap"], 0, G.SCRAP_MAX)
             rep["scrap"] = rw["scrap"]
@@ -675,6 +716,10 @@ class Campaign:
             if pc is not None:
                 g.equip(self.hero, pc["id"])
                 rep["equip"] = parts.part_name(pc)
+        if rw.get("skill"):
+            rep["skills"] = self._give_skill(rw["skill"])
+        if rw.get("pts"):
+            rep["pts"] = self._give_pts(rw["pts"])
         if rw.get("title"):
             g.stats["titles"] += 1
         g.tier_done = max(g.tier_done, G.clamp(ch["tier_done_on_close"], -1, len(G.TIER_OVR) - 1))
@@ -701,6 +746,7 @@ class Campaign:
         rb = g.make_robot(spec["name"], spec["role"], spec["chassis"], spec["base_ovr"],
                           spec.get("paint"))
         rb["level"] = G.clamp(int(spec.get("level", 1)), 1, G.MAX_LEVEL)
+        rb["skills"]["pts"] = skills.ph_for_level(rb["level"])    # B11: PH retroativos do nivel inicial
         g.robots.append(rb)
         if spec.get("piece"):
             pc = self._give_piece(spec["piece"])
