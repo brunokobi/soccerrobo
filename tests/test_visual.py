@@ -27,6 +27,20 @@ def test_led_color_dark_is_lightened():
     assert lum(soccer.led_color((40, 40, 50))) >= 120
 
 
+def test_robot_art_module_matches_game():
+    # Fase 4, passo 0.4: a arte dos robos mora em robot_art.py; Game so delega
+    import robot_art
+    assert robot_art.PR == soccer.PR
+    assert soccer.led_color is robot_art.led_color and soccer.scale_color is robot_art.scale_color
+    g.new_match(1)
+    g.warm_sprites()
+    t = g.teams[0]
+    ch, led, gk = g.sprite_key(t, t.players[0])
+    assert (ch, led, gk) == robot_art.sprite_key(t, t.players[0])
+    assert g.get_sprite(ch, led, gk, True) is robot_art.get_sprite(g.sprites, ch, led, gk, True)
+    assert g.build_robot_sprite(ch, led, gk, False).get_size() == (64, 64)
+
+
 def test_clash_uses_led_colors():
     # Corsários (40,40,50) x Lobos (90,100,110): iguais depois de clarear -> visitante muda de cor
     g.start_career_match(cfg("A", (40, 40, 50)), cfg("B", (90, 100, 110)))

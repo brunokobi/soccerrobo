@@ -143,6 +143,7 @@ export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy
 .venv/bin/python tests/test_campaign_save.py           # save da campanha (validação, reparo, save inválido)
 .venv/bin/python tests/test_campaign_ui.py             # telas da campanha (menu, mapa, diálogo, torneio, fim)
 .venv/bin/python tests/test_portraits.py               # retratos e cenários desenhados por código
+.venv/bin/python tests/test_prefs.py                   # preferências do jogador (store, valor inválido -> padrão)
 .venv/bin/python tests/test_campaign_balance.py        # balanço da campanha por simulação (~1,5 min)
 .venv/bin/python tests/sim_harness.py golden --check   # regressão: 80 placares do modo legado
 .venv/bin/python tests/sim_harness.py golden-new --check  # regressão: 80 placares do balanço novo
@@ -168,7 +169,9 @@ Utilitários do harness (`tests/sim_harness.py`): `golden`/`golden-new` com
 - `game/garage.py`: Modo Robôs: equipe, robôs, XP/nível, overclock, loja, recompensas e save
 - `game/parts.py`: catálogo de peças (slots, modelos, raridades, upgrades)
 - `game/robot_league.py`: liga de 6 times (calendário, tabela, simulação estatística, premiação)
+- `game/robot_art.py`: arte dos robôs em campo (sprites pré-renderizados e cache); `Game` delega a ele
 - `game/store.py`: armazenamento de texto (`localStorage` no navegador, arquivo em `~` no desktop)
+- `game/prefs.py`: preferências do jogador (`soccerpy_prefs_v1`: torcida ALTA/MEDIA/OFF), com sanitize e padrão; ainda sem tela
 - `game/robots_ui.py`: telas do Modo Robôs (hub, garagem, banco, loja, liga)
 - `game/career.py` / `game/career_ui.py`: carreira de clubes (liga, mercado, finanças, save) e suas telas
 - `game/story.py`: dados da campanha (personagens, times, cenas/diálogos, torneios, capítulos, recompensas); módulo puro, sem pygame

@@ -11,12 +11,14 @@ from collections import OrderedDict, deque
 import pygame
 from pygame import Vector2 as V
 
+import robot_art
 import robots
 from campaign import Campaign
 from campaign_ui import CampaignUI
 from career import Career
 from career_ui import CareerUI
 from garage import Garage
+from robot_art import led_color, scale_color  # noqa: F401  (reexportados: soccer.led_color)
 from robots_ui import RobotsUI
 
 W, H = 1100, 700
@@ -74,20 +76,6 @@ def seg_dist(pt, a, b):
         return pt.distance_to(a)
     t = clamp((pt - a).dot(ab) / l2, 0, 1)
     return pt.distance_to(a + ab * t)
-
-
-def led_color(c, min_lum=125):
-    """Cor do LED/halo do time com luminancia minima (cores escuras somem na arena escura)."""
-    c = tuple(int(x) for x in c[:3])
-    lum = 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]
-    if lum >= min_lum:
-        return c
-    k = (min_lum - lum) / (255.0 - lum)
-    return tuple(int(x + (255 - x) * k) for x in c)
-
-
-def scale_color(c, f):
-    return (int(c[0] * f), int(c[1] * f), int(c[2] * f))
 
 
 # (quantidade, velocidade min/max, vida min/max, cor, tamanho)
@@ -1099,59 +1087,21 @@ class Game:
 
     # robos ------------------------------------------------------------
     def build_robot_sprite(self, chassis, led, gk, low):
-        """Aspirador visto de cima: sombra, halo, anel de LED, corpo metalico. Sem rotacao em runtime."""
-        size = 64
-        c = size // 2
-        s = pygame.Surface((size, size), pygame.SRCALPHA)
-        led = scale_color(led, 0.4) if low else led
-        pygame.draw.ellipse(s, (0, 0, 0, 110), (c - PR + 1, c + PR - 9, PR * 2, 18))
-        for r in range(c - 2, PR, -1):                       # halo
-            k = (1 - (r - PR) / (c - 2 - PR)) ** 2
-            pygame.draw.circle(s, led + (int((22 if low else 70) * k),), (c, c), r)
-        ring = 5 if chassis == "Tanque" else 3
-        if chassis == "Velocista":                           # aleta traseira
-            pygame.draw.polygon(s, led, [(c - 7, c - PR + 2), (c + 7, c - PR + 2), (c, c - PR - 7)])
-            pygame.draw.polygon(s, (20, 24, 32), [(c - 7, c - PR + 2), (c + 7, c - PR + 2), (c, c - PR - 7)], 1)
-        pygame.draw.circle(s, led, (c, c), PR)
-        pygame.draw.circle(s, (12, 16, 24), (c, c), PR, 1)
-        body = PR - ring
-        for i in range(body, 0, -1):                         # domo metalico com brilho
-            t = 1 - i / body
-            v = int(46 + 92 * t)
-            pygame.draw.circle(s, (v, v + 4, v + 14), (c - int(t * 3), c - int(t * 3)), i)
-        pygame.draw.circle(s, (20, 24, 34), (c, c), body, 1)
-        pygame.draw.circle(s, (190, 200, 215), (c - 4, c - 4), 2)   # reflexo
-        if chassis == "Tanque":                              # placas de blindagem
-            for sx in (-1, 1):
-                pygame.draw.line(s, (25, 28, 38), (c + sx * 3, c - body + 1), (c + sx * 3, c + body - 1), 2)
-        if gk or chassis == "Goleiro":                       # LEDs extras
-            for k in range(8):
-                a = k * math.pi / 4
-                pygame.draw.circle(s, led, (int(c + math.cos(a) * (PR - 6)), int(c + math.sin(a) * (PR - 6))), 1)
-        return s.convert_alpha()
+        """Aspirador visto de cima (sem cache). A arte fica em robot_art.py."""
+        return robot_art.build_robot_sprite(chassis, led, gk, low)
 
     def sprite_key(self, t, p):
-        col = p.paint or (t.gk_color if p.role == "GK" else t.color)
-        return (p.chassis, led_color(col), p.role == "GK")
+        return robot_art.sprite_key(t, p)
 
     def robot_sprite(self, rb):
         """Sprite (cacheado) de um robo da garagem, com a cor de pintura dele."""
-        return self.get_sprite(rb["chassis"], led_color(rb["paint"]), rb["role"] == "GK")
+        return robot_art.robot_sprite(self.sprites, rb)
 
     def get_sprite(self, ch, led, gk, low=False):
-        key = (ch, led, gk, low)
-        spr = self.sprites.get(key)
-        if spr is None:
-            spr = self.sprites[key] = self.build_robot_sprite(ch, led, gk, low)
-        return spr
+        return robot_art.get_sprite(self.sprites, ch, led, gk, low)
 
     def warm_sprites(self):
-        for t in self.teams:
-            for p in t.players:
-                ch, led, gk = self.sprite_key(t, p)
-                for low in (False, True):
-                    if (ch, led, gk, low) not in self.sprites:
-                        self.sprites[(ch, led, gk, low)] = self.build_robot_sprite(ch, led, gk, low)
+        robot_art.warm_sprites(self.sprites, self.teams)
 
     def draw(self):
         scr = self.screen
