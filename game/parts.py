@@ -62,7 +62,10 @@ PARTS = {
                           "kind": "agressivo", "set": "Plasma"},
     "Célula Solar":      {"slot": "bateria", "w": {"bat": 1.2, "vel": 0.1}, "heat": 0.0,
                           "kind": "equilibrado", "set": "Faxineiro"},
-    "Célula Fusão":      {"slot": "bateria", "w": {"bat": 1.5, "ace": 0.4, "def": 0.2}, "heat": 0.5,
+    # Celula Fusao (decisao do dev, B6-B9): sidegrade de pico - muita ACE (arranque) com calor alto, o
+    # que deixa a BAT LIQUIDA abaixo de todas as baterias (drena mais). Antes (bat 1,5 ace 0,4 def 0,2)
+    # empatava em BAT liquido e dominava a Celula Longa/Rapida.
+    "Célula Fusão":      {"slot": "bateria", "w": {"bat": 1.1, "ace": 0.8}, "heat": 0.5,
                           "kind": "agressivo", "set": "Plasma"},
     "Espuma Viscoelástica": {"slot": "parachoque", "w": {"def": 0.7, "ctr": 0.7}, "heat": 0.0,
                              "kind": "especialista", "set": "Faxineiro"},
@@ -125,15 +128,18 @@ MODULE_MODELS = tuple(m for m in PARTS if PARTS[m]["slot"] == "modulo")
 UNIQUE_MODELS = frozenset(RELIC_MODELS)
 BALANCED_MODELS = tuple(m for m in CORE_MODELS if PARTS[m]["heat"] == 0.0)
 
-# --- sets (spec secao 3). Faixas SUBSTITUEM a anterior (4 pecas vale o 4, nao 2+4); a de 6 = a de 4
-# + a passiva. Bonus em pontos de atributo, fora do multiplicador de overclock.
-SET_TIERS = (2, 4, 6)
+# --- sets (spec secao 3; faixas 2/3/4 por decisao do dev: com 1 peca por slot as faixas 4/6 da spec
+# eram inalcancaveis). Magnitudes: faixa 2 = a 2 da spec; faixa 3 = a 4 da spec; faixa 4 = a 6 da spec
+# (= faixa 3 + a passiva). Faixas SUBSTITUEM a anterior (3 pecas vale o 3, nao 2+3). Bonus em pontos de
+# atributo, fora do multiplicador de overclock. Titã e Dojo so tem pecas em 3 slots: a faixa 4 (passiva)
+# deles e inalcancavel num robo (ver test_parts_v2.test_set_max_equippable_and_text).
+SET_TIERS = (2, 3, 4)
 SETS = {
-    "Faxineiro": {2: {"ctr": 2}, 4: {"ctr": 3, "bat": 3}, 6: {"ctr": 3, "bat": 3}, "passive": "faxina_total"},
-    "Plasma":    {2: {"chu": 2}, 4: {"chu": 3, "vel": 3}, 6: {"chu": 3, "vel": 3}, "passive": "sobrecarga"},
-    "Titã":      {2: {"def": 3}, 4: {"def": 4, "ctr": 3}, 6: {"def": 4, "ctr": 3}, "passive": "muralha_aco"},
-    "Dojo":      {2: {"qi": 2}, 4: {"qi": 3, "vis": 3}, 6: {"qi": 3, "vis": 3}, "passive": "mente_zen"},
-    "Limpex":    {2: {"vel": 2}, 4: {"vel": 3, "ace": 3}, 6: {"vel": 3, "ace": 3}, "passive": "impecavel"},
+    "Faxineiro": {2: {"ctr": 2}, 3: {"ctr": 3, "bat": 3}, 4: {"ctr": 3, "bat": 3}, "passive": "faxina_total"},
+    "Plasma":    {2: {"chu": 2}, 3: {"chu": 3, "vel": 3}, 4: {"chu": 3, "vel": 3}, "passive": "sobrecarga"},
+    "Titã":      {2: {"def": 3}, 3: {"def": 4, "ctr": 3}, 4: {"def": 4, "ctr": 3}, "passive": "muralha_aco"},
+    "Dojo":      {2: {"qi": 2}, 3: {"qi": 3, "vis": 3}, 4: {"qi": 3, "vis": 3}, "passive": "mente_zen"},
+    "Limpex":    {2: {"vel": 2}, 3: {"vel": 3, "ace": 3}, 4: {"vel": 3, "ace": 3}, "passive": "impecavel"},
 }
 SET_NAMES = tuple(SETS)
 
@@ -237,7 +243,7 @@ def set_counts(models):
 
 
 def set_tier(n):
-    """Maior faixa (2/4/6) atingida com n pecas, ou 0."""
+    """Maior faixa (2/3/4) atingida com n pecas, ou 0."""
     t = 0
     for k in SET_TIERS:
         if n >= k:
@@ -261,7 +267,7 @@ def set_bonus(counts):
 
 
 def set_bonus_text(counts):
-    """Linhas curtas (Latin-1) por set com peca equipada: 'Faxineiro 3/6: CTR+2'."""
+    """Linhas curtas (Latin-1) por set com peca equipada: 'Faxineiro 3/4: CTR+3 BAT+3'."""
     lines = []
     for s in SET_NAMES:
         n = counts.get(s, 0)

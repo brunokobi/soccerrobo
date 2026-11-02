@@ -27,7 +27,8 @@ SPEC_NEW = {
     "Servo Ágil": ("motor", {"ace": 1.0, "vel": 0.4}, 0.0, "equilibrado", "Faxineiro"),
     "Ímã Linear": ("motor", {"vel": 1.5, "ace": 0.5}, 0.45, "agressivo", "Plasma"),
     "Célula Solar": ("bateria", {"bat": 1.2, "vel": 0.1}, 0.0, "equilibrado", "Faxineiro"),
-    "Célula Fusão": ("bateria", {"bat": 1.5, "ace": 0.4, "def": 0.2}, 0.5, "agressivo", "Plasma"),
+    # decisao do dev (B6-B9): Fusao virou sidegrade de pico (spec: bat 1,5 ace 0,4 def 0,2, que dominava)
+    "Célula Fusão": ("bateria", {"bat": 1.1, "ace": 0.8}, 0.5, "agressivo", "Plasma"),
     "Espuma Viscoelástica": ("parachoque", {"def": 0.7, "ctr": 0.7}, 0.0, "especialista", "Faxineiro"),
     "Placa Reativa": ("parachoque", {"def": 1.5, "ctr": 0.3}, 0.4, "agressivo", "Titã"),
     "Mola Dupla": ("chutador", {"chu": 0.8, "vis": 0.4, "ctr": 0.2}, 0.0, "especialista", "Dojo"),
@@ -49,7 +50,8 @@ SPEC_SETS = {
     "Dojo": {"Mola Dupla", "Câmera Dupla", "Chip Tático", "Chip de CPU", "Infravermelho"},
     "Limpex": {"Chip Zero", "Solenoide Duplo", "Radar LiDAR", "Célula Rápida"},
 }
-# (set) -> {2: bonus, 4: bonus, 6: bonus}, faixas substituem a anterior; 6 = 4 + passiva
+# (set) -> (faixa 2, faixa 3, passiva da faixa 4); faixas 2/3/4 (decisao do dev: com 1 peca por slot as
+# faixas 4/6 da spec eram inalcancaveis). Magnitudes: 2 = 2 da spec, 3 = 4 da spec, 4 = 3 + passiva.
 SPEC_SET_BONUS = {
     "Faxineiro": ({"ctr": 2}, {"ctr": 3, "bat": 3}, "faxina_total"),
     "Plasma": ({"chu": 2}, {"chu": 3, "vel": 3}, "sobrecarga"),
@@ -57,10 +59,9 @@ SPEC_SET_BONUS = {
     "Dojo": ({"qi": 2}, {"qi": 3, "vis": 3}, "mente_zen"),
     "Limpex": ({"vel": 2}, {"vel": 3, "ace": 3}, "impecavel"),
 }
-# Excecoes CONHECIDAS a regra "sidegrade, nunca estritamente melhor" (valores da spec, mantidos;
-# reportado ao dev): Celula Fusao, com o calor descontado da propria bateria, empata em BAT liquido e
-# ainda soma ACE/DEF -> domina as baterias Comuns originais.
-SIDEGRADE_EXCEPTIONS = {("Célula Fusão", "Célula Longa"), ("Célula Fusão", "Célula Rápida")}
+# Regra "sidegrade, nunca estritamente melhor": vale para TODOS os modelos novos (a excecao da Celula
+# Fusao foi removida por decisao do dev: ela virou sidegrade de pico, ACE alta com BAT liquida baixa).
+SIDEGRADE_EXCEPTIONS = set()
 
 
 def net_vec(model, rar, lvl=0):
@@ -148,9 +149,7 @@ def test_sidegrade_never_strictly_better():
                 a, b = net_vec(m, rar), net_vec(c, rar)
                 if all(a[k] >= b[k] - 1e-9 for k in a) and any(a[k] > b[k] + 1e-9 for k in a):
                     found.add((m, c))
-    assert found == SIDEGRADE_EXCEPTIONS, sorted(found)
-    if found:
-        print("  [AVISO spec] modelos que dominam um original:", sorted(found))
+    assert found == SIDEGRADE_EXCEPTIONS == set(), sorted(found)
 
 
 # ----------------------------------------------------------------- loja (B1)
@@ -223,21 +222,22 @@ def test_set_membership_matches_spec():
     assert set(parts.SETS) == set(SPEC_SETS)
 
 
-def test_set_bonus_table_2_4_6():
-    for s, (b2, b4, passive) in SPEC_SET_BONUS.items():
+def test_set_bonus_table_2_3_4():
+    assert parts.SET_TIERS == (2, 3, 4)
+    for s, (b2, b3, passive) in SPEC_SET_BONUS.items():
         for n in range(0, 8):
             attrs, pas = parts.set_bonus({s: n})
             if n < 2:
                 assert attrs == {} and pas == [], (s, n)
-            elif n < 4:
+            elif n < 3:
                 assert attrs == b2 and pas == [], (s, n)
-            elif n < 6:
-                assert attrs == b4 and pas == [], (s, n)
+            elif n < 4:
+                assert attrs == b3 and pas == [], (s, n)
             else:
-                assert attrs == b4 and pas == [passive], (s, n)
+                assert attrs == b3 and pas == [passive], (s, n)
         assert passive in skills.SPECIAL
     # sets diferentes somam
-    attrs, pas = parts.set_bonus({"Faxineiro": 2, "Titã": 2, "Plasma": 6})
+    attrs, pas = parts.set_bonus({"Faxineiro": 2, "Titã": 2, "Plasma": 4})
     assert attrs == {"ctr": 2, "def": 3, "chu": 3, "vel": 3} and pas == ["sobrecarga"]
 
 
@@ -252,7 +252,13 @@ def test_set_bonus_in_effective_attrs():
     two = gm.effective_attrs(equip_all(copy.deepcopy(r), pb2), pb2)
     exp = parts.part_bonus("Borracha", 0, 0)["ctr"] + parts.part_bonus("Escova de Sucção", 0, 0)["ctr"] + 2
     assert two["ctr"] - base["ctr"] == exp
-    # 4 pecas Faxineiro: CTR +3 e BAT +3 (substitui o +2)
+    # 3 pecas Faxineiro (faixa 3): CTR +3 e BAT +3 (substitui o +2)
+    pb3 = pieces("Borracha", "Escova de Sucção", "Servo Ágil")
+    three = gm.effective_attrs(equip_all(copy.deepcopy(r), pb3), pb3)
+    c3 = sum(parts.part_bonus(m, 0, 0).get("ctr", 0) for m in (p["model"] for p in pb3.values()))
+    b3 = sum(parts.part_bonus(m, 0, 0).get("bat", 0) for m in (p["model"] for p in pb3.values()))
+    assert three["ctr"] - base["ctr"] == c3 + 3 and three["bat"] - base["bat"] == b3 + 3
+    # 4 pecas Faxineiro (faixa 4): CTR +3 e BAT +3 (substitui o +2) + passiva
     pb4 = pieces("Servo Ágil", "Célula Solar", "Espuma Viscoelástica", "Escova Dupla")
     rr = equip_all(copy.deepcopy(r), pb4)
     four = gm.effective_attrs(rr, pb4)
@@ -270,18 +276,23 @@ def test_set_bonus_in_effective_attrs():
 
 
 def test_set_max_equippable_and_text():
-    # com 1 peca por slot, quantas pecas de cada set cabem num robo (a faixa de 6 da spec e inalcancavel)
+    # com 1 peca por slot, quantas pecas de cada set cabem num robo: com as faixas 2/3/4 a faixa 3 vale para
+    # todos os sets e a 4 (passiva) para Faxineiro, Plasma e Limpex (Titã e Dojo so tem 3 slots)
     reach = {}
     for s, members in SPEC_SETS.items():
         reach[s] = len({parts.PARTS[m]["slot"] for m in members})
     assert reach == {"Faxineiro": 4, "Plasma": 4, "Titã": 3, "Dojo": 3, "Limpex": 4}, reach
-    print("  [AVISO spec] maximo de pecas de um set num robo:", reach)
+    assert all(n >= parts.SET_TIERS[1] for n in reach.values())
+    full = {s for s, n in reach.items() if n >= parts.SET_TIERS[-1]}
+    assert full == {"Faxineiro", "Plasma", "Limpex"}, full
+    print("  [AVISO] passiva de set (faixa 4) inalcancavel num robo para:", sorted(set(reach) - full))
     assert parts.set_bonus_text({}) == []
-    assert parts.set_bonus_text({"Faxineiro": 1}) == ["Faxineiro 1/6"]
-    assert parts.set_bonus_text({"Faxineiro": 3}) == ["Faxineiro 3/6: CTR+2"]
-    assert parts.set_bonus_text({"Titã": 4}) == ["Titã 4/6: DEF+4 CTR+3"]
-    assert parts.set_bonus_text({"Dojo": 6, "Plasma": 2}) == ["Plasma 2/6: CHU+2", "Dojo 6/6: QI+3 VIS+3 +passiva"]
-    for line in parts.set_bonus_text({s: 6 for s in parts.SETS}):
+    assert parts.set_bonus_text({"Faxineiro": 1}) == ["Faxineiro 1/4"]
+    assert parts.set_bonus_text({"Faxineiro": 2}) == ["Faxineiro 2/4: CTR+2"]
+    assert parts.set_bonus_text({"Faxineiro": 3}) == ["Faxineiro 3/4: CTR+3 BAT+3"]
+    assert parts.set_bonus_text({"Titã": 3}) == ["Titã 3/4: DEF+4 CTR+3"]
+    assert parts.set_bonus_text({"Dojo": 4, "Plasma": 2}) == ["Plasma 2/4: CHU+2", "Dojo 4/4: QI+3 VIS+3 +passiva"]
+    for line in parts.set_bonus_text({s: 4 for s in parts.SETS}):
         line.encode("latin-1")
         assert len(line) <= 40
 

@@ -117,9 +117,10 @@ def next_fixture(league):
 
 
 def team_strength(league, idx, garage):
-    """Rating usado pelo Poisson: usuario = team_rating, demais = ovr."""
+    """Rating usado pelo Poisson: usuario = team_rating (com skills se mod_on, B9) + consumiveis da
+    Mochila (match_F, B8), demais = ovr."""
     if idx == USER:
-        return garage.rating()
+        return garage.match_F()
     return float(league["teams"][idx]["ovr"])
 
 

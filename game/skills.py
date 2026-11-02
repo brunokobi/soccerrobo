@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 """Skills (habilidades) dos robos - dados e regras PURAS (sem pygame, sem random global).
 
-Spec: docs/specs/itens-e-habilidades.md secao 7 (Onda B, passo B5). Este modulo NAO esta ligado ao
-motor (isso e o passo B6): soccer.py vai usar compile_factors/TRIGGERS/pick_active; a garagem usa
-effective_skills, skill_force e as regras de PH/arvore/equipar.
+Spec: docs/specs/itens-e-habilidades.md secao 7 (Onda B, passos B5-B9). O motor (soccer.py, B6) usa
+compile_factors/aura_mods/item_mods, TRIGGERS/TRIGGER_KEYS/check_trigger, pick_active, cooldown e
+scaled_extra; a garagem usa effective_skills, skill_force/team_skill_force (team_rating, B9) e as regras
+de PH/arvore/equipar.
 
-Valores PROVISORIOS (os da spec, rank 1); SKILL_FORCE sera recalibrado por tests/calib_skills.py (B9).
+Efeitos = os da spec (rank 1). SKILL_FORCE: calibrada no motor real por tests/calib_skills.py (B9).
 
 Convencoes
 ----------
@@ -37,7 +38,8 @@ RANK_MUL = (1.0, 1.25, 1.5)
 RANK_CD = (1.0, 0.9, 0.8)
 UP_MUL = 0.04                 # +4% de magnitude por nivel de upgrade do modulo (provisorio)
 SK_CAP = 4.0                  # teto da forca de skills (pontos de F) por time
-ROBOT_SK_CAP = 4.0            # teto por robo (provisorio)
+ROBOT_SK_CAP = 20.0           # teto por robo (B9): = 5 x SK_CAP, um robo sozinho (ex.: goleiro com Defesa
+#                               Elastica) pode carregar no maximo o teto do time inteiro
 PH_PER_LEVEL = 1              # 1 PH por nivel a partir do 2
 PTS_MAX = 99
 TRAIN_PH_EVERY, TRAIN_PH_MAX = 5, 5    # treino: +1 PH a cada 5 jogadas, max 5 por robo (B11)
@@ -186,11 +188,37 @@ ALL = dict(SKILLS)
 ALL.update(SPECIAL)
 
 # --- forca provisoria (pontos de F por robo, por rank) - recalibrada em B9 (calib_skills.py) -------
-SKILL_FORCE = {sid: ((0.4, 0.5, 0.6) if s["kind"] in ("P", "C") else (0.5, 0.7, 0.9))
-               for sid, s in SKILLS.items()}
-SKILL_FORCE["lider"] = (0.3, 0.4, 0.5)            # aura: o efeito no time e contado uma vez so
-for _sid, _s in SPECIAL.items():
-    SKILL_FORCE[_sid] = (0.25,) * 3 if "set" in _s["src"] else (0.6,) * 3
+# SKILL_FORCE-BEGIN (gerado por tests/calib_skills.py --write; nao editar a mao)
+SKILL_FORCE = {
+    "arrancada": (1.85, 2.69, 3.53),
+    "succao": (4.17, 6.19, 8.22),
+    "curva": (0.00, 0.00, 0.00),
+    "muralha": (0.00, 0.00, 1.27),
+    "leitura": (1.45, 3.47, 5.50),
+    "poupanca": (0.19, 0.49, 0.79),
+    "recarga": (0.09, 0.09, 0.09),
+    "overclock": (1.71, 2.96, 4.21),
+    "blindagem": (3.55, 4.44, 5.32),
+    "drible": (0.00, 0.00, 0.00),
+    "elastica": (14.81, 18.40, 20.00),
+    "pressao": (0.46, 1.12, 1.77),
+    "choque": (0.00, 0.00, 0.00),
+    "matador": (0.00, 0.00, 0.00),
+    "lancador": (0.00, 0.00, 0.00),
+    "lider": (3.01, 6.83, 10.65),
+    "rolando": (1.85, 1.85, 1.85),
+    "instinto_vo": (0.23, 0.23, 0.23),
+    "remendo": (0.60, 0.60, 0.60),
+    "calor_forno": (0.00, 0.00, 0.00),
+    "chinelada": (0.00, 0.00, 0.00),
+    "faro_meia": (0.09, 0.09, 0.09),
+    "faxina_total": (4.26, 4.26, 4.26),
+    "sobrecarga": (0.00, 0.00, 0.00),
+    "muralha_aco": (2.73, 2.73, 2.73),
+    "mente_zen": (0.00, 0.00, 0.00),
+    "impecavel": (1.90, 1.90, 1.90),
+}
+# SKILL_FORCE-END
 
 # --- consumiveis (spec secao 5): scope "team" | "gk" | "one" ----------------------------------------
 ITEM_MAX = 9
@@ -275,6 +303,29 @@ TRIGGERS = {
     "near_goal": lambda c: _g(c, "dist_opp_goal", math.inf) < 180,
     "carry_any": lambda c: bool(_g(c, "has_ball", False)),
 }
+
+
+# Campos de ctx que cada gatilho le (o motor monta so estes: ctx barato a ~10 Hz). Os gatilhos de
+# EVENTO nao sao avaliados no ciclo periodico: o motor os chama no proprio evento (chute, desarme).
+TRIGGER_KEYS = {
+    "always": (),
+    "carry_free_lane": ("has_ball", "opp_ahead", "bat"),
+    "loose_ball_near": ("ball_free", "ball_dist", "ball_speed", "is_chaser"),
+    "curve_shot": ("kicking", "dist_opp_goal", "shoot_range", "gk_off_line"),
+    "curve_shot_any": ("kicking", "dist_opp_goal", "shoot_range"),
+    "goal_threat": ("ball_goal_dist", "opp_ball_zone"),
+    "low_bat_still": ("bat", "vel_frac"),
+    "late_or_charged": ("score_diff", "minute", "bat", "ball_third"),
+    "shielded_carry": ("has_ball", "opp_near"),
+    "pressed": ("has_ball", "opp_near"),
+    "shot_incoming": ("shot_speed", "ball_goal_dist", "ball_toward_goal"),
+    "high_press": ("opp_has_ball", "ball_third"),
+    "won_ball": ("won_ball",),
+    "lost_ball": ("lost_ball",),
+    "near_goal": ("dist_opp_goal",),
+    "carry_any": ("has_ball",),
+}
+EVENT_TRIGGERS = {"kick": ("curve_shot", "curve_shot_any"), "won": ("won_ball",), "lost": ("lost_ball",)}
 
 
 def check_trigger(sid, ctx):
@@ -580,7 +631,7 @@ def effective_skills(robot, pieces_by_id, mod_on=True):
 
 
 def skill_force(skill_list):
-    """Pontos de F de um robo pelas skills (provisorio), com teto ROBOT_SK_CAP."""
+    """Pontos de F de um robo pelas skills (SKILL_FORCE calibrada no motor, B9), com teto ROBOT_SK_CAP."""
     tot = 0.0
     for e in skill_list:
         sid, rank, _up = _norm(e)

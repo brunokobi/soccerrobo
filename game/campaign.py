@@ -470,7 +470,7 @@ class Campaign:
                 "stage_name": STAGE_NAMES[stage], "boss": self._is_boss(tr, stage),
                 "knockout": stage[0] != "G", "training": False, "opp": opp,
                 "home": self.garage.match_cfg(), "away": RL.match_cfg(opp),
-                "user_F": self.garage.rating(), "O": opp["ovr"],
+                "user_F": self.garage.match_F(), "O": opp["ovr"],
                 "F_rec": ch["F_start"] + (ch["F_end"] - ch["F_start"]) * frac,
                 "pity": self.pity, "attempt": tour["attempt"]}
 
@@ -525,6 +525,7 @@ class Campaign:
         tier = self.econ_tier()
         rew = G.match_rewards(g, my, opp, pids, tier, self._rng("rw"))
         g.refresh_shop(tier, self._rng("shop"))
+        g.consume_backpack()                               # consumiveis da Mochila (B8): gastos na partida
         self.stats["matches"] += 1
         if simulated:
             self.stats["sims"] += 1
@@ -610,7 +611,7 @@ class Campaign:
         color = rng.choice(RL.TEAM_COLORS)
         team = RL.opponent_team(name, color, self.training_ovr(), rng.randrange(1, 100000))
         return {"home": self.garage.match_cfg(), "away": RL.match_cfg(team), "opp": team,
-                "O": team["ovr"], "user_F": self.garage.rating(), "econ_tier": self.training_econ_tier(),
+                "O": team["ovr"], "user_F": self.garage.match_F(), "econ_tier": self.training_econ_tier(),
                 "bg": self.chapter_bg(), "training": True}
 
     def record_training(self, my, opp, events=None, simulated=False):
@@ -622,6 +623,7 @@ class Campaign:
         tier = self.training_econ_tier()
         rew = G.match_rewards(g, my, opp, pids, tier, self._rng("rw"))
         g.refresh_shop(tier, self._rng("shop"))
+        g.consume_backpack()
         self.stats["trained"] += 1
         return {"result": rew["result"], "my": my, "opp": opp, "rewards": rew, "training": True}
 

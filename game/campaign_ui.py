@@ -821,7 +821,7 @@ class CampaignUI(RobotsUI):
         tr = self.train
         if cp is None or tr is None:
             return
-        my, opp = C.sim_match(cp.garage.rating(), tr["O"], cp._rng("trainsim"))
+        my, opp = C.sim_match(cp.garage.match_F(), tr["O"], cp._rng("trainsim"))
         out = cp.record_training(my, opp, simulated=True)
         self.finish_result(out, tr, [], True, training=True)
 

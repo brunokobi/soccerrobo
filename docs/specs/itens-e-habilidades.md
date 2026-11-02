@@ -13,7 +13,7 @@
 | motor | Servo Ágil | ace 1,0, vel 0,4 | 0 | equilibrado | Faxineiro |
 | motor | Ímã Linear | vel 1,5, ace 0,5 | 0,45 | agressivo | Plasma |
 | bateria | Célula Solar | bat 1,2, vel 0,1 | 0 | equilibrado | Faxineiro |
-| bateria | Célula Fusão | bat 1,5, ace 0,4, def 0,2 | 0,5 | agressivo | Plasma |
+| bateria | Célula Fusão | bat 1,1, ace 0,8 | 0,5 | agressivo (pico) | Plasma |
 | parachoque | Espuma Viscoelástica | def 0,7, ctr 0,7 | 0 | especialista | Faxineiro |
 | parachoque | Placa Reativa | def 1,5, ctr 0,3 | 0,4 | agressivo | Titã |
 | chutador | Mola Dupla | chu 0,8, vis 0,4, ctr 0,2 | 0 | especialista | Dojo |
@@ -27,6 +27,8 @@
 | motor | Motor Torque | vel 0,6, ace 0,6, def 0,3 | 0 | especialista | Titã |
 | chutador | Solenoide Duplo | chu 1,1, ctr 0,3 | 0,15 | meio-termo | Limpex |
 
+**Decisão do dev (B6-B9): Célula Fusão é sidegrade.** Com os pesos originais (bat 1,5, ace 0,4, def 0,2, heat 0,5) ela empatava em BAT líquido e dominava a Célula Longa/Rápida em todas as raridades. Agora é uma bateria de **pico**: muita ACE (arranque), com calor alto que deixa a BAT líquida abaixo de todas as baterias (drena mais). O teste de sidegrade (`test_parts_v2`) vale para todos os modelos, sem exceção.
+
 **Cuidado com a loja determinística**: `garage.refresh_shop` e `match_rewards` usam `r.choice(parts.MODELS)` e tests dependem do fluxo do RNG. Manter `parts.MODELS` (14 modelos originais) como `CORE_MODELS`; criar `ALL_MODELS` com os novos. A loja usa `CORE_MODELS` no tier < 4 e `ALL_MODELS` a partir do tier 4; assim, o stream do RNG dos testes antigos não muda.
 
 ## 2. 8º slot: Módulo (`modulo`)
@@ -39,7 +41,9 @@ Modo Robôs: o slot Módulo só aparece/equipa com `flags["mod_on"]` (liberado a
 ## 3. Sets (bônus de conjunto)
 Cada modelo tem `set` opcional. `effective_attrs` conta peças equipadas por set (qualquer raridade) e aplica bônus de atributo. Cálculo antes do multiplicador de overclock e dentro de `raw[a]`.
 
-| Set | Peças (6 possíveis) | 2 peças | 4 peças | 6 peças |
+**Decisão do dev (B6-B9): faixas 2/3/4 peças** (com uma peça por slot as faixas 4/6 eram inalcançáveis). As magnitudes da coluna "4 peças" abaixo valem para **3 peças**, e as da coluna "6 peças" (a de 4 + passiva) valem para **4 peças** (`parts.SET_TIERS = (2, 3, 4)`). Titã e Dojo só têm peças em 3 slots: a passiva deles (faixa 4) continua inalcançável num robô.
+
+| Set | Peças | 2 peças | 4 peças (agora 3) | 6 peças (agora 4) |
 |---|---|---|---|---|
 | Faxineiro | Servo Ágil, Célula Solar, Espuma Viscoelástica, Escova Dupla, Escova de Sucção, Borracha | CTR +2 | CTR +3, BAT +3 | + passiva "Faxina Total" (`tackle` x1,1 e `reach` +3) |
 | Plasma | Ímã Linear, Célula Fusão, Railgun de Bolso, Sonar Quântico, Canhão de Plasma, Turbina | CHU +2 | CHU +3, VEL +3 | + passiva "Sobrecarga" (`kick_pow` x1,06; `bat_drain_mul` x1,08) |
@@ -172,6 +176,8 @@ Mudanças em `soccer.py` (todas guardadas por flag):
 3. **Regressão**: `calib_campaign.py --grid` (F 66..82 x O 48..74, n = 200) e a tabela por checkpoint com garages que incluem skills (`build_garage_for` ganha skills em F alto). Meta: |SIM - motor| médio <= 3 pontos, máximo <= 6,5 (hoje 2,5/6,0).
 4. **Modo Robôs**: `calib_robots.py --fit` roda de novo (a liga usa `team_rating` com skills) e confere que a simulação continua dentro da tolerância; se o desvio passar de 3, `ROBOT_SLOPE`/`SIM_K` ajustam, mas o motor não.
 5. **Ramos e atos**: um autoplay "guloso" por semente (3 sementes) em cada ramo (`renova_limpex` sim/não), medindo F ao fim de cada capítulo contra a tabela da spec de campanha.
+
+**Estado (B6-B9, 02/11/2026).** Motor: `Game.sk_setup/tick_skills/sk_eval/sk_start/sk_stop/sk_pre_shot/sk_on_kick/on_steal/ball_curve` em `soccer.py`, atrás de `sk_on` (só liga com `skills`, aura ou `items` no elenco: Modo Robôs com `mod_on` e campanha a partir de `rw_5`); goldens 80/80. Custo medido: ~0,0023 ms/step (10 robôs x 3 skills; meta 0,006). Diferenças da spec: o gatilho de chute (Curva/Chinelada) é avaliado em `ai_shoot` antes do erro de mira (para `shot_err` valer) e interrompe a ativa atual; a saída do Chute em Curva é pré-girada pela corda do arco (integrada com a física da bola) para a curva terminar no alvo. `SKILL_FORCE` calibrada por `tests/calib_skills.py` (tabela no docstring); `ROBOT_SK_CAP` = 20 (o teto que vale é o do time, 4,0). `calib_campaign --skills` (caps. 3 e 5): |SIM - motor| 2,8 pontos, `sim_bias` mantido. Skills sem efeito mensurável no motor atual: Lançador (nenhum), Curva, Muralha r1, Drible, Choque, Instinto Matador, Recarga, Calor de Forno, Mente Zen, Sobrecarga, Chinelada (candidatas a rebalanceamento na B14).
 
 ## 10. Garage v2 (save)
 - `garage.VERSION` 1 -> 2. `MIGRATIONS[1] = fn(dict) -> dict`: para cada robô, `slots["modulo"] = None`, `skills = {"learned": {}, "equipped": [], "pts": 0}`, `look = {}`; no topo, `items = {}`, `cosmetics = []`, `cap = 10`; `v = 2`. `FIELDS` ganha `items`, `cosmetics`, `cap`. A chave de armazenamento continua `soccerpy_robots_v1`.

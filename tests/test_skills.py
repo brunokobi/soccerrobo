@@ -268,8 +268,15 @@ def test_effective_skills_sources():
     learned_eq = [e for e in eff if e[0] in S.SKILLS]
     assert len(learned_eq) <= S.MAX_EQUIPPED
     assert sum(S.load_of(e[0], e[1]) for e in learned_eq) <= S.LOAD_MAX
-    # set completo (6 pecas) -> passiva do set (contada direto pela tabela; 6 e inalcancavel com 7 slots)
-    assert parts.set_bonus({"Plasma": 6})[1] == ["sobrecarga"]
+    # set completo (faixa 4 = 4 pecas) -> passiva do set entra nas skills efetivas
+    assert parts.set_bonus({"Plasma": 4})[1] == ["sobrecarga"]
+    g2 = gm.new_game(random.Random(5))
+    r2 = g2.robots[0]
+    for m in ("Turbina", "Célula Fusão", "Canhão de Plasma", "Sonar Quântico"):
+        pc = g2.new_piece(m, 0)
+        g2.inventory.append(pc)
+        assert g2.equip(r2["id"], pc["id"])[0]
+    assert ("sobrecarga", 1, 0) in S.effective_skills(r2, g2.pieces_by_id())
     # robo bagunçado nunca levanta
     for bad in ({}, {"slots": None}, {"slots": {"modulo": 999}}, {"skills": {"equipped": ["x", None]}},
                 {"skills": {"learned": {"leitura": "a"}, "equipped": ["leitura"]}}):
@@ -280,10 +287,12 @@ def test_skill_force_and_cap():
     assert S.skill_force([]) == 0.0
     f1 = S.skill_force([("arrancada", 1)])
     f3 = S.skill_force([("arrancada", 3)])
-    assert 0 < f1 < f3 and f1 == S.SKILL_FORCE["arrancada"][0]
+    assert 0 <= f1 <= f3 and f1 == S.SKILL_FORCE["arrancada"][0] and f3 == S.SKILL_FORCE["arrancada"][2]
+    # B9: tabela calibrada no motor (tests/calib_skills.py): >= 0, monotona no rank, teto por robo
+    assert set(S.SKILL_FORCE) == set(S.ALL)
     for sid in S.SKILL_FORCE:
         a, b, c = S.SKILL_FORCE[sid]
-        assert 0 < a <= b <= c <= 1.0, sid
+        assert 0 <= a <= b <= c <= S.ROBOT_SK_CAP, sid
     many = [(sid, 3) for sid in S.SKILL_IDS]
     assert S.skill_force(many) == S.ROBOT_SK_CAP
     assert S.team_skill_force([]) == 0.0

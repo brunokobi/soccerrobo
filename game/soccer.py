@@ -15,6 +15,7 @@ import crowd
 import prefs
 import robot_art
 import robots
+import skills
 from campaign import Campaign
 from campaign_ui import CampaignUI
 from career import Career
@@ -110,6 +111,9 @@ FX_KINDS = {
     "smoke":  (1, 10, 30, 0.6, 1.0, (176, 178, 188), 4),       # superaquecendo (pecas de calor)
     "smoke_dark": (2, 10, 26, 0.7, 1.2, (58, 58, 64), 4),      # bateria critica (< 0,10)
     "spark":  (3, 70, 170, 0.12, 0.25, (255, 236, 110), 1),    # curto-circuito (bateria baixa)
+    # B7 (skills): so pelo desenho (Game.draw_skill_fx), no fx_rng
+    "sk_spark": (3, 80, 190, 0.15, 0.3, (255, 150, 40), 2),     # Pressao Alta / Arrancada
+    "sk_zap": (5, 120, 260, 0.1, 0.22, (255, 250, 140), 1),     # Choque Eletrico
 }
 # estilo da particula: indice em robot_art.PUFF_COLORS (fumaca/poeira desenhadas com sprites prontos);
 # ausente = faisca (linha + circulo). FX_RISE: deriva para cima (fumaca).
@@ -117,6 +121,19 @@ FX_STYLE = {"dust": 0, "smoke": 1, "smoke_dark": 2}
 FX_RISE = {"smoke": 26.0, "smoke_dark": 34.0}
 ROBOT_FX = ("dust", "smoke", "smoke_dark", "spark")
 ROBOT_FX_MAX = 36                      # particulas de robo ao mesmo tempo (dentro do FX_MAX)
+# --- skills (B6/B7) ---
+SK_EVAL_EVERY = 6                      # gatilhos periodicos: cada robo e avaliado a cada 6 passos (~10 Hz)
+SK_RNG_SEED = 20261                    # RNG proprio das skills (direcao da curva); nunca o random global
+SK_ZONE = 160.0                        # px: "adversario com a bola na zona do robo" (Muralha)
+SK_AHEAD_COS = 0.5                     # cone de 60 graus a frente (Arrancada: campo livre)
+SK_GK_OFF = (40.0, 20.0)               # goleiro "fora da linha": > 40 px da linha do gol ou > 20 px do centro
+SK_ZAP_T = 0.35                        # s de jogo: raio do Choque visivel
+SK_FX_COLORS = {"dash": (120, 230, 255), "magnet": (90, 160, 255), "curve": (255, 70, 220),
+                "shield": (110, 220, 255), "overclock": (255, 70, 50), "heal": (80, 240, 120),
+                "zap": (255, 250, 140), "gold_ring": (255, 205, 60), "spin": (200, 255, 255),
+                "gloves": (255, 235, 90), "sparks": (255, 150, 40), "glow": (255, 255, 200),
+                "wheel": (255, 200, 120), "tape": (230, 210, 150), "slipper": (255, 120, 120),
+                "captain": (255, 215, 60), "icon": (170, 230, 255)}
 DUST_SPEED = 165.0                     # px/s: acima disso o robo levanta poeira
 LOW_BAT, CRIT_BAT = 0.25, 0.10
 
@@ -140,11 +157,13 @@ class Ball:
         self.vel = V()
         self.owner = None
         self.roll = 0.0
+        self.curve = 0.0                         # graus/s (skill Chute em Curva); 0.0 = bola reta (legado)
+        self.curve_t = 0.0
 
 
 class Player:
     def __init__(self, team, idx, role, fx, fy, name="", ovr=65.0, chassis=None, seed=None,
-                 attrs=None, tuning=None, pid=None, paint=None, vis=None):
+                 attrs=None, tuning=None, pid=None, paint=None, vis=None, skills=None):
         self.team = team
         self.idx = idx
         self.role = role
@@ -175,6 +194,15 @@ class Player:
         self.tackle_cd = 0.0
         self.think = random.random() * 0.3
         self.hold = 0.0        # goleiro segurando a bola
+        # skills (B6): [(id, rank, up)] vindos da entrada de elenco; o estado so e montado por
+        # Game.sk_setup quando a partida tem skills (sk_on). Valores neutros: tk_ext 0.0 (x + 0.0 e exato).
+        self.skills = tuple(tuple(e) for e in skills if e) if skills else ()
+        self.tk_ext = 0.0
+        self.sk_cur = None     # skill ativa agora (id) ou None
+        self.sk_fx = None      # FX desenhado agora (skills.ALL[id]["fx"]) ou None
+        self.sk_kick = self.sk_won = self.sk_lost = ()
+        self.sk_curve = 0.0
+        self.sk_zap = None
 
 
 class Team:
@@ -193,7 +221,8 @@ class Team:
             elif isinstance(squad[i], dict):       # modo robos: {name, attrs, chassis, pid, paint}
                 e = squad[i]
                 nm, ovr, chassis, seed = e.get("name", ""), 65, e.get("chassis"), None
-                extra = dict(attrs=e["attrs"], pid=e.get("pid"), paint=e.get("paint"), vis=e.get("vis"))
+                extra = dict(attrs=e["attrs"], pid=e.get("pid"), paint=e.get("paint"), vis=e.get("vis"),
+                             skills=e.get("skills"))
             elif len(squad[i]) >= 4:               # carreira: (nome, ovr, pid, pos)
                 nm, ovr, pid, pos = squad[i][:4]
                 chassis, seed = robots.POS_CHASSIS.get(pos), pid
@@ -205,6 +234,9 @@ class Team:
         self.ctrl = None
         self.switch_cd = 0.0
         self.chaser = None
+        self.tactic = skills.DEFAULT_TACTIC      # prioridade das skills (Ofensivo/Equilibrado/Defensivo)
+        self.items = ()                          # consumiveis da partida (aura de time)
+        self.sk_pilha = 0                        # Pilha Reserva: usos restantes
 
     @property
     def goal_x(self):      # gol que eu defendo
@@ -229,6 +261,15 @@ class Game:
         self.puffs = None
         self.fx_amb = 0                           # particulas de robo vivas (teto ROBOT_FX_MAX)
         self.speed_idx = 0
+        self.sk_on = False                        # skills ligadas nesta partida (so Modo Robos/campanha com skills)
+        self.sk_rng = random.Random(SK_RNG_SEED)
+        self.sk_t = 0.0
+        self.sk_n = 0
+        self.sk_groups = ()
+        self.sk_live = []
+        self.sk_count = {}
+        self.sk_imgs = {}
+        self.sk_pilha_on = False
         self.crowd = None                         # torcida da partida assistida (crowd.Crowd) ou None
         self.crowd_clock = None                   # relogio injetavel da torcida (testes); None = perf_counter
         self.crowd_venue = None                   # local da partida assistida atual (re-warm na pausa)
@@ -308,6 +349,7 @@ class Game:
         self.career_match = False
         self.match_sink = None
         self.crowd = None
+        self.sk_on = False                        # amistoso: nunca ha skills
         self.speed_idx = 0
         self.match_time = self.time_left = MATCH_TIME
         self.events = []
@@ -355,6 +397,7 @@ class Game:
         self.speed_idx = 0
         self.ball = Ball()
         self.paused = False
+        self.sk_setup(home, away)
         self.reset_fx()
         self.cam_reset()
         self.warm_crowd(venue)
@@ -386,6 +429,8 @@ class Game:
                 p.vel = V()
                 p.face = V(t.dir, 0)
                 p.cd = p.tackle_cd = p.hold = 0.0
+        if self.sk_on:
+            self.sk_kickoff()
         b.pos = V(CX, CY)
         b.vel = V()
         kicker = self.teams[team_idx].players[4]
@@ -546,6 +591,8 @@ class Game:
     def update_play(self, dt):
         self.time_left -= dt
         self.tick_timers(dt)
+        if self.sk_on:
+            self.tick_skills(dt)
         for t in self.teams:
             cand = [p for p in t.players if p.role != "GK"]
             t.chaser = min(cand, key=lambda p: p.pos.distance_squared_to(self.ball.pos))
@@ -658,6 +705,8 @@ class Game:
         b.pos = p.pos + d * (PR + BR + 3)
         b.vel = d * power
         p.cd = 0.35
+        if self.sk_on:
+            self.sk_on_kick(p, d, power)
         if power >= 600:
             self.fx_emit("kick", b.pos, d=d)
         if self.crowd is not None and power > 450:      # chance: chute forte perto do gol, na direcao dele
@@ -706,6 +755,8 @@ class Game:
             b.pos = o.pos + o.face * (PR + BR - 2)
             b.vel = V(o.vel)
         else:
+            if b.curve:
+                self.ball_curve(b, dt)
             b.pos += b.vel * dt
             b.vel *= 0.35 ** dt
             if b.vel.length() < 8:
@@ -722,7 +773,7 @@ class Game:
             for q in self.teams[1 - o.team.idx].players:
                 if q.role == "GK" or q.tackle_cd > 0:
                     continue
-                if q.pos.distance_to(o.pos) < PR * 2 + 4:
+                if q.pos.distance_to(o.pos) < PR * 2 + 4 + q.tk_ext:
                     q.tackle_cd = 0.55
                     chance = 0.5 if q.team.human else q.f.tackle
                     if random.random() < chance * o.f.shield:
@@ -730,6 +781,8 @@ class Game:
                         q.cd = 0.0
                         o.cd = 0.7
                         self.fx_emit("tackle", b.pos)
+                        if self.sk_on:
+                            self.on_steal(q, o)
                         break
             return
         if o:
@@ -910,6 +963,8 @@ class Game:
         if bad_aim:                          # decisao ruim: mira no lado do goleiro
             side = -side
         ty = CY + side * GOAL_HALF * random.uniform(0.35, 0.7)
+        if self.sk_on and p.sk_kick:
+            self.sk_pre_shot(p)
         err = p.f.shot_err
         d = (V(t.target_x, ty) - p.pos).rotate(random.uniform(-err, err))
         self.kick(p, d, random.uniform(560, 680) + 140 * p.f.g_chu)
@@ -988,6 +1043,372 @@ class Game:
         speed = p.f.gk_speed * min(1.0, to.length() / 30) * (1.25 if shot else 1.0)
         self.steer(p, to, speed, dt)
         p.face = V(t.dir, 0)
+
+    # ---------------------------------------------------------------- skills (B6)
+    def sk_setup(self, home, away):
+        """Monta as skills da partida (Fase 4, B6). So liga (sk_on) se algum time traz skills, aura ou
+        consumiveis; senao o motor fica EXATAMENTE como o legado (goldens, carreira, amistoso).
+
+        Por time: aura (Lider) + consumiveis (ITEMS: "team" no time, "gk" so no goleiro, "one" = Pilha
+        Reserva) entram nos fatores base de cada robo; por robo: passivas compiladas em f_base, uma
+        variante pre-calculada (f_var) por ativa/condicional. Nao toca o random global (RNG: sk_rng)."""
+        self.sk_on = False
+        self.sk_rng = random.Random(SK_RNG_SEED)
+        self.sk_t = 0.0
+        self.sk_n = 0
+        self.sk_live = []
+        self.sk_count = {}
+        groups = [[] for _ in range(SK_EVAL_EVERY)]
+        k = 0
+        self.sk_pilha_on = False
+        for t, cfg in zip(self.teams, (home, away)):
+            tac = cfg.get("tactic") if isinstance(cfg, dict) else None
+            t.tactic = tac if tac in skills.TACTICS else skills.DEFAULT_TACTIC
+            raw = cfg.get("items") if isinstance(cfg, dict) else None
+            items = tuple(i for i in (raw or ()) if i in skills.ITEMS)[:skills.BACKPACK]
+            t.items = items
+            lists = [p.skills for p in t.players]
+            aura = skills.aura_mods(lists)
+            if not (aura or items or any(lists)):
+                continue
+            self.sk_on = True
+            t.sk_pilha = sum(skills.ITEMS[i].get("extra", {}).get("uses", 0) for i in items
+                             if skills.ITEMS[i]["scope"] == "one")
+            self.sk_pilha_on = self.sk_pilha_on or t.sk_pilha > 0
+            for p in t.players:
+                if self.sk_init_player(p, aura, items):
+                    groups[k % SK_EVAL_EVERY].append(p)
+                    k += 1
+        self.sk_groups = tuple(tuple(g) for g in groups)
+        if self.sk_on:
+            self.warm_skill_fx()
+
+    def sk_init_player(self, p, aura, items):
+        """Estado de skills de um robo. Devolve True se ele tem gatilho periodico (vai num grupo)."""
+        f0 = p.f
+        if aura:
+            f0 = skills.apply_mods(f0, aura)
+        for it in items:
+            sc = skills.ITEMS[it]["scope"]
+            if sc == "team" or (sc == "gk" and p.role == "GK"):
+                f0 = skills.apply_mods(f0, skills.item_mods(it))
+        comp = skills.compile_factors(f0, p.skills)
+        p.f = p.f_base = comp["_base"]
+        p.spd = p.spd_base = p.f.speed
+        p.f_var = {sid: v for sid, v in comp.items() if sid != "_base"}
+        p.sk_rank, p.sk_cdv, p.sk_extra, p.sk_ready, p.sk_uses = {}, {}, {}, {}, {}
+        per, kick, won, lost, cond, need = [], [], [], [], [], set()
+        ev_kick, ev_won, ev_lost = (skills.EVENT_TRIGGERS[k] for k in ("kick", "won", "lost"))
+        for e in p.skills:
+            sid, rank, up = skills._norm(e)
+            s = skills.ALL.get(sid)
+            if s is None or s["kind"] == "P" or sid in p.sk_rank:
+                continue
+            p.sk_rank[sid] = (rank, up)
+            p.sk_cdv[sid] = skills.cooldown(sid, rank)
+            p.sk_extra[sid] = skills.scaled_extra(sid, rank, up)
+            p.sk_ready[sid] = 0.0
+            if "uses" in p.sk_extra[sid]:
+                p.sk_uses[sid] = int(p.sk_extra[sid]["uses"])
+            trg = s["trigger"]
+            fn = skills.TRIGGERS[trg]
+            if s["kind"] == "C":
+                cond.append((sid, fn))
+                need.update(skills.TRIGGER_KEYS.get(trg, ()))
+            elif trg in ev_kick:
+                kick.append(sid)
+            elif trg in ev_won:
+                won.append(sid)
+            elif trg in ev_lost:
+                lost.append(sid)
+            else:
+                per.append((sid, fn, s["bat"] + skills.BAT_MARGIN if s["bat"] else 0.0))
+                need.update(skills.TRIGGER_KEYS.get(trg, ()))
+        p.sk_per, p.sk_kick, p.sk_won, p.sk_lost, p.sk_cond = (tuple(x) for x in (per, kick, won, lost, cond))
+        p.sk_need = frozenset(need)
+        p.sk_cur = p.sk_condon = p.sk_fx = None
+        p.sk_end = p.sk_gcd = p.sk_fat_end = p.sk_fx_t = 0.0
+        p.sk_pull = 0.0
+        p.sk_curve = 0.0
+        p.sk_curve_t = 0.0
+        p.sk_zap = None
+        p.sk_fx_next = 0.0
+        return bool(per or cond)
+
+    def sk_kickoff(self):
+        """Saida de bola: encerra as ativas (o cansaco do Overclock tambem) e a curva da bola."""
+        t = self.sk_t
+        for p in list(self.sk_live):
+            if p.sk_cur is not None:
+                self.sk_stop(p, t, fatigue=False)
+            p.sk_fat_end = 0.0
+            p.spd = p.f.speed
+        self.sk_live = []
+        for tm in self.teams:
+            for p in tm.players:
+                if p.sk_cur is None and getattr(p, "sk_condon", None) is not None:
+                    p.f = p.f_base
+                    p.spd = p.spd_base
+                    p.sk_condon = None
+                    p.sk_fx = None
+        self.ball.curve = self.ball.curve_t = 0.0
+
+    def tick_skills(self, dt):
+        """Relogio das skills (so com sk_on): fim de ativas/cansaco e o ima da Succao a cada passo; os
+        gatilhos periodicos de 1/6 dos robos por passo (cada robo a ~10 Hz); Pilha Reserva."""
+        t = self.sk_t = self.sk_t + dt
+        if self.sk_live:
+            b = self.ball
+            for p in tuple(self.sk_live):
+                if p.sk_cur is not None:
+                    if t >= p.sk_end:
+                        self.sk_stop(p, t)
+                    elif p.sk_pull and b.owner is None:
+                        to = p.pos - b.pos
+                        d2 = to.length_squared()
+                        if 1.0 < d2 < 14400.0:            # ima ate 120 px
+                            b.vel += to * (p.sk_pull * dt / math.sqrt(d2))
+                elif t >= p.sk_fat_end:
+                    p.sk_fat_end = 0.0
+                    p.spd = p.f.speed
+                    self.sk_live.remove(p)
+        n = self.sk_n = (self.sk_n + 1) % SK_EVAL_EVERY
+        for p in self.sk_groups[n]:
+            if p.sk_cur is None:
+                self.sk_eval(p, t)
+        if not self.sk_pilha_on:
+            return
+        self.sk_pilha_on = any(tm.sk_pilha for tm in self.teams)
+        for tm in self.teams:
+            if tm.sk_pilha:
+                for p in tm.players:
+                    if p.bat < skills.ITEMS["pilha_reserva"]["extra"]["restore_below"]:
+                        p.bat = 1.0
+                        tm.sk_pilha -= 1
+                        self.sk_count["pilha_reserva"] = self.sk_count.get("pilha_reserva", 0) + 1
+                        break
+
+    def sk_ctx(self, p, need):
+        """Contexto dos gatilhos (skills.TRIGGERS) so com os campos que o robo precisa."""
+        b = self.ball
+        o = b.owner
+        t = p.team
+        hb = o is p
+        c = {"has_ball": hb, "bat": p.bat}
+        if hb and ("opp_ahead" in need or "opp_near" in need):
+            ahead = near = math.inf
+            dx = t.dir
+            px, py = p.pos.x, p.pos.y
+            for q in self.teams[1 - t.idx].players:
+                rx, ry = q.pos.x - px, q.pos.y - py
+                dd = math.hypot(rx, ry)
+                if dd < near:
+                    near = dd
+                if rx * dx > SK_AHEAD_COS * dd and dd < ahead:
+                    ahead = dd
+            c["opp_ahead"] = ahead
+            c["opp_near"] = near
+        opp_has = o is not None and o.team is not t
+        if "opp_has_ball" in need:
+            c["opp_has_ball"] = opp_has
+        if "opp_ball_zone" in need:
+            c["opp_ball_zone"] = opp_has and o.pos.distance_squared_to(p.pos) < SK_ZONE * SK_ZONE
+        if "ball_free" in need:
+            c["ball_free"] = o is None
+            c["is_chaser"] = t.chaser is p
+            c["ball_dist"] = p.pos.distance_to(b.pos)
+            c["ball_speed"] = b.vel.length()
+        if "ball_goal_dist" in need:
+            c["ball_goal_dist"] = math.hypot(b.pos.x - t.goal_x, b.pos.y - CY)
+        if "shot_speed" in need:
+            c["shot_speed"] = b.vel.length() if o is None else 0.0
+            c["ball_toward_goal"] = o is None and b.vel.x * t.dir < 0
+        if "dist_opp_goal" in need:
+            c["dist_opp_goal"] = math.hypot(p.pos.x - t.target_x, p.pos.y - CY)
+        if "ball_third" in need:
+            bf = (b.pos.x - PITCH.left) / PITCH.w
+            if t.dir == -1:
+                bf = 1.0 - bf
+            c["ball_third"] = "att" if bf > 2 / 3 else ("def" if bf < 1 / 3 else "mid")
+        if "vel_frac" in need:
+            c["vel_frac"] = p.vel.length() / (PLAYER_SPEED * p.spd_base)
+        if "score_diff" in need:
+            c["score_diff"] = self.score[t.idx] - self.score[1 - t.idx]
+            c["minute"] = self.minute()
+        return c
+
+    def sk_ready_ok(self, p, sid, t):
+        """Pronta: recarga zerada, usos restantes e bateria >= custo + margem."""
+        if p.sk_ready[sid] > t:
+            return False
+        if sid in p.sk_uses and p.sk_uses[sid] <= 0:
+            return False
+        cost = skills.ALL[sid]["bat"]
+        return not cost or p.bat >= cost + skills.BAT_MARGIN
+
+    def sk_eval(self, p, t):
+        """Avaliacao periodica de um robo sem ativa: condicional (Instinto Matador) e ativas prontas.
+        Caminho quente (~1,7 robos por passo): gatilhos pre-resolvidos (skills.TRIGGERS) e ctx so com os
+        campos que o robo usa, montado so se alguma skill esta pronta."""
+        ctx = None
+        if p.sk_cond:
+            ctx = self.sk_ctx(p, p.sk_need)
+            on = None
+            for sid, fn in p.sk_cond:
+                if fn(ctx):
+                    on = sid
+                    break
+            if on != p.sk_condon:
+                p.sk_condon = on
+                p.f = p.f_var[on] if on is not None else p.f_base
+                if not p.sk_fat_end:
+                    p.spd = p.f.speed
+                p.sk_fx = skills.ALL[on]["fx"] if on is not None else None
+                if on is not None:
+                    p.sk_fx_t = t
+                    self.sk_count[on] = self.sk_count.get(on, 0) + 1
+        if t < p.sk_gcd:
+            return
+        bat = p.bat
+        ready, uses = p.sk_ready, p.sk_uses
+        cand = None
+        for sid, fn, need_bat in p.sk_per:
+            if ready[sid] > t or bat < need_bat or (uses and uses.get(sid, 1) <= 0):
+                continue
+            if ctx is None:
+                ctx = self.sk_ctx(p, p.sk_need)
+            if fn(ctx):
+                cand = [sid] if cand is None else cand + [sid]
+        if cand:
+            self.sk_start(p, cand[0] if len(cand) == 1 else skills.pick_active(cand, p.team.tactic), t)
+
+    def sk_start(self, p, sid, t):
+        """Liga a ativa: custo de bateria, recarga, GCD, variante de fatores (dur > 0)."""
+        s = skills.ALL[sid]
+        p.bat = max(0.0, p.bat - s["bat"])
+        p.sk_ready[sid] = t + p.sk_cdv[sid]
+        if sid in p.sk_uses:
+            p.sk_uses[sid] -= 1
+        p.sk_gcd = t + skills.GCD
+        self.sk_count[sid] = self.sk_count.get(sid, 0) + 1
+        if s["dur"] <= 0:                              # efeito imediato (Choque): sem variante
+            return
+        ex = p.sk_extra[sid]
+        p.sk_cur = sid
+        p.sk_end = t + s["dur"]
+        p.sk_condon = None
+        p.f = p.f_var[sid]
+        p.spd = p.f.speed
+        p.sk_fat_end = 0.0
+        p.tk_ext = ex.get("tk_ext", 0.0)
+        p.sk_pull = ex.get("pull", 0.0)
+        p.sk_fx = s["fx"]
+        p.sk_fx_t = t
+        if p not in self.sk_live:
+            self.sk_live.append(p)
+
+    def sk_stop(self, p, t, fatigue=True):
+        """Desliga a ativa: volta a f_base (passivas), tk_ext 0.0; Overclock deixa cansaco (spd)."""
+        sid = p.sk_cur
+        p.sk_cur = None
+        p.f = p.f_base
+        p.tk_ext = 0.0
+        p.sk_pull = 0.0
+        p.sk_fx = None
+        fat = p.sk_extra[sid].get("fatigue") if sid is not None else None
+        if fatigue and fat:
+            p.sk_fat_end = t + fat[0]
+            p.spd = p.f.speed * fat[1]
+        else:
+            p.spd = p.spd_base
+            if p in self.sk_live:
+                self.sk_live.remove(p)
+
+    def sk_pre_shot(self, p):
+        """Gatilho de chute (Chute em Curva, Chinelada): chamado em ai_shoot ANTES do erro de mira, para
+        shot_err/kick_pow da variante valerem neste chute. Interrompe a ativa atual (o chute encerra a
+        conducao); ignora o GCD (gatilho de evento)."""
+        t = self.sk_t
+        cand = [sid for sid in p.sk_kick if self.sk_ready_ok(p, sid, t)]
+        if not cand:
+            return
+        tm = p.team
+        gk = self.teams[1 - tm.idx].players[0]
+        ctx = {"kicking": True, "dist_opp_goal": math.hypot(p.pos.x - tm.target_x, p.pos.y - CY),
+               "shoot_range": p.f.shoot_range,
+               "gk_off_line": abs(gk.pos.x - tm.target_x) > SK_GK_OFF[0] or abs(gk.pos.y - CY) > SK_GK_OFF[1]}
+        cand = [sid for sid in cand if skills.check_trigger(sid, ctx)]
+        if not cand:
+            return
+        sid = cand[0] if len(cand) == 1 else skills.pick_active(cand, tm.tactic)
+        if p.sk_cur is not None:
+            self.sk_stop(p, t, fatigue=False)
+        self.sk_start(p, sid, t)
+        p.sk_curve = p.sk_extra[sid].get("curve", 0.0)
+        p.sk_curve_t = p.sk_extra[sid].get("curve_t", 0.0)
+
+    def sk_on_kick(self, p, d, power):
+        """Depois de kick() (sk_on): a bola sai reta (curve 0) salvo um Chute em Curva pendente; a curva
+        gira a velocidade a `curve` graus/s por `curve_t` s e a saida e pre-girada para o arco terminar
+        no alvo (o goleiro le a linha reta). Direcao (horario/anti) pelo sk_rng."""
+        b = self.ball
+        cv = p.sk_curve
+        if not cv:
+            b.curve = b.curve_t = 0.0
+            return
+        p.sk_curve = 0.0
+        sign = 1.0 if self.sk_rng.random() < 0.5 else -1.0
+        pre = -self.sk_curve_chord(sign * cv, p.sk_curve_t, power, abs(p.team.target_x - p.pos.x))
+        b.vel = b.vel.rotate(pre)
+        b.pos = p.pos + d.rotate(pre) * (PR + BR + 3)
+        b.curve = sign * cv
+        b.curve_t = p.sk_curve_t
+
+    @staticmethod
+    def sk_curve_chord(curve, curve_t, power, dist):
+        """Angulo (graus) da corda do arco de um chute com curva ate percorrer `dist` px na direcao do
+        chute: integra a mesma fisica de update_ball (arrasto 0,35**dt, giro curve*dt por curve_t s) num
+        laco curto (so no chute em curva). Pre-girar a saida por -angulo faz a bola chegar ao alvo."""
+        dt = 1 / 60
+        vx, vy = power, 0.0
+        x = y = 0.0
+        t = 0.0
+        drag = 0.35 ** dt
+        c, s = math.cos(math.radians(curve * dt)), math.sin(math.radians(curve * dt))
+        while x < dist and t < 2.0 and vx * vx + vy * vy > 64.0:
+            if t < curve_t:
+                vx, vy = vx * c - vy * s, vx * s + vy * c
+            x += vx * dt
+            y += vy * dt
+            vx *= drag
+            vy *= drag
+            t += dt
+        return math.degrees(math.atan2(y, x)) if x > 1.0 else 0.0
+
+    def ball_curve(self, b, dt):
+        """Bola com efeito (so existe com sk_on): gira a velocidade; acaba em curve_t."""
+        b.vel = b.vel.rotate(b.curve * dt)
+        b.curve_t -= dt
+        if b.curve_t <= 0:
+            b.curve = b.curve_t = 0.0
+
+    def on_steal(self, q, o):
+        """Desarme com sucesso (sk_on): q ganhou, o perdeu. Choque (o fica `stun` s a mais sem dominar)
+        e Remendo (o protege a bola por 2 s)."""
+        t = self.sk_t
+        for sid in q.sk_won:
+            if self.sk_ready_ok(q, sid, t) and skills.check_trigger(sid, {"won_ball": True}):
+                self.sk_start(q, sid, t)
+                stun = q.sk_extra[sid].get("stun", 0.0)
+                if stun:
+                    o.cd += stun
+                    q.sk_zap = (o, t + SK_ZAP_T)
+                break
+        if o.sk_lost and o.sk_cur is None:
+            for sid in o.sk_lost:
+                if self.sk_ready_ok(o, sid, t) and skills.check_trigger(sid, {"lost_ball": True}):
+                    self.sk_start(o, sid, t)
+                    break
 
     # ------------------------------------------------------------------ fx
     def reset_fx(self):
@@ -1570,6 +1991,8 @@ class Game:
         pygame.draw.circle(scr, (235, 250, 255), (ex, ey), 3)
         pygame.draw.circle(scr, led, (ex, ey), 1)
         self.robot_fx(p, art, now)
+        if self.sk_on and self.speed_idx != 3 and (p.sk_fx is not None or p.sk_zap is not None):
+            self.draw_skill_fx(scr, p, pos, now)
         bat = p.bat
         if bat < 0.98 or p.vel.length_squared() > 625:       # barra de bateria 22x4
             x, y = pos[0] - 12, pos[1] - art.rad - 11
@@ -1593,20 +2016,104 @@ class Game:
                 c = t.human.charge
                 pygame.draw.rect(scr, (int(80 + 175 * c), int(230 - 150 * c), 60), (x, y, int(40 * c), 6))
 
+    # ------------------------------------------------------------- FX das skills (B7)
+    def warm_skill_fx(self):
+        """Pre-render (inicio da partida, nunca por quadro) dos letreiros das skills; o resto e pygame.draw."""
+        self.sk_imgs = {"dash": self.text_img("ZOOM!", 22, (150, 240, 255)),
+                        "gloves": self.text_img("!!", 26, (255, 235, 90)),
+                        "captain": self.text_img("C", 16, (20, 20, 30)),
+                        "slipper": self.text_img("PLAFT!", 22, (255, 150, 150))}
+
+    def draw_skill_fx(self, scr, p, pos, now):
+        """FX da skill ativa do robo (so com sk_on, fora do MAX): so pygame.draw e blits de imagens
+        prontas (sk_imgs); faiscas no fx_rng (fx_emit). Nunca toca a simulacao nem o random global."""
+        x, y = pos
+        kind = p.sk_fx
+        if kind is not None:
+            col = SK_FX_COLORS.get(kind, (255, 255, 255))
+            ph = now * 8.0 + p.idx
+            if kind == "dash" or kind == "wheel":            # imagens residuais + letreiro ZOOM
+                v = p.vel
+                if v.length_squared() > 100:
+                    back = v * -0.035
+                    for k in (3, 2, 1):
+                        q = (int(x + back.x * k), int(y + back.y * k))
+                        pygame.draw.circle(scr, scale_color(col, 0.25 + 0.15 * (3 - k)), q, PR - 2 * k, 2)
+                if kind == "dash" and self.sk_t - p.sk_fx_t < 0.6:
+                    img = self.sk_imgs["dash"]
+                    scr.blit(img, (x - (img.get_width() >> 1), y - 44))
+            elif kind == "magnet":                          # arcos concentricos azuis
+                for k in range(3):
+                    r = 18 + int((ph * 3 + k * 8) % 24)
+                    pygame.draw.circle(scr, scale_color(col, 1.0 - (r - 18) / 26), pos, r, 1)
+            elif kind in ("shield", "gold_ring", "tape"):   # anel de escudo
+                r = PR + 7 + int(math.sin(ph) * 2)
+                pygame.draw.circle(scr, scale_color(col, 0.45), pos, r + 2, 1)
+                pygame.draw.circle(scr, col, pos, r, 2)
+            elif kind == "overclock":                       # halo vermelho pulsando
+                r = PR + 6 + int((math.sin(ph * 1.5) + 1) * 3)
+                pygame.draw.circle(scr, col, pos, r, 2)
+                pygame.draw.circle(scr, scale_color(col, 0.4), pos, r + 4, 1)
+            elif kind == "heal":                            # cruz verde
+                cy = y - PR - 16
+                pygame.draw.rect(scr, (10, 40, 18), (x - 6, cy - 2, 12, 5))
+                pygame.draw.rect(scr, (10, 40, 18), (x - 2, cy - 6, 5, 13))
+                pygame.draw.rect(scr, col, (x - 5, cy - 1, 10, 3))
+                pygame.draw.rect(scr, col, (x - 1, cy - 5, 3, 10))
+            elif kind == "spin":                            # anel girando
+                a = ph * 1.4
+                r = PR + 6
+                rect = (x - r, y - r, 2 * r, 2 * r)
+                pygame.draw.arc(scr, col, rect, a, a + 2.2, 2)
+                pygame.draw.arc(scr, col, rect, a + math.pi, a + math.pi + 2.2, 2)
+            elif kind == "gloves":                          # luvas piscando "!!"
+                if int(now * 8) % 2 == 0:
+                    img = self.sk_imgs["gloves"]
+                    scr.blit(img, (x - (img.get_width() >> 1), y - 44))
+                pygame.draw.circle(scr, col, pos, PR + 5, 2)
+            elif kind == "sparks":                          # faiscas laranja (fx_rng)
+                pygame.draw.circle(scr, scale_color(col, 0.6), pos, PR + 5, 1)
+                if now >= p.sk_fx_next:
+                    p.sk_fx_next = now + 0.12
+                    self.fx_emit("sk_spark", p.pos)
+            elif kind == "glow" or kind == "curve":         # brilho no sensor
+                e = p.pos + p.face * (PR - 6)
+                pygame.draw.circle(scr, col, (int(e.x), int(e.y)), 4 + int(now * 10) % 2, 1)
+            elif kind == "slipper":
+                img = self.sk_imgs["slipper"]
+                scr.blit(img, (x - (img.get_width() >> 1), y - 44))
+        zp = p.sk_zap
+        if zp is not None:                                  # Choque: raio curto ate o desarmado
+            o, until = zp
+            if self.sk_t >= until or self.state != "play":
+                p.sk_zap = None
+            else:
+                ox, oy = int(o.pos.x), int(o.pos.y)
+                mx, my = (x + ox) >> 1, (y + oy) >> 1
+                j = 6 if int(now * 20) % 2 else -6
+                pts = [(x, y), (mx + j, my - j), (mx - j, my + j), (ox, oy)]
+                pygame.draw.lines(scr, (120, 90, 20), False, pts, 4)
+                pygame.draw.lines(scr, SK_FX_COLORS["zap"], False, pts, 2)
+                pygame.draw.circle(scr, SK_FX_COLORS["zap"], (ox, oy), PR + 3, 1)
+                if now >= p.sk_fx_next:
+                    p.sk_fx_next = now + 0.1
+                    self.fx_emit("sk_zap", o.pos)
+
     def draw_ball(self):
         b, scr = self.ball, self.screen
         pos = (int(b.pos.x), int(b.pos.y))
         tr = self.trail
         if self.paused:
             pass
-        elif b.vel.length_squared() > 350 * 350:
+        elif b.vel.length_squared() > 350 * 350 or (b.curve and b.owner is None):
             tr.append(pos)
         elif tr:
             tr.popleft()
         n = len(tr)
+        tc = SK_FX_COLORS["curve"] if b.curve and self.sk_on else (120, 230, 255)   # rastro curvo magenta
         for i, q in enumerate(tr):
             f = (i + 1) / (n + 1)
-            pygame.draw.circle(scr, scale_color((120, 230, 255), f * 0.8), q, max(1, int(BR * f * 0.8)))
+            pygame.draw.circle(scr, scale_color(tc, f * 0.8), q, max(1, int(BR * f * 0.8)))
         scr.blit(self.glows["ball"], (pos[0] - 28, pos[1] - 28), special_flags=pygame.BLEND_RGB_ADD)
         pygame.draw.circle(scr, (250, 250, 250), pos, BR)
         a = b.roll

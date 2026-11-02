@@ -5,6 +5,8 @@ Uso (da raiz do repo):
   SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy .venv/bin/python tests/sim_harness.py golden --check
   ... tests/sim_harness.py golden-new --write|--check   (padrao novo: TUNING + bateria; regressao do balanco)
   ... tests/sim_harness.py run 80 50 40 [seed0] [legacy]
+  ... tests/sim_harness.py run-skills 65 65 20 [seed0] [off]   (Modo Robos, 10 robos x 3 skills; off = sem)
+  ... tests/sim_harness.py skill-shots                 (B7: partida com Arrancada, Muralha e Choque ativando)
 
 O golden confere o MODO LEGADO: ele aplica LEGACY_TUNING + BATTERY_ON=False explicitamente
 (o padrao do jogo agora e TUNING + BATTERY_ON=True) e tem de ficar 80/80.
@@ -95,6 +97,48 @@ def run(ovr_a, ovr_b, n, seed0=0, legacy=False):
         wld[0 if ga > gb else 1 if gb > ga else 2] += 1
     dt = time.perf_counter() - t0
     return {"goals_per_game": goals / n, "wld": wld, "ms_step": dt / steps * 1000}
+
+
+# B6: 3 skills por robo (10 robos), por papel; mede ms_step do motor com skills ligadas (meta <= +0,006 ms)
+SK_LOADOUT = {"GK": (("elastica", 1), ("lancador", 1), ("poupanca", 1)),
+              "DEF": (("muralha", 1), ("choque", 1), ("blindagem", 1)),
+              "MID": (("succao", 1), ("pressao", 1), ("leitura", 1)),
+              "ATT": (("arrancada", 1), ("curva", 1), ("matador", 1))}
+
+
+def robot_cfg(name, ovr, seed, with_skills=True, loadout=None):
+    """Time do Modo Robos (robot_league.opponent_team) com `skills` por papel (SK_LOADOUT)."""
+    import robot_league as RL
+    cfg = RL.match_cfg(RL.opponent_team(name, (50, 120, 255) if name == "A" else (235, 65, 65), ovr, seed))
+    if with_skills:
+        lo = loadout or SK_LOADOUT
+        for e, role in zip(cfg["squad"], RL.ROLES):
+            e["skills"] = tuple(lo[role])
+    return cfg
+
+
+def run_skills(ovr_a, ovr_b, n, seed0=0, with_skills=True):
+    """Como run(), mas partidas do Modo Robos (TUNING_ROBOTS, bateria) com/sem skills nos 10 robos."""
+    goals, wld, steps, acts = 0, [0, 0, 0], 0, {}
+    t0 = time.perf_counter()
+    for i in range(n):
+        a, b = robot_cfg("A", ovr_a, 11, with_skills), robot_cfg("B", ovr_b, 22, with_skills)
+        if i % 2:
+            a, b = b, a
+        random.seed(seed0 + i)
+        g.start_robot_match(a, b, lambda s, e: None, tuning=soccer.robots.TUNING_ROBOTS)
+        while g.state != "over":
+            g.step(1 / 60)
+            steps += 1
+        ga, gb = g.score if i % 2 == 0 else g.score[::-1]
+        goals += ga + gb
+        wld[0 if ga > gb else 1 if gb > ga else 2] += 1
+        for k, v in g.sk_count.items():
+            acts[k] = acts.get(k, 0) + v
+    g.match_sink = None
+    dt = time.perf_counter() - t0
+    return {"goals_per_game": goals / n, "wld": wld, "ms_step": dt / steps * 1000, "sk_on": g.sk_on,
+            "activations_per_game": {k: round(v / n, 1) for k, v in sorted(acts.items())}}
 
 
 def _prep_play(mode=1, warm=120):
@@ -464,6 +508,60 @@ def robot_shots():
     return paths
 
 
+def skill_shots():
+    """B7: capturas de uma partida do Modo Robos com skills (estadio): pausa o motor no quadro em que
+    Arrancada, Muralha e Choque estao visiveis e salva um PNG (+ zoom) de cada."""
+    import tempfile
+    out = os.environ.get("SOCCERPY_SHOTS_DIR") or tempfile.mkdtemp(prefix="soccerpy_shots_")
+    os.makedirs(out, exist_ok=True)
+    _crowd_prefs("ALTA")
+    paths = []
+    want = {"dash": "b7_arrancada", "shield": "b7_muralha", "zap": "b7_choque", "curve": "b7_curva",
+            "gloves": "b7_elastica", "magnet": "b7_succao", "sparks": "b7_pressao"}
+    for seed in range(12):
+        if not want:
+            break
+        random.seed(seed)
+        g.start_robot_match(robot_cfg("A", 62, 11), robot_cfg("B", 60, 22), lambda s, e: None,
+                            tuning=soccer.robots.TUNING_ROBOTS, return_state="campaign", venue="estadio")
+        for _ in range(60 * 90):
+            if g.state == "over" or not want:
+                break
+            g.step(1 / 60)
+            hit = None
+            for t in g.teams:
+                for p in t.players:
+                    k = "zap" if p.sk_zap is not None else p.sk_fx
+                    if g.ball.curve and "curve" in want:
+                        k, p = "curve", g.last_owner or p
+                    if k in want and g.state == "play":
+                        hit = (k, p)
+            if hit is None:
+                continue
+            k, p = hit
+            for _ in range(3):
+                g.draw()
+            name = want.pop(k)
+            paths.append(os.path.join(out, name + ".png"))
+            pygame.image.save(_scr, paths[-1])
+            pos = g.ball.pos if k == "curve" else p.pos
+            # estadio: o mundo e reduzido para crowd.CAM_RECT; o zoom recorta da tela no ponto mapeado
+            import crowd
+            if g.camera_on():
+                sx = crowd.CAM_POS[0] + (pos.x - crowd.CAM_CROP.x) * crowd.CAM_SIZE[0] / crowd.CAM_CROP.w
+                sy = crowd.CAM_POS[1] + (pos.y - crowd.CAM_CROP.y) * crowd.CAM_SIZE[1] / crowd.CAM_CROP.h
+            else:
+                sx, sy = pos.x, pos.y
+            r = pygame.Rect(0, 0, 220, 150)
+            r.center = (int(sx), int(sy))
+            paths.append(os.path.join(out, name + "_zoom.png"))
+            _zoom(r.clamp(_scr.get_rect()), paths[-1], 3)
+    g.match_sink = None
+    g.state = "menu"
+    paths.append(out)
+    return paths
+
+
 def golden_scores():
     out = {}
     for oa, ob in MATCHUPS:
@@ -502,6 +600,12 @@ if __name__ == "__main__":
     elif a[:1] == ["run"]:
         print(run(int(a[1]), int(a[2]), int(a[3]), int(a[4]) if len(a) > 4 and a[4].isdigit() else 0,
                   legacy="legacy" in a))
+    elif a[:1] == ["run-skills"]:
+        print(run_skills(int(a[1]), int(a[2]), int(a[3]), int(a[4]) if len(a) > 4 and a[4].isdigit() else 0,
+                         with_skills="off" not in a))
+    elif a[:1] == ["skill-shots"]:
+        for p in skill_shots():
+            print(p)
     elif a[:1] == ["draw"] and "--crowd" in a:
         lv = [x for x in a if x in ("ALTA", "MEDIA")]
         cam = [x for x in a if x in ("ESTADIO", "PERTO")]

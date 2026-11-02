@@ -5,6 +5,7 @@ e confere o SIMULAR (campaign.sim_bias(O)) e as metas de dificuldade (passo 16).
 Uso (da raiz; ~12 min com n=300, 4 processos; nao grava nada em disco):
   .venv/bin/python tests/calib_campaign.py [--n 300] [--procs 4] [--chapters 1,3] [--json out.json]
   .venv/bin/python tests/calib_campaign.py --grid --n 200 --json grade.json     (grade F x O, regressao)
+  .venv/bin/python tests/calib_campaign.py --skills --chapters 3,5 --n 200       (B9: garage COM skills)
 Para cada checkpoint (treino e cada estagio do torneio de cada capitulo: G1..G3, [QF], SF, final) monta um
 Garage de Forca F = F_rec do estagio (F_start + (F_end - F_start) * i/(n-1), como Campaign._match_action;
 F_start/F_end sao a Forca da politica gulosa) pela API do garage (nivel + pecas, ver build_garage_for) e
@@ -65,6 +66,27 @@ DEPOIS = story calibrada. F = Forca real do garage de teste; motor = V+E/2 %; Po
 Valores medidos antes (n=400, passo 6): treino F43.7 O36 72.8% | Cap1 grupo F44.7 O38 65.0% | Cap1 chefe
 F47.7 O46 36.1% (o motor nao e funcao so de F-O).
 Opcao antiga --roles (chassis de papel) removida: o motor usa os atributos, nao o chassis.
+
+B9 (02/11/2026, n=200, caps. 3 e 5): garage COM skills (--skills: mod_on + SKILL_KIT rank 1; F = rating
+com skills.team_skill_force, aqui no teto 4,0) contra a mesma garage SEM skills (Ato 1 real):
+  checkpoint             F    O | COM skills: motor  SIM  dif | SEM skills: motor  SIM  dif
+  3 treino             55.7  43 |            63.0  60.6 -2.4 |            66.5  60.6 -5.9
+  3 G1 Bombeiros       55.7  43 |            66.5  60.6 -5.9 |            64.5  60.6 -3.9
+  3 G2 Coral           55.7  43 |            65.0  60.6 -4.4 |            61.8  60.6 -1.1
+  3 G3 Detetives       56.7  44 |            66.5  60.6 -5.9 |            64.0  60.6 -3.4
+  3 SF Sindicato       56.7  46 |            62.0  56.1 -5.9 |            54.0  56.1 +2.1
+  3 F Imaculados L-9   57.7  51 |            47.0  47.0 -0.0 |            43.8  47.0 +3.2
+  5 treino             63.1  52 |            59.0  57.0 -2.0 |            56.8  57.0 +0.2
+  5 G1 Sakura          63.1  47 |            68.8  67.9 -0.9 |            66.0  67.9 +1.9
+  5 G2 Staubsauger     64.1  48 |            71.8  67.9 -3.9 |            67.0  67.9 +0.9
+  5 G3 Aspirateurs     65.1  49 |            67.0  67.9 +0.9 |            64.0  67.9 +3.9
+  5 QF Dust Bunnies    65.1  50 |            67.0  65.8 -1.2 |            68.8  65.8 -3.0
+  5 SF Dojo do Kenji   65.4  53 |            63.5  60.0 -3.5 |            54.5  60.0 +5.5
+  5 F Hiperlimpos X-9  65.4  58 |            48.5  48.7 +0.2 |            43.8  48.7 +4.9
+  |SIM - motor|: COM skills media 2,8 (max 5,9; dif media com sinal -2,7) | SEM skills 3,1 (max 5,9; +0,4).
+  COM <= 3 pontos: sim_bias NAO foi ajustado. O vies negativo com skills vem do teto SK_CAP: o kit soma
+  ~6,5 F por robo e so 4,0 entram no F (o SIMULAR fica um pouco pessimista, a favor do jogador).
+  Ato 1 nao tem skills (mod_on so liga em rw_5): a coluna SEM e o mesmo caminho de antes (ruido n=200).
 """
 import argparse
 import math
@@ -82,7 +104,17 @@ os.chdir(os.path.join(ROOT, "game"))
 import pygame  # noqa: E402
 
 import campaign as cm  # noqa: E402
+import career  # noqa: E402
 import garage as gm  # noqa: E402
+import prefs  # noqa: E402
+
+# nunca le/grava os saves reais (stores em memoria); torcida OFF (o warm e caro e nao muda a simulacao)
+gm._store_get = cm._store_get = career._store_get = lambda: None
+gm._store_set = cm._store_set = career._store_set = lambda t: True
+prefs._store_get = lambda: '{"v": 1, "crowd": "OFF"}'
+prefs._store_set = lambda t: True
+prefs.reset_cache()
+
 import parts  # noqa: E402
 import robot_league as rl  # noqa: E402
 import robots  # noqa: E402
@@ -109,9 +141,31 @@ def _equip_all(g, rar, lvl):
             assert g.equip(r["id"], pc["id"])[0]
 
 
-def build_garage_for(F):
+# B9: skills por papel do titular (GOL, DEF, MEI, MEI, ATA) quando build_garage_for(F, with_skills=True):
+# 2 ativas + 1 passiva (carga 5 <= 6), rank 1. A Forca F do garage ja inclui a forca delas (team_rating
+# com mod_on soma skills.team_skill_force), entao o SIMULAR recebe o mesmo F que o jogador veria.
+SKILL_KIT = {"GK": ("elastica", "lancador", "poupanca"), "DEF": ("muralha", "blindagem", "poupanca"),
+             "MID": ("succao", "pressao", "leitura"), "ATT": ("arrancada", "curva", "matador")}
+SKILL_RANK = 1
+
+
+def give_skills(g, rank=SKILL_RANK):
+    """Liga mod_on e equipa o SKILL_KIT (aprendido direto, como uma recompensa de historia)."""
+    import skills
+    g.flags[gm.MOD_FLAG] = 1
+    for slot, rid in zip(gm.LINEUP_SLOTS, g.lineup):
+        r = g.robot(rid)
+        r["skills"] = skills.new_robot_skills()
+        for sid in SKILL_KIT[slot]:
+            skills.learn_skill(r, sid, rank)
+            ok, msg = skills.equip_skill(r, sid)
+            assert ok, msg
+
+
+def build_garage_for(F, with_skills=False):
     """Garage (campanha nova) com Forca ~F: escada nivel/pecas pela API do garage (a primeira
-    configuracao com rating >= F-2) e ajuste fino por um deslocamento uniforme dos atributos base."""
+    configuracao com rating >= F-2) e ajuste fino por um deslocamento uniforme dos atributos base.
+    with_skills: mod_on + SKILL_KIT nos titulares; F (rating) inclui a forca das skills."""
     g = cm.new_campaign(random.Random(7)).garage
     ladder = [(None, 0, lv) for lv in range(1, 11)]                      # so nivel
     ladder += [(rar, lvl, 10) for rar in (0, 1, 2, 3) for lvl in (0, 3, 5)]
@@ -127,6 +181,8 @@ def build_garage_for(F):
         if g.rating() >= F - 2.0:
             break
     g.auto_lineup()
+    if with_skills:
+        give_skills(g)
     for _ in range(40):                                                   # ajuste fino
         d = F - g.rating()
         if abs(d) < 0.3:
@@ -244,9 +300,9 @@ def table_cells(chapters=None):
     return out
 
 
-def measure(pool, F, kind, tid, ovr, n):
+def measure(pool, F, kind, tid, ovr, n, with_skills=False):
     """(F real do garage, V, E, D) do motor: usuario mandante, 10 variantes de adversario."""
-    g = build_garage_for(F)
+    g = build_garage_for(F, with_skills)
     home = g.match_cfg()
     if kind == "train":
         spec = lambda k: rl.opponent_team(rl.TEAM_NAMES[k % len(rl.TEAM_NAMES)],  # noqa: E731
@@ -269,7 +325,7 @@ def main_table(a):
     rows = []
     with Pool(a.procs) as pool:
         for name, kind, tid, ovr, F in cells:
-            Fr, w, d, l = measure(pool, F, kind, tid, ovr, a.n)
+            Fr, w, d, l = measure(pool, F, kind, tid, ovr, a.n, a.skills)
             eng = 100.0 * (w + d / 2.0) / a.n
             pw, pd, _ = poisson_wdl(Fr - cm.sim_bias(ovr), ovr)
             ow, od, _ = poisson_wdl(Fr - 2.0, ovr)
@@ -320,6 +376,7 @@ def main():
     ap.add_argument("--chapters", default="", help="ex.: 1,3 (padrao: todos os jogaveis)")
     ap.add_argument("--json", default="", help="grava as linhas em JSON")
     ap.add_argument("--grid", action="store_true", help="grade F x O (regressao do vies)")
+    ap.add_argument("--skills", action="store_true", help="garage com mod_on + SKILL_KIT (B9)")
     a = ap.parse_args()
     if a.grid:
         main_grid(a)

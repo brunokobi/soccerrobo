@@ -136,7 +136,7 @@ def effective_attrs(robot, pieces_by_id):
             else:
                 raw[a] += ocm * v
         bat_extra -= parts.part_heat(pc["model"], pc["rar"], pc["lvl"])
-    # sets (B2): bonus fixo por faixa (2/4/6 pecas), fora do multiplicador de overclock
+    # sets (B2): bonus fixo por faixa (2/3/4 pecas), fora do multiplicador de overclock
     set_attrs, _passives = parts.set_bonus(parts.set_counts(models))
     for a, v in set_attrs.items():
         if a == "bat":
@@ -148,16 +148,21 @@ def effective_attrs(robot, pieces_by_id):
             for a in robots.ATTRS}
 
 
-def team_rating(robot_list, pieces_by_id):
-    """Forca da equipe: media da media dos atributos efetivos dos robos, x100."""
+def team_rating(robot_list, pieces_by_id, mod_on=False):
+    """Forca da equipe: media da media dos atributos efetivos dos robos, x100; com mod_on (skills
+    ligadas) soma skills.team_skill_force (pontos de F calibrados no motor por tests/calib_skills.py,
+    teto SK_CAP 4,0 no time). Sem mod_on (Ato 1, Modo Robos antes do tier 1) e o valor antigo exato."""
     if not robot_list:
         return 0.0
     tot = sum(robots.mean_attr(effective_attrs(r, pieces_by_id)) for r in robot_list)
-    return tot / len(robot_list) * 100.0
+    base = tot / len(robot_list) * 100.0
+    if not mod_on:
+        return base
+    return base + skills.team_skill_force(skills.effective_skills(r, pieces_by_id, True) for r in robot_list)
 
 
 def robot_set_counts(robot, pieces_by_id):
-    """{set: n} das pecas equipadas no robo (para a UI: 'Faxineiro 3/6')."""
+    """{set: n} das pecas equipadas no robo (para a UI: 'Faxineiro 3/4')."""
     models = []
     for slot in parts.SLOTS:
         pid = robot.get("slots", {}).get(slot)
@@ -194,11 +199,18 @@ def robot_vis(robot, pieces_by_id):
             "hot": hot}
 
 
-def match_entry(robot, pieces_by_id):
-    """Entrada de elenco aceita por soccer.Team (modo robos). `vis` (A9) e aditivo e so visual."""
-    return {"name": robot["name"], "attrs": effective_attrs(robot, pieces_by_id),
-            "chassis": robot["chassis"], "pid": robot["id"], "paint": tuple(robot["paint"]),
-            "vis": robot_vis(robot, pieces_by_id)}
+def match_entry(robot, pieces_by_id, mod_on=False):
+    """Entrada de elenco aceita por soccer.Team (modo robos). `vis` (A9) e aditivo e so visual.
+    Com mod_on (B8) e alguma skill efetiva, ganha `skills` = ((id, rank, up), ...) para o motor (B6);
+    sem mod_on a entrada e a antiga (o motor nao liga skills: Ato 1 e Modo Robos antes do tier 1)."""
+    e = {"name": robot["name"], "attrs": effective_attrs(robot, pieces_by_id),
+         "chassis": robot["chassis"], "pid": robot["id"], "paint": tuple(robot["paint"]),
+         "vis": robot_vis(robot, pieces_by_id)}
+    if mod_on:
+        sk = skills.effective_skills(robot, pieces_by_id, True)
+        if sk:
+            e["skills"] = tuple(sk)
+    return e
 
 
 # --- XP -----------------------------------------------------------------------------
@@ -256,6 +268,7 @@ class Garage:
         self.cosmetics = []
         self.cap = MAX_LEVEL
         self.tactic = skills.DEFAULT_TACTIC
+        self.backpack = []            # Mochila da PROXIMA partida (transitoria: nao vai ao save; UI no B12)
 
     # ---------------------------------------------------------------- serializacao
     def to_dict(self):
@@ -371,16 +384,61 @@ class Garage:
         return [self.robot(i) for i in self.lineup]
 
     def rating(self):
-        return team_rating(self.lineup_robots(), self.pieces_by_id())
+        """Forca do time (B9: com mod_on inclui a forca das skills, teto 4,0). Os consumiveis da
+        Mochila NAO entram aqui (so na partida: match_F)."""
+        return team_rating(self.lineup_robots(), self.pieces_by_id(), self.mod_on())
+
+    def match_F(self):
+        """Forca para o SIMULAR da proxima partida: rating() + item_force da Mochila (spec 5/9.2)."""
+        return self.rating() + skills.item_force(self.backpack_items())
 
     def entry(self, robot):
-        return match_entry(robot, self.pieces_by_id())
+        return match_entry(robot, self.pieces_by_id(), self.mod_on())
 
     def match_cfg(self):
-        """Config de time para Game.start_robot_match (lado do usuario)."""
+        """Config de time para Game.start_robot_match (lado do usuario). Com mod_on: skills por robo e a
+        tatica do time; com Mochila: `items` (consumiveis aplicados como aura pelo motor)."""
         pb = self.pieces_by_id()
-        return {"name": self.team["name"], "color": tuple(self.team["color"]),
-                "squad": [match_entry(self.robot(i), pb) for i in self.lineup]}
+        on = self.mod_on()
+        cfg = {"name": self.team["name"], "color": tuple(self.team["color"]),
+               "squad": [match_entry(self.robot(i), pb, on) for i in self.lineup]}
+        if on:
+            cfg["tactic"] = self.tactic
+        items = self.backpack_items()
+        if items:
+            cfg["items"] = tuple(items)
+        return cfg
+
+    # ---------------------------------------------------------------- mochila (consumiveis, B8)
+    def set_backpack(self, ids):
+        """Escolhe ate skills.BACKPACK consumiveis distintos que o jogador TEM (items[id] > 0).
+        Devolve a Mochila valida (ids desconhecidos/sem estoque/repetidos sao ignorados)."""
+        out = []
+        for i in ids or ():
+            if i in skills.ITEMS and self.items.get(i, 0) > 0 and i not in out:
+                out.append(i)
+            if len(out) >= skills.BACKPACK:
+                break
+        self.backpack = out
+        return list(out)
+
+    def backpack_items(self):
+        """Mochila valida agora (estoque pode ter mudado)."""
+        out = []
+        for i in self.backpack:
+            if i in skills.ITEMS and self.items.get(i, 0) > 0 and i not in out:
+                out.append(i)
+        return out[:skills.BACKPACK]
+
+    def consume_backpack(self):
+        """Consome 1 de cada item da Mochila (partida assistida ou simulada) e a esvazia."""
+        used = self.backpack_items()
+        for i in used:
+            self.items[i] -= 1
+            if self.items[i] <= 0:
+                del self.items[i]
+        self.backpack = []
+        return used
 
     def new_id(self):
         i = self.next_id
