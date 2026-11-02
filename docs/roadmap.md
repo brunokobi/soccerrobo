@@ -7,7 +7,7 @@
 | 1 | 6 chassis, 8 atributos, bateria, arena neon | pronta |
 | 2 | Garagem: 14 peças (7 slots x 2 modelos, 4 raridades, upgrade 0-5), XP/nível até 10, loja, liga de 6 times (Modo Robôs) | pronta |
 | 3 | Campanha "A Garagem do Vô": Prólogo + 5 capítulos + epílogo, 53 cenas / 626 falas, 27 times, 12 personagens, 6 escolhas, torneios (grupo de 4 + mata-mata), chefes com pity, treino, save próprio `soccerpy_campaign_v1` (v1, sv1) | pronta e jogável |
-| 4 (nova) | **Campanha Expandida**: torcida + desenhos detalhados, itens/skills, campanha 3 atos | planejada (este documento) |
+| 4 (nova) | **Campanha Expandida**: torcida + desenhos detalhados, itens/skills, campanha 3 atos | Onda A (visual, torcida, câmera de estádio) e Onda B (peças, sets, módulo, 16 skills, itens, cosméticos) prontas; Ondas C e D planejadas |
 | 5 | Editor de firmware (regras da IA em blocos) | planejada (era a antiga Fase 4) |
 
 Números do código hoje:

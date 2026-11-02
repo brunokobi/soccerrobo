@@ -74,6 +74,21 @@ No menu (teclas 1-6): `1 - AMISTOSO`, `2 - AMISTOSO`, `3 - NOVA CARREIRA`, `4 - 
      rodada você escolhe **assistir** (partida jogada no motor) ou **simular**
      (resultado estatístico). Terminar em 3º ou melhor libera o próximo tier, e a
      premiação em sucata depende da colocação.
+   - **Habilidades, itens e visual (Fase 4, Onda B)** - liberados ao concluir o tier 1 do
+     Modo Robôs ou o Ato 1 da campanha (antes disso tudo joga exatamente como antes):
+     - **8º slot "Módulo"**, 30 modelos de peça, 6 relíquias únicas e 5 sets (Faxineiro,
+       Plasma, Titã, Dojo, Limpex) com bônus ao juntar 2, 3 e 4 peças do mesmo set.
+     - **16 skills** (+11 especiais da campanha) que a IA usa sozinha durante a partida
+       (Arrancada, Sucção Magnética, Chute em Curva, Muralha, Defesa Elástica, Choque
+       Elétrico, Instinto Matador, Líder...): cada robô equipa até 3, aprendidas com
+       pontos de habilidade (1 por nível) numa árvore Ataque/Controle/Defesa, com ranks
+       1-3. Aba **HABILIDADES** na garagem e tática do time (Ofensivo / Equilibrado /
+       Defensivo). Cada skill foi calibrada no próprio motor e soma Força ao time (até +9).
+     - **Itens de partida** (Bateria Extra, Cera Turbo, Café do Prof., Fita Isolante, Pilha
+       Reserva, Spray Anti-Poeira): comprados na LOJA, levados na **Mochila** (até 2 por
+       partida) e gastos ao jogar.
+     - **Cosméticos** (adesivo, antena, rastro e comemoração de gol): só visuais, comprados
+       na aba COSMÉTICOS da loja e equipados por robô no botão **VISUAL** da bancada.
    - **Save próprio**, separado da carreira de clubes: `localStorage`
      (`soccerpy_robots_v1`) no navegador; `~/.soccerpy_robots.json` no desktop. Um save
      inválido só é sobrescrito pelo NOVO JOGO após confirmação explícita; a cópia fica em `.bad`.
@@ -123,7 +138,7 @@ O jogador controlado troca sozinho (o mais perto da bola).
 | 1 | Robôs com chassis e 8 atributos, bateria, arena tecnológica (neon) | pronta |
 | 2 | Garagem e laboratório: peças, upgrades, XP, evolução, loja e liga (Modo Robôs) | pronta e jogável |
 | 3 | **Campanha** "A Garagem do Vô": história, diálogos, torneios, chefes e treino (escola -> mundial) | pronta e jogável |
-| 4 | **Campanha Expandida**: torcida realista e desenhos mais detalhados, ~36 peças + sets/relíquias/consumíveis, 16 skills dos robôs, Atos 2 e 3 (14 capítulos), missões secundárias e 3 finais | planejada ([docs/roadmap.md](docs/roadmap.md)) |
+| 4 | **Campanha Expandida**: torcida realista, câmera de estádio e desenhos mais detalhados (Onda A), peças/sets/relíquias/itens/cosméticos e 16 skills dos robôs (Onda B), Atos 2 e 3, missões secundárias e 3 finais (Ondas C e D) | Ondas A e B prontas; C e D planejadas ([docs/roadmap.md](docs/roadmap.md)) |
 | 5 | Editor de firmware (regras da IA em blocos) | planejada |
 
 O planejamento detalhado fica em [`docs/`](docs/INDEX.md).
@@ -156,6 +171,10 @@ export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy
 .venv/bin/python tests/test_robot_mode.py              # motor no modo robôs (atributos diretos, tuning por robô)
 .venv/bin/python tests/test_garage.py                  # garagem, peças, progressão e liga
 .venv/bin/python tests/test_robot_save.py              # save do Modo Robôs (store, validação, save inválido)
+.venv/bin/python tests/test_garage_v2.py              # garage v2: migração do save, slot Módulo, itens, cosméticos, sanitize
+.venv/bin/python tests/test_parts_v2.py               # catálogo novo: modelos, relíquias, módulos e sets
+.venv/bin/python tests/test_skills.py                  # dados das skills, árvore, carga, tática e força calibrada
+.venv/bin/python tests/test_skills_engine.py           # skills no motor: cada uma muda o lance, disparos, FX (~minutos)
 .venv/bin/python tests/test_robots_ui.py               # telas do Modo Robôs
 .venv/bin/python tests/test_visual.py                  # cores dos clubes, efeitos, pausa, save
 .venv/bin/python tests/test_story.py                   # dados da campanha (cenas, textos, torneios, capítulos, recompensas)
@@ -177,8 +196,9 @@ Os testes da campanha também não gravam nos saves reais. Os de partida são le
 ```bash
 .venv/bin/python tests/test_mechanics.py               # efeito dos atributos na partida
 .venv/bin/python tests/test_robot_balance.py [-n 70] [--procs 4]  # balanço da equipe (peças/raridades) contra o time base
-.venv/bin/python tests/calib_robots.py [--n 100] [--diffs ...] [--fit] [--procs 4]  # calibra a simulação estatística da liga contra o motor
-.venv/bin/python tests/calib_campaign.py [--n 200] [--procs 4]  # calibra a simulação da campanha (SIM_BIAS) contra o motor; pesado, opcional
+.venv/bin/python tests/calib_robots.py [--n 100] [--diffs ...] [--fit] [--skills] [--procs 4]  # calibra a simulação estatística da liga contra o motor
+.venv/bin/python tests/calib_campaign.py [--n 200] [--skills] [--procs 4]  # calibra a simulação da campanha (SIM_BIAS) contra o motor; pesado, opcional
+.venv/bin/python tests/calib_skills.py               # mede a força de cada skill no motor (tabela SKILL_FORCE); muito pesado
 ```
 Utilitários do harness (`tests/sim_harness.py`): `golden`/`golden-new` com
 `--write` (regrava a baseline) ou `--check`, `run <ovrA> <ovrB> <n> [seed0] [legacy]`
@@ -190,13 +210,14 @@ Utilitários do harness (`tests/sim_harness.py`): `golden`/`golden-new` com
 - `game/soccer.py`: partida (física, IA), visual neon, menu e HUD
 - `game/robots.py`: chassis, atributos, fatores usados pelo motor e ajustes (`TUNING`, `TUNING_ROBOTS`)
 - `game/garage.py`: Modo Robôs: equipe, robôs, XP/nível, overclock, loja, recompensas e save
-- `game/parts.py`: catálogo de peças (slots, modelos, raridades, upgrades)
+- `game/parts.py`: catálogo de peças (slots, modelos, raridades, upgrades, relíquias, módulos, sets) e cosméticos
+- `game/skills.py`: skills dos robôs (dados, árvore, gatilhos, efeitos no motor, força calibrada), táticas e itens de partida
 - `game/robot_league.py`: liga de 6 times (calendário, tabela, simulação estatística, premiação)
 - `game/robot_art.py`: arte dos robôs em campo (sprites pré-renderizados e cache); `Game` delega a ele
 - `game/store.py`: armazenamento de texto (`localStorage` no navegador, arquivo em `~` no desktop)
 - `game/prefs.py`: preferências do jogador (`soccerpy_prefs_v1`: torcida ALTA/MEDIA/OFF, tecla T; câmera ESTADIO/PERTO, tecla C, ausente = AUTO), com sanitize e padrão
 - `game/crowd.py`: torcida (locais, espectadores pré-renderizados, reações, confete/LED/telão, LOD) e a geometria das câmeras PERTO/ESTÁDIO
-- `game/robots_ui.py`: telas do Modo Robôs (hub, garagem, banco, loja, liga)
+- `game/robots_ui.py`: telas do Modo Robôs (hub, garagem, banco, loja, habilidades, mochila, visual, liga)
 - `game/career.py` / `game/career_ui.py`: carreira de clubes (liga, mercado, finanças, save) e suas telas
 - `game/story.py`: dados da campanha (personagens, times, cenas/diálogos, torneios, capítulos, recompensas); módulo puro, sem pygame
 - `game/campaign.py`: lógica da campanha (progresso, torneios, chefes/pity, treino, recompensas, save)

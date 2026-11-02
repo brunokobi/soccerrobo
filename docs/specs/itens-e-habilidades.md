@@ -190,6 +190,19 @@ Chinelada (mira). FX de evento: "DRIBLE!", "LANÇOU!", "ZZT!", bola alta, faixa 
 docstring de `tests/calib_skills.py`. B16: com `mod_on` a loja traz 1 Módulo e 25% dos drops viram Módulo
 (RNG derivado: sem `mod_on` nada muda).
 
+**Fechamento da Onda B (02/11/2026).** `skills.SK_CAP` subiu de 4,0 para 9,0: depois do rebalanceamento o teto
+antigo subestimava o motor em ~5 F (SIMULAR pessimista em até 17 pontos contra o chefe do cap. 3). Com 9,0,
+`calib_campaign --skills` (caps. 3 e 5, n=200): |SIM - motor| média 3,4 / máx. 7,4 (ruído ±5,7); motor com
+skills: treino 59,5, regulares 61,4, SF 53,4, chefes 46,2 (todas as faixas no alvo); `sim_bias` mantido.
+`calib_robots --skills` (LOADOUT): curva do motor coerente com o rating. Skills que quase não pesam no motor
+(bateria raramente é gargalo): Poupança 0,29, Remendo 0,59, Chinelada 0,83, Recarga r1 0,93 F.
+**B13 (cosméticos):** compra única na aba COSMÉTICOS da LOJA (adesivo 80, antena 100, rastro 150, comemoração 120
+de sucata) e `Garage.grant_cosmetic` para recompensas (D3); `equip_look`/`unequip_look` por robô, galeria
+**VISUAL** na bancada (Modo Robôs e campanha). Adesivo e antena entram na arte pré-renderizada (chave do cache);
+o rastro é **do robô** (pool fixo de 6 pontos), não da bola; a comemoração é **por robô** (dispara quando ele
+marca; RNG de FX), não por time, para não subir a versão do save. Catálogo de antenas (curta, mola, dupla)
+provisório. Partida idêntica com e sem cosméticos (teste); goldens 80/80.
+
 ## 10. Garage v2 (save)
 - `garage.VERSION` 1 -> 2. `MIGRATIONS[1] = fn(dict) -> dict`: para cada robô, `slots["modulo"] = None`, `skills = {"learned": {}, "equipped": [], "pts": 0}`, `look = {}`; no topo, `items = {}`, `cosmetics = []`, `cap = 10`; `v = 2`. `FIELDS` ganha `items`, `cosmetics`, `cap`. A chave de armazenamento continua `soccerpy_robots_v1`.
 - `_robot()` (sanitize): `skills.learned` é dict `{id: rank}` só com ids conhecidos e rank 1-3; `equipped` é subconjunto de `learned` (e de módulos equipados), sem duplicatas, com soma de `load` <= `LOAD_MAX`; `pts` int 0..99; `look` só com ids conhecidos; `level` 1..15 (e <= `cap`). `slots` aceita `modulo` (peça existente do slot certo).
