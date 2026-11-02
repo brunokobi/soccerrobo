@@ -14,6 +14,7 @@ Planejamento e especificações do jogo. O código e os comandos do dia a dia es
 
 ## Estado
 - Fases 1, 2 e 3: prontas e publicadas em https://copaaspirador.brunokobi.tech
-- Fase 4 (Campanha Expandida): **planejada, aguardando as decisões** listadas no fim de
+- Fase 4 (Campanha Expandida): **Onda A (torcida, robôs detalhados, retratos e cenários)
+  pronta e publicada**; Ondas B (itens e skills), C (Atos 2 e 3) e D (pós-campanha) planejadas em
   [specs/plano-de-implementacao.md](specs/plano-de-implementacao.md)
 - Fase 5 (Editor de firmware): planejada
