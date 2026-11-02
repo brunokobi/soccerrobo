@@ -202,8 +202,12 @@ def robot_vis(robot, pieces_by_id):
         nm = VIS_OVERLAY.get(pc["model"])
         if nm:
             vis_parts.append((nm, int(pc["rar"])))
-    return {"chassis": robot["chassis"], "paint": tuple(robot["paint"]), "parts": tuple(sorted(vis_parts)),
-            "hot": hot}
+    vis = {"chassis": robot["chassis"], "paint": tuple(robot["paint"]), "parts": tuple(sorted(vis_parts)),
+           "hot": hot}
+    look = robot.get("look")
+    if look:                                  # B13: cosmeticos (so desenho); ausente = sem cosmetico
+        vis["look"] = dict(look)
+    return vis
 
 
 def match_entry(robot, pieces_by_id, mod_on=False):
@@ -464,6 +468,54 @@ class Garage:
         self.scrap -= it["price"]
         self.items[item_id] = have + 1
         return True, "Comprou %s por %d (agora %d)." % (it["name"], it["price"], have + 1)
+
+    # ---------------------------------------------------------------- cosmeticos (B13; so visuais)
+    def owns_cosmetic(self, cid):
+        return cid in self.cosmetics
+
+    def grant_cosmetic(self, cid):
+        """Desbloqueia um cosmetico (recompensa/conquista). True se era novo."""
+        if cid not in parts.COSMETICS or cid in self.cosmetics:
+            return False
+        self.cosmetics.append(cid)
+        return True
+
+    def buy_cosmetic(self, cid):
+        """Compra um cosmetico na LOJA (aba COSMETICOS) com sucata; cada um so uma vez. (ok, msg)."""
+        if cid not in parts.COSMETICS:
+            return False, "Cosmético inválido."
+        name = parts.COSMETIC_NAMES[cid]
+        if cid in self.cosmetics:
+            return False, "Você já tem %s." % name
+        price = parts.cosmetic_price(cid)
+        if self.scrap < price:
+            return False, "Sucata insuficiente (precisa de %d)." % price
+        self.scrap -= price
+        self.cosmetics.append(cid)
+        return True, "Comprou %s por %d. Equipe na bancada (botão VISUAL)." % (name, price)
+
+    def equip_look(self, rid, cid):
+        """Equipa um cosmetico desbloqueado no slot do tipo dele (robot["look"]). (ok, msg)."""
+        r = self.robot(rid)
+        if r is None:
+            return False, "Robô não encontrado."
+        kind = parts.COSMETIC_KIND.get(cid)
+        if kind is None:
+            return False, "Cosmético inválido."
+        if cid not in self.cosmetics:
+            return False, "Cosmético bloqueado: compre na LOJA."
+        r.setdefault("look", {})[kind] = cid
+        return True, "%s: %s." % (parts.LOOK_TITLES[kind], parts.COSMETIC_NAMES[cid])
+
+    def unequip_look(self, rid, kind):
+        r = self.robot(rid)
+        if r is None:
+            return False, "Robô não encontrado."
+        if kind not in parts.LOOK_KINDS:
+            return False, "Tipo inválido."
+        if r.get("look", {}).pop(kind, None) is None:
+            return False, "Nada equipado."
+        return True, "%s: nenhum." % parts.LOOK_TITLES[kind]
 
     # ---------------------------------------------------------------- habilidades (B10, UI)
     def learn_skill_node(self, rid, node_id):
@@ -1135,6 +1187,9 @@ def _sanitize(data):
     for c in (co_raw[:len(parts.COSMETICS) * 4] if isinstance(co_raw, list) else []):
         if isinstance(c, str) and c in parts.COSMETICS and c not in cosmetics:
             cosmetics.append(c)
+    owned = set(cosmetics)
+    for rb in robot_list:                         # look so com cosmeticos desbloqueados (B13)
+        rb["look"] = {k: v for k, v in rb["look"].items() if v in owned}
     tactic = data.get("tactic")
     if not (isinstance(tactic, str) and tactic in skills.TACTICS):
         tactic = skills.DEFAULT_TACTIC

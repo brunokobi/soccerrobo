@@ -114,6 +114,11 @@ FX_KINDS = {
     # B7 (skills): so pelo desenho (Game.draw_skill_fx), no fx_rng
     "sk_spark": (3, 80, 190, 0.15, 0.3, (255, 150, 40), 2),     # Pressao Alta / Arrancada
     "sk_zap": (5, 120, 260, 0.1, 0.22, (255, 250, 140), 1),     # Choque Eletrico
+    # B13 (comemoracao cosmetica do autor do gol): fx_rng, cor por chamada (robot_art.CELEBRATION_COLORS)
+    "cel_confete": (9, 90, 320, 0.9, 1.6, None, 2),
+    "cel_bolo": (8, 60, 220, 0.8, 1.4, None, 3),
+    "cel_chinelo_voando": (5, 160, 360, 0.7, 1.2, None, 4),
+    "cel_fogos": (10, 160, 380, 0.5, 1.0, None, 2),
 }
 # estilo da particula: indice em robot_art.PUFF_COLORS (fumaca/poeira desenhadas com sprites prontos);
 # ausente = faisca (linha + circulo). FX_RISE: deriva para cima (fumaca).
@@ -270,6 +275,7 @@ class Game:
         self.fx_pairs = {}
         self.fx_last = time.perf_counter()
         self.trail = deque(maxlen=10)
+        self.trail_players = []                   # B13: jogadores com rastro cosmetico (warm_sprites)
         self.sprites = robot_art.SpriteCache()   # sprites dos robos (LRU por bytes; ver robot_art)
         self.puffs = None
         self.fx_amb = 0                           # particulas de robo vivas (teto ROBOT_FX_MAX)
@@ -893,6 +899,8 @@ class Game:
                 for p in t.players:
                     p.bat = min(1.0, p.bat + robots.BAT_GOAL_BONUS)
         self.fx_emit("goal", self.ball.pos, led_color(self.teams[team_idx].color))
+        if lo is not None and lo.team.idx == team_idx and lo.vis:
+            self.fx_celebrate((lo.vis.get("look") or {}).get("celebration"), self.ball.pos)
         self.state = "goal"
         self.timer = 2.4
         if self.crowd is not None:
@@ -1576,6 +1584,19 @@ class Game:
         back = p.vel.normalize() * -art.rad if sp2 > 1 else V(0, 0)
         self.fx_emit(kind, p.pos + back, d=(p.vel if sp2 > 1 else None))
 
+    def fx_celebrate(self, cid, pos):
+        """B13: comemoracao cosmetica (so particulas no fx_rng; no-op em MAX/'over' via fx_emit)."""
+        cols = robot_art.CELEBRATION_COLORS.get(cid)
+        if not cols:
+            return
+        kind = "cel_" + cid
+        if cid == "fogos":                          # 3 estouros em volta da bola
+            for (dx, dy), c in zip(((-40, -30), (35, -20), (0, 35)), cols):
+                self.fx_emit(kind, pos + V(dx, dy), c)
+            return
+        for c in cols:
+            self.fx_emit(kind, pos, c)
+
     def fx_bump(self, a, c):
         """Colisao robo x robo: 4 faiscas, no maximo 1 por par a cada 0.3 s de jogo."""
         key = (a.team.idx, a.idx, c.team.idx, c.idx)
@@ -1714,6 +1735,12 @@ class Game:
         d.append(R(int(b.pos.x) - 30, int(b.pos.y) - 30, 60, 60))
         for q in self.trail:
             d.append(R(q[0] - 10, q[1] - 10, 20, 20))
+        th = robot_art.TRAIL_SIZE // 2 + 1
+        for p in self.trail_players:                    # B13: rastro dos robos (pontos vivos)
+            pts, h = p.trail_pts, p.trail_h
+            for i in range(p.trail_n):
+                q = pts[(h - i) % robot_art.TRAIL_N]
+                d.append(R(q[0] - th, q[1] - th, th * 2, th * 2))
         for p in self.fx:
             d.append(R(int(p[0]) - 24, int(p[1]) - 24, 48, 48))
 
@@ -1919,6 +1946,34 @@ class Game:
     def warm_sprites(self):
         robot_art.warm_sprites(self.sprites, self.teams)
         self.puffs = robot_art.get_puffs(self.sprites)
+        self.trail_players = [p for t in self.teams for p in t.players if p.art.trail is not None]
+
+    def draw_robot_trails(self, scr):
+        """B13: rastro cosmetico atras dos robos em movimento. Pool fixo de TRAIL_N pontos por robo
+        (amostrado no relogio real do desenho), imagens prontas (build_trail); congela na pausa."""
+        now = time.perf_counter()
+        n_max = robot_art.TRAIL_N
+        half = robot_art.TRAIL_SIZE // 2
+        paused = self.paused
+        for p in self.trail_players:
+            pts = p.trail_pts
+            if not paused and now >= p.trail_next:
+                p.trail_next = now + robot_art.TRAIL_DT
+                if p.vel.length_squared() > robot_art.TRAIL_SPEED2:
+                    h = p.trail_h = (p.trail_h + 1) % n_max
+                    q = pts[h]
+                    q[0] = int(p.pos.x)
+                    q[1] = int(p.pos.y)
+                    if p.trail_n < n_max:
+                        p.trail_n += 1
+                elif p.trail_n:
+                    p.trail_n -= 1
+            n = p.trail_n
+            if n:
+                imgs, h = p.art.trail, p.trail_h
+                for i in range(n - 1, -1, -1):            # do mais velho (menor) para o mais novo
+                    q = pts[(h - i) % n_max]
+                    scr.blit(imgs[i], (q[0] - half, q[1] - half))
 
     def draw(self):
         scr = self.screen
@@ -1965,6 +2020,8 @@ class Game:
             ws = self.screen
             b = self.ball
             pygame.draw.ellipse(ws, (3, 8, 18), (b.pos.x - BR + 2, b.pos.y - BR + 5, BR * 2, BR * 1.4))
+            if self.trail_players and self.speed_idx != 3:   # B13: rastros sob todos os robos (nada em MAX)
+                self.draw_robot_trails(ws)
             for t in self.teams:
                 for p in t.players:
                     self.draw_player(t, p)

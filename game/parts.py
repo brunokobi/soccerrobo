@@ -148,8 +148,23 @@ DECALS = ("estrela", "raio", "pao_queijo", "chinelo", "caveira", "coracao")
 TRAILS = ("neon", "fogo", "arco_iris", "estrelas")
 ANTENNAS = ("curta", "mola", "dupla")              # provisorio: a spec cita `antenna` sem catalogo
 CELEBRATIONS = ("confete", "bolo", "chinelo_voando", "fogos")
-LOOK_KINDS = {"decal": DECALS, "trail": TRAILS, "antenna": ANTENNAS}
+# B13: slots de `robot["look"]` (a comemoracao e por robo: toca quando ESSE robo marca; a spec fala em
+# "por time", mas um campo de time exigiria subir a versao do save)
+LOOK_KINDS = {"decal": DECALS, "antenna": ANTENNAS, "trail": TRAILS, "celebration": CELEBRATIONS}
 COSMETICS = frozenset(DECALS + TRAILS + ANTENNAS + CELEBRATIONS)
+COSMETIC_KIND = {c: k for k, ids in LOOK_KINDS.items() for c in ids}
+COSMETIC_PRICE = {"decal": 80, "antenna": 100, "trail": 150, "celebration": 120}   # sucata (LOJA > COSMETICOS)
+COSMETIC_NAMES = {"estrela": "Estrela", "raio": "Raio", "pao_queijo": "Pão de Queijo", "chinelo": "Chinelo",
+                  "caveira": "Caveira", "coracao": "Coração",
+                  "neon": "Neon", "fogo": "Fogo", "arco_iris": "Arco-Íris", "estrelas": "Estrelas",
+                  "curta": "Curta", "mola": "Mola", "dupla": "Dupla",
+                  "confete": "Confete", "bolo": "Bolo", "chinelo_voando": "Chinelo Voando", "fogos": "Fogos"}
+LOOK_LABELS = {"decal": "ADESIVO", "antenna": "ANTENA", "trail": "RASTRO", "celebration": "COMEMORAÇÃO"}
+LOOK_TITLES = {"decal": "Adesivo", "antenna": "Antena", "trail": "Rastro", "celebration": "Comemoração"}
+
+
+def cosmetic_price(cid):
+    return COSMETIC_PRICE[COSMETIC_KIND[cid]]
 
 
 def models_for_slot(slot, pool=None):

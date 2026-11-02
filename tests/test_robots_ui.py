@@ -805,7 +805,7 @@ def test_shop_buy_sell_flow():
     # VENDER com confirmação em dois cliques
     gg.scrap = 100
     ui.cache = None
-    click_btn(lambda r: r.x == 520 and r.y == 132)                   # VENDER (modo)
+    click_btn(lambda r: r.x == 640 and r.y == 132)                   # VENDER (modo)
     frame()
     assert ui.shop_mode == "sell"
     free = ui.shop_list()
@@ -1608,6 +1608,149 @@ def test_backpack_league_pick_consume_and_result():
     assert "cera_turbo" not in gg.items
     ui.match_done([1, 0], [])                                        # callback repetido: nada
     assert ui.screen_id == "hub"
+    ui.to_menu()
+
+
+# ------------------------------------------------------------------ B13: cosméticos
+class FakeClock:
+    """Relógio de soccer.time que avança 1/60 s por quadro (rastro determinístico no screenshot)."""
+
+    def __init__(self, t=900.0):
+        self.t = t
+
+    def perf_counter(self):
+        return self.t
+
+
+def cos_card(row, k):
+    cw, ch = robots_ui.COS_CARD
+    return pygame.Rect(20 + k * (cw + 8), robots_ui.COS_ROW0 + row * robots_ui.COS_ROW_PITCH + 20, cw, ch)
+
+
+def vis_card(row, k):
+    """Cartão da galeria VISUAL: k = 0 é "nenhum", k >= 1 é o (k-1)-ésimo do catálogo do tipo."""
+    m = robots_ui.VIS_MODAL
+    cw, ch = robots_ui.VIS_CARD
+    return pygame.Rect(m.x + 230 + k * (cw + 6), m.y + 72 + row * 106 + 20, cw, ch)
+
+
+def test_cosmetics_shop_gallery_and_match():
+    import parts as PP
+    gg = fresh(31, scrap=1000)
+    tab("shop")
+    assert click_btn(lambda r: r.x == 380 and r.y == 132)            # COSMÉTICOS
+    frame()
+    assert ui.shop_tab == "cosmetics"
+    n, keys = counting_frames(60)
+    assert n == 0 and len(keys) < 150, (n, len(keys))
+    order = robots_ui.LOOK_ORDER
+    assert order == ("decal", "antenna", "trail", "celebration")
+    # cartões não se sobrepõem e cabem acima do botão COMPRAR
+    rects = [cos_card(r, k) for r, kd in enumerate(order) for k in range(len(PP.LOOK_KINDS[kd]))]
+    assert all(r.right <= 1080 and r.bottom <= 636 for r in rects)
+    assert not any(a.colliderect(b) for i, a in enumerate(rects) for b in rects[i + 1:])
+    frame()
+    click(cos_card(0, PP.DECALS.index("raio")).center)
+    assert ui.cos_sel == "raio"
+    frame()
+    btn = pygame.Rect(860, 650, 220, 44)
+    click(btn.center)
+    click(btn.center)                                                # mesmo quadro: 1 compra só
+    price = PP.COSMETIC_PRICE["decal"]
+    assert gg.cosmetics == ["raio"] and gg.scrap == 1000 - price
+    assert saved().cosmetics == ["raio"] and saved().scrap == gg.scrap
+    frame()
+    click(cos_card(0, PP.DECALS.index("raio")).center)
+    frame()
+    assert not any(en for r, _f, en in ui.buttons if r == btn)       # já tem: COMPRAR desabilitado
+    for row, cid in ((2, "fogo"), (1, "mola"), (3, "fogos")):
+        frame()
+        click(cos_card(row, PP.LOOK_KINDS[order[row]].index(cid)).center)
+        frame()
+        click(btn.center)
+    assert gg.cosmetics == ["raio", "fogo", "mola", "fogos"]
+    frame()
+    assert has_text("TENHO")
+    shot("b13_loja_cosmeticos")
+    # bancada -> galeria VISUAL (modal)
+    tab("garage")
+    assert click_btn(lambda r: r.size == (295, 44) and r.y == 562)  # ABRIR BANCADA
+    frame()
+    assert ui.screen_id == "bench"
+    rb = gg.robot(ui.bench_rid)
+    assert click_btn(lambda r: r == robots_ui.VIS_BTN)
+    frame()
+    assert ui.vis_open
+    assert not any(r.size == (185, 36) for r, _f, _e in ui.buttons)  # VOLTAR escondido pelo modal
+    m = robots_ui.VIS_MODAL
+    cards = [vis_card(r, k) for r, kd in enumerate(order) for k in range(len(PP.LOOK_KINDS[kd]) + 1)]
+    assert all(m.contains(r) for r in cards)
+    assert not any(a.colliderect(b) for i, a in enumerate(cards) for b in cards[i + 1:])
+    ok_btn = pygame.Rect(m.right - 176, m.bottom - 56, 150, 40)
+    assert not any(c.colliderect(ok_btn) for c in cards)
+    for row, cid in ((0, "raio"), (1, "mola"), (2, "fogo"), (3, "fogos")):
+        frame()
+        click(vis_card(row, PP.LOOK_KINDS[order[row]].index(cid) + 1).center)
+    assert rb["look"] == {"decal": "raio", "antenna": "mola", "trail": "fogo", "celebration": "fogos"}
+    assert saved().robot(rb["id"])["look"] == rb["look"]
+    frame()
+    click(vis_card(0, PP.DECALS.index("estrela") + 1).center)        # bloqueado: nada
+    frame()
+    assert rb["look"]["decal"] == "raio"
+    n, keys = counting_frames(60)
+    assert n == 0 and len(keys) < 150, (n, len(keys))
+    shot("b13_galeria_visual")
+    click(vis_card(2, 0).center)                                     # "nenhum" no rastro
+    frame()
+    assert "trail" not in rb["look"] and saved().robot(rb["id"])["look"].get("trail") is None
+    click(vis_card(2, PP.TRAILS.index("fogo") + 1).center)
+    frame()
+    assert rb["look"]["trail"] == "fogo"
+    click(pygame.Rect(m.x + 26 + 90, m.y + 82 + 170 + 62, 80, 34).center)   # PROX: troca o robô no modal
+    frame()
+    assert ui.vis_open and ui.bench_rid != rb["id"]
+    rb2 = gg.robot(ui.bench_rid)
+    click(vis_card(0, PP.DECALS.index("raio") + 1).center)
+    frame()
+    assert rb2["look"] == {"decal": "raio"}
+    key(pygame.K_ESCAPE)                                             # Esc só fecha o modal
+    assert not ui.vis_open and ui.screen_id == "bench" and g.state == "robots"
+    frame()
+    shot("b13_bancada_visual")
+    # partida com os cosméticos (todos os titulares) - screenshot com rastro
+    for cid in sorted(PP.COSMETICS):
+        gg.grant_cosmetic(cid)
+    for i, rid in enumerate(gg.lineup):
+        for kd in order:
+            ids = PP.LOOK_KINDS[kd]
+            gg.equip_look(rid, ids[i % len(ids)])
+    opp = gm.new_game(random.Random(77))
+    old = soccer.time
+    clock = soccer.time = FakeClock()
+    try:
+        random.seed(5)
+        g.start_robot_match(gg.match_cfg(), opp.match_cfg(), lambda s, e: None, venue="bairro")
+        g.state = "play"
+        assert len(g.trail_players) == 5
+        for _ in range(150):
+            clock.t += 1 / 60
+            g.step(1 / 60)
+            g.draw()
+        assert any(p.trail_n for p in g.trail_players)
+        if SHOTS_DIR:
+            os.makedirs(SHOTS_DIR, exist_ok=True)
+            pygame.image.save(g.screen, "%s/%s.png" % (SHOTS_DIR, "b13_partida"))
+            g.crowd = None                                           # sem torcida/câmera: campo 1:1
+            for _ in range(20):
+                clock.t += 1 / 60
+                g.step(1 / 60)
+                g.draw()
+            pygame.image.save(g.screen, "%s/%s.png" % (SHOTS_DIR, "b13_partida_perto"))
+    finally:
+        soccer.time = old
+        g.match_sink = None
+        g.crowd = None
+    g.state = "robots"
     ui.to_menu()
 
 

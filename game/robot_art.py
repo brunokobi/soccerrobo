@@ -31,6 +31,8 @@ from collections import OrderedDict
 
 import pygame
 
+import parts as _parts                                  # so o catalogo de cosmeticos (parts nao importa nada)
+
 SPRITE_SIZE = 64        # sprite quadrado; o centro fica em (32, 32)
 PR = 14                 # raio do corpo no sprite = raio fisico do jogador (soccer.PR)
 C = SPRITE_SIZE // 2
@@ -61,6 +63,19 @@ DARK = (14, 18, 26)
 PUFF_COLORS = ((170, 146, 108), (206, 208, 218), (112, 110, 118))   # poeira, fumaca, fumaca escura
 PUFF_RADII = (2, 3, 4, 5, 6, 7, 8, 9, 10)
 PUFF_FADES = 4
+
+# cosmeticos (B13; so visuais). Adesivo e antena entram no atlas (chave ganha `look`): custo por quadro 0.
+DECAL_AB = (1, 7)        # adesivo ~9x9 a 1 px a frente e 7 px a direita do centro (sob as pecas)
+TRAIL_N = 6              # rastro do robo: pool fixo de 6 pontos por jogador (amostra a cada TRAIL_DT s reais)
+TRAIL_DT = 0.045
+TRAIL_SIZE = 16
+TRAIL_SPEED2 = 90 * 90   # so deixa rastro acima de 90 px/s
+ICON_SIZE = 40           # icone da galeria/loja
+RAINBOW = ((255, 70, 70), (255, 160, 40), (255, 235, 60), (80, 220, 100), (60, 150, 255), (190, 100, 255))
+CELEBRATION_COLORS = {"confete": ((255, 80, 120), (255, 220, 60), (80, 220, 120), (70, 170, 255)),
+                      "bolo": ((255, 150, 190), (255, 245, 225), (150, 90, 50), (255, 220, 80)),
+                      "chinelo_voando": ((60, 140, 255), (255, 220, 60), (60, 200, 110)),
+                      "fogos": ((255, 210, 70), (255, 80, 60), (120, 230, 255))}
 
 STATS = {"atlas": 0, "body": 0, "halo": 0}           # construcoes (testes de cache)
 
@@ -415,13 +430,178 @@ def _crop(s):
     return (s.subsurface(r).copy().convert_alpha(), r.x - C, r.y - C)
 
 
-class Atlas:
-    """Camadas por direcao de um robo: under[d]/over[d] = (Surface, dx, dy) ou None."""
+# ---------------------------------------------------------------------------------- cosmeticos (B13)
+def _draw_sticker(s, did, cx, cy):
+    """Adesivo no robo (~11 px): selo redondo claro (escuro na caveira) com o simbolo por cima, para ler
+    bem sobre o domo cinza em qualquer cor de time."""
+    back = (40, 44, 60) if did == "caveira" else (244, 244, 236)
+    pygame.draw.circle(s, back, (cx, cy), 5.5)
+    pygame.draw.circle(s, (16, 20, 30), (cx, cy), 5.5, 1)
+    _draw_decal(s, did, cx, cy, 0.95)
 
-    def __init__(self, ch, led, gk, parts):
-        self.key = (ch, led, gk, parts)
+
+def _draw_decal(s, did, cx, cy, k=1.0):
+    """Adesivo `did` centrado em (cx, cy); k = escala (1 = ~9 px no robo; a galeria usa ~3,6). Abaixo de
+    k 2 sem contorno (o selo de _draw_sticker faz o contraste)."""
+    def q(x, y):
+        return (cx + x * k, cy + y * k)
+    w = max(1, int(round(k * 0.6)))
+    edge = (30, 22, 18)
+    if k < 2:
+        w = 0
+    if did == "estrela":
+        pts = [q(math.cos(-math.pi / 2 + i * math.pi / 5) * (4.6 if i % 2 == 0 else 1.9),
+                 math.sin(-math.pi / 2 + i * math.pi / 5) * (4.6 if i % 2 == 0 else 1.9)) for i in range(10)]
+        pygame.draw.polygon(s, (255, 215, 60), pts)
+        if w:
+            pygame.draw.polygon(s, edge, pts, w)
+    elif did == "raio":
+        pts = [q(1.2, -4.6), q(-2.8, 0.6), q(-0.2, 0.6), q(-1.2, 4.6), q(2.8, -0.8), q(0.2, -0.8)]
+        pygame.draw.polygon(s, (255, 180, 20) if k < 2 else (255, 196, 40), pts)
+        if w:
+            pygame.draw.polygon(s, edge, pts, w)
+    elif did == "pao_queijo":
+        pygame.draw.circle(s, (232, 186, 104), q(0, 0), 4.2 * k)
+        pygame.draw.circle(s, (150, 98, 44), q(0, 0), 4.2 * k, max(1, w))
+        for x, y in ((-1.6, -1.2), (1.4, -0.6), (-0.2, 1.6)):
+            pygame.draw.circle(s, (196, 134, 62), q(x, y), max(1.0, 0.8 * k))
+        pygame.draw.circle(s, (252, 226, 160), q(-1.4, -2.2), max(1.0, 0.7 * k))
+    elif did == "chinelo":
+        r = pygame.Rect(0, 0, int(4.6 * k), int(9.4 * k))
+        r.center = (int(cx), int(cy))
+        pygame.draw.ellipse(s, (60, 140, 255), r)
+        if w:
+            pygame.draw.ellipse(s, (16, 40, 90), r, w)
+        pygame.draw.lines(s, (255, 230, 60) if k < 2 else (250, 250, 250), False,
+                          [q(-2, -0.6), q(0, -2.8), q(2, -0.6)], max(1, w))
+    elif did == "caveira":
+        pygame.draw.circle(s, (240, 240, 232), q(0, -0.9), 3.6 * k)
+        pygame.draw.rect(s, (240, 240, 232), pygame.Rect(q(-2.0, 1.2), (4.0 * k + 1, 3.0 * k)))
+        if w:
+            pygame.draw.circle(s, edge, q(0, -0.9), 3.6 * k, w)
+        for x in (-1.4, 1.4):
+            pygame.draw.circle(s, (20, 20, 24), q(x, -0.9), max(1.0, 1.0 * k))
+        pygame.draw.line(s, (20, 20, 24), q(0, 2.0), q(0, 4.0), max(1, w))
+    elif did == "coracao":
+        red = (235, 50, 80)
+        for x in (-1.7, 1.7):
+            pygame.draw.circle(s, red, q(x, -1.2), 2.3 * k)
+        pygame.draw.polygon(s, red, [q(-3.9, -0.7), q(3.9, -0.7), q(0, 4.2)])
+        pygame.draw.circle(s, (255, 190, 200), q(-1.9, -1.8), max(1.0, 0.7 * k))
+
+
+def _draw_antenna(s, aid, d, led, cx=C, cy=C):
+    """Antena cosmetica na traseira do robo virado para `d` (desenhada por cima de tudo)."""
+    def p(a, b):
+        return _pt(d, a, b, cx, cy)
+    dark = (36, 40, 52)
+    if aid == "curta":
+        pygame.draw.line(s, dark, p(-6, 0), p(-PR - 3, 0), 2)
+        pygame.draw.circle(s, led, p(-PR - 3, 0), 3)
+        pygame.draw.circle(s, (250, 252, 255), p(-PR - 3, 0), 1)
+    elif aid == "mola":
+        pts = [p(-6 - i * 2.2, 0 if i in (0, 6) else (2 if i % 2 else -2)) for i in range(7)]
+        pygame.draw.lines(s, (186, 192, 206), False, pts, 1)
+        pygame.draw.circle(s, (255, 90, 150), pts[-1], 3)
+        pygame.draw.circle(s, (255, 230, 240), pts[-1], 1)
+    elif aid == "dupla":
+        for b in (-1, 1):
+            pygame.draw.line(s, dark, p(-5, b * 3), p(-PR - 3, b * 8), 2)
+            pygame.draw.circle(s, led, p(-PR - 3, b * 8), 2)
+            pygame.draw.circle(s, (250, 252, 255), p(-PR - 3, b * 8), 1)
+
+
+def look_key(look):
+    """(adesivo, antena) que entram no sprite/atlas (None = nenhum), a partir de um dict `look`."""
+    look = look or {}
+    return (look.get("decal"), look.get("antenna"))
+
+
+def build_trail(tid):
+    """Rastro do robo: TRAIL_N imagens TRAIL_SIZE (0 = mais nova/maior, depois some). Prontas no warm."""
+    out = []
+    h = TRAIL_SIZE // 2
+    for i in range(TRAIL_N):
+        f = 1.0 - i / float(TRAIL_N)
+        a = int(40 + 190 * f)
+        r = max(1, int(2 + 4.5 * f))
+        s = pygame.Surface((TRAIL_SIZE, TRAIL_SIZE), pygame.SRCALPHA)
+        if tid == "neon":
+            pygame.draw.circle(s, (40, 230, 255, a // 3), (h, h), min(h, r + 2))
+            pygame.draw.circle(s, (120, 245, 255, a), (h, h), r)
+            pygame.draw.circle(s, (235, 255, 255, a), (h, h), max(1, r - 2))
+        elif tid == "fogo":
+            c = mix((255, 236, 110), (220, 50, 20), i / float(TRAIL_N - 1))
+            pygame.draw.circle(s, c + (a // 2,), (h, h), min(h, r + 1))
+            pygame.draw.circle(s, mix(c, (255, 255, 220), 0.4) + (a,), (h, h - 1), max(1, r - 1))
+        elif tid == "arco_iris":
+            pygame.draw.circle(s, RAINBOW[i % len(RAINBOW)] + (a,), (h, h), r)
+        else:                                           # estrelas: estrelinhas de 4 pontas
+            c = (255, 230, 90) if i % 2 == 0 else (255, 255, 235)
+            e = r + 1
+            pygame.draw.polygon(s, c + (a,), [(h, h - e), (h + 1, h - 1), (h + e, h), (h + 1, h + 1),
+                                              (h, h + e), (h - 1, h + 1), (h - e, h), (h - 1, h - 1)])
+        out.append(s.convert_alpha())
+    return tuple(out)
+
+
+def build_cosmetic_icon(cid):
+    """Icone ICON_SIZE da galeria/loja (pronto; cacheado por cosmetic_icon)."""
+    kind = _parts.COSMETIC_KIND.get(cid)
+    n = ICON_SIZE
+    s = pygame.Surface((n, n), pygame.SRCALPHA)
+    h = n // 2
+    if kind == "decal":
+        _draw_decal(s, cid, h, h, 3.6)
+    elif kind == "antenna":
+        big = pygame.Surface((SPRITE_SIZE, SPRITE_SIZE), pygame.SRCALPHA)   # ampliado 1,5x (pixelado)
+        pygame.draw.circle(big, (0, 170, 220), (C, C + 16), PR)
+        _dome(big, C, C + 16, PR - 3)
+        _draw_antenna(big, cid, 2, (0, 230, 255), C, C + 16)
+        s.blit(pygame.transform.scale(big.subsurface((C - 13, C - 10, 27, 27)), (n, n)), (0, 0))
+    elif kind == "trail":
+        imgs = build_trail(cid)
+        for i in range(TRAIL_N - 1, -1, -1):
+            x = 4 + int((TRAIL_N - 1 - i) * (n - 8 - TRAIL_SIZE) / (TRAIL_N - 1))
+            s.blit(imgs[i], (x, h - TRAIL_SIZE // 2 + (2 if i % 2 else -2)))
+    elif kind == "celebration":
+        cols = CELEBRATION_COLORS[cid]
+        if cid == "bolo":
+            pygame.draw.rect(s, (150, 90, 50), (9, 20, 22, 12), border_radius=3)
+            pygame.draw.rect(s, (255, 150, 190), (9, 18, 22, 5), border_radius=2)
+            for x in (14, 20, 26):
+                pygame.draw.line(s, (240, 240, 250), (x, 17), (x, 11), 2)
+                pygame.draw.circle(s, (255, 210, 70), (x, 9), 2)
+        elif cid == "chinelo_voando":
+            _draw_decal(s, "chinelo", 14, 22, 2.6)
+            _draw_decal(s, "chinelo", 28, 16, 2.0)
+        elif cid == "fogos":
+            for (fx, fy, r), c in zip(((13, 14, 9), (28, 22, 8)), cols):
+                for k in range(8):
+                    a = k * math.pi / 4
+                    pygame.draw.line(s, c, (fx + math.cos(a) * 3, fy + math.sin(a) * 3),
+                                     (fx + math.cos(a) * r, fy + math.sin(a) * r), 2)
+        k = 0
+        for x, y in ((6, 6), (33, 7), (20, 4), (5, 32), (35, 33), (21, 36), (12, 26), (30, 28)):
+            if cid == "confete" or k % 2 == 0:
+                pygame.draw.rect(s, cols[k % len(cols)], (x, y, 4, 3))
+            k += 1
+    return s.convert_alpha()
+
+
+def cosmetic_icon(cache, cid):
+    return _get(cache, ("cos_icon", cid), lambda: build_cosmetic_icon(cid))
+
+
+class Atlas:
+    """Camadas por direcao de um robo: under[d]/over[d] = (Surface, dx, dy) ou None.
+    `look` = (adesivo, antena) cosmeticos (B13): adesivo sob as pecas, antena por cima de tudo."""
+
+    def __init__(self, ch, led, gk, parts, look=(None, None)):
+        self.key = (ch, led, gk, parts, look)
         self.under, self.over = [], []
         names = dict(parts)
+        decal, antenna = look if look else (None, None)
         for d in range(DIRS):
             u = pygame.Surface((SPRITE_SIZE, SPRITE_SIZE), pygame.SRCALPHA)
             _draw_chassis_under(u, ch, d, led)
@@ -430,9 +610,13 @@ class Atlas:
                     _draw_part(u, nm, names[nm], d, led)
             o = pygame.Surface((SPRITE_SIZE, SPRITE_SIZE), pygame.SRCALPHA)
             _draw_chassis_over(o, ch, d, led)
+            if decal:
+                _draw_sticker(o, decal, *_pt(d, *DECAL_AB))
             for nm in OVER:
                 if nm in names:
                     _draw_part(o, nm, names[nm], d, led)
+            if antenna:
+                _draw_antenna(o, antenna, d, led)
             self.under.append(_crop(u))
             self.over.append(_crop(o))
         self.nbytes = sum(x[0].get_width() * x[0].get_height() * 4
@@ -440,8 +624,8 @@ class Atlas:
         STATS["atlas"] += 1
 
 
-def build_atlas(ch, led, gk, parts=()):
-    return Atlas(ch, led, gk, tuple(parts))
+def build_atlas(ch, led, gk, parts=(), look=(None, None)):
+    return Atlas(ch, led, gk, tuple(parts), tuple(look) if look else (None, None))
 
 
 # ---------------------------------------------------------------------------------- escova e fumaca
@@ -509,11 +693,12 @@ def brush_count(vis):
 class Art:
     """Tudo o que draw_player precisa de um jogador (referencias prontas; nada e criado por quadro)."""
     __slots__ = ("body", "low", "halo", "atlas", "brushes", "nbrush", "orbital", "radar", "modulo",
-                 "turbina", "hot", "led", "key", "brush_off", "radar_off", "mod_off", "jet_off", "rad")
+                 "turbina", "hot", "led", "key", "brush_off", "radar_off", "mod_off", "jet_off", "rad", "trail")
 
-    def __init__(self, body, low, halo, atlas, brushes, vis, ch, led, key):
+    def __init__(self, body, low, halo, atlas, brushes, vis, ch, led, key, trail=None):
         self.body, self.low, self.halo, self.atlas, self.brushes = body, low, halo, atlas, brushes
         self.led, self.key = led, key
+        self.trail = trail                               # B13: imagens do rastro (build_trail) ou None
         parts = dict(atlas.key[3])
         self.nbrush = brush_count(vis)
         self.orbital = ch == "Orbital"
@@ -536,12 +721,16 @@ def warm_player(cache, key, vis):
     """Art de um jogador: (chassis, led, gk) + p.vis. Constroi so o que nao esta no cache."""
     ch, led, gk = key
     parts = atlas_parts(vis)
+    look = (vis or {}).get("look") or {}
+    lk = look_key(look)
     body = get_sprite(cache, ch, led, gk, False)
     low = get_sprite(cache, ch, led, gk, True)
     halo = _get(cache, ("halo", led), lambda: build_halo(led))
-    atlas = _get(cache, ("ov", ch, led, gk, parts), lambda: build_atlas(ch, led, gk, parts))
+    atlas = _get(cache, ("ov", ch, led, gk, parts, lk), lambda: build_atlas(ch, led, gk, parts, lk))
     brushes = _get(cache, ("brush",), build_brushes)
-    return Art(body, low, halo, atlas, brushes, vis, ch, led, key)
+    tid = look.get("trail")
+    trail = _get(cache, ("trail", tid), lambda: build_trail(tid)) if tid else None
+    return Art(body, low, halo, atlas, brushes, vis, ch, led, key, trail)
 
 
 def get_puffs(cache):
@@ -560,8 +749,9 @@ def get_sprite(cache, ch, led, gk, low=False):
     return _get(cache, (ch, led, gk, low), lambda: build_robot_sprite(ch, led, gk, low))
 
 
-def build_ui_sprite(ch, led, gk, d=2):
-    """Sprite 64x64 da UI (garagem/bancada): halo alfa + camadas do chassi viradas para baixo."""
+def build_ui_sprite(ch, led, gk, d=2, look=(None, None)):
+    """Sprite 64x64 da UI (garagem/bancada): halo alfa + camadas do chassi viradas para baixo, com o
+    adesivo e a antena cosmeticos (B13) quando houver."""
     s = pygame.Surface((SPRITE_SIZE, SPRITE_SIZE), pygame.SRCALPHA)
     _halo_alpha(s, led)
     u = pygame.Surface((SPRITE_SIZE, SPRITE_SIZE), pygame.SRCALPHA)
@@ -570,14 +760,28 @@ def build_ui_sprite(ch, led, gk, d=2):
     s.blit(build_robot_sprite(ch, led, gk, False), (0, 0))
     o = pygame.Surface((SPRITE_SIZE, SPRITE_SIZE), pygame.SRCALPHA)
     _draw_chassis_over(o, ch, d, led)
+    decal, antenna = look if look else (None, None)
+    if decal:
+        _draw_sticker(o, decal, *_pt(d, *DECAL_AB))
+    if antenna:
+        _draw_antenna(o, antenna, d, led)
     s.blit(o, (0, 0))
     return s.convert_alpha()
 
 
 def robot_sprite(cache, rb):
-    """Sprite (cacheado) de um robo da garagem, com a cor de pintura dele (UI)."""
+    """Sprite (cacheado) de um robo da garagem, com a cor de pintura e o visual dele (UI)."""
     ch, led, gk = rb["chassis"], led_color(rb["paint"]), rb["role"] == "GK"
-    return _get(cache, ("ui", ch, led, gk), lambda: build_ui_sprite(ch, led, gk))
+    lk = look_key(rb.get("look"))
+    return _get(cache, ("ui", ch, led, gk, lk), lambda: build_ui_sprite(ch, led, gk, look=lk))
+
+
+def robot_sprite_big(cache, rb, size=128):
+    """Sprite da UI ampliado (vitrine da galeria de cosmeticos); escala feita uma vez e cacheada."""
+    ch, led, gk = rb["chassis"], led_color(rb["paint"]), rb["role"] == "GK"
+    lk = look_key(rb.get("look"))
+    return _get(cache, ("ui_big", ch, led, gk, lk, size),
+                lambda: pygame.transform.scale(robot_sprite(cache, rb), (size, size)))
 
 
 def warm_sprites(cache, teams):
@@ -588,3 +792,7 @@ def warm_sprites(cache, teams):
         for p in t.players:
             p.art = warm_player(cache, sprite_key(t, p), getattr(p, "vis", None))
             p.vdir = None
+            # B13: pool fixo do rastro (pontos reaproveitados; nada e alocado por quadro)
+            p.trail_pts = [[0, 0] for _ in range(TRAIL_N)] if p.art.trail is not None else None
+            p.trail_n = p.trail_h = 0
+            p.trail_next = 0.0

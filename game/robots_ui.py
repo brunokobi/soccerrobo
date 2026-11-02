@@ -13,6 +13,7 @@ import pygame
 import crowd
 import garage as G
 import parts as P
+import robot_art
 import robot_league as RL
 import robots
 import skills as SK
@@ -92,6 +93,13 @@ SK_INFO = pygame.Rect(672, 172, 408, 300)
 SK_EQ = pygame.Rect(20, 482, 640, 210)
 SK_TAC = pygame.Rect(672, 482, 408, 210)
 BP_MODAL = pygame.Rect(180, 110, 740, 490)
+# ---- cosmeticos (B13): LOJA > COSMÉTICOS (grade por tipo) e galeria VISUAL (modal da bancada)
+LOOK_ORDER = ("decal", "antenna", "trail", "celebration")
+COS_CARD = (170, 88)                                  # loja: cartao (w, h); 6 por linha
+COS_ROW0, COS_ROW_PITCH = 176, 112
+VIS_MODAL = pygame.Rect(90, 92, 920, 586)
+VIS_CARD = (92, 84)                                   # galeria: "nenhum" + até 6 cartões por linha
+VIS_BTN = pygame.Rect(990, 188, 80, 30)               # bancada: botão VISUAL (painel direito)
 
 
 def fnum(v, d=1):
@@ -240,6 +248,8 @@ class RobotsUI(CareerUI):
         self.item_sel = None       # loja/itens: id do consumível selecionado
         self.bp_open = False       # Mochila (modal) aberta
         self.cmp_cache = None      # bancada: (chave, dados) do ANTES/DEPOIS
+        self.cos_sel = None        # loja/cosméticos: id selecionado
+        self.vis_open = False      # galeria VISUAL (modal da bancada) aberta
 
     def open(self):
         """Entra no Modo Robôs (tela de menu do modo)."""
@@ -267,6 +277,7 @@ class RobotsUI(CareerUI):
         self.place_mode = False
         self.editing = False
         self.bp_open = False
+        self.vis_open = False
         self.msg = ""
         if screen == "garage" and self.garage is not None and self.garage.robot(self.sel) is None:
             self.sel = self.garage.lineup[0] if self.garage.lineup else None
@@ -336,9 +347,10 @@ class RobotsUI(CareerUI):
 
     # -------------------------------------------------------------- eventos
     def modal_escape(self, e):
-        """Esc com a Mochila aberta só fecha a Mochila. True se consumiu o evento."""
-        if self.bp_open and e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE:
+        """Esc com a Mochila (ou a galeria VISUAL) aberta só fecha o modal. True se consumiu o evento."""
+        if (self.bp_open or self.vis_open) and e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE:
             self.bp_open = False
+            self.vis_open = False
             return True
         return False
 
@@ -384,6 +396,9 @@ class RobotsUI(CareerUI):
         if self.bp_open and self.garage is not None:
             self.buttons = []                    # modal: só os botões da Mochila valem
             self.draw_backpack_modal()
+        elif self.vis_open and self.garage is not None and self.screen_id == "bench":
+            self.buttons = []                    # modal: só os botões da galeria valem
+            self.draw_visual_modal()
 
     # ---- menu do modo
     def draw_menu(self):
@@ -451,6 +466,7 @@ class RobotsUI(CareerUI):
     def set_shop_tab(self, t):
         self.shop_tab = t
         self.item_sel = None
+        self.cos_sel = None
         self.shop_sel = None
         self.confirm_sell = None
         self.model_sel = None
@@ -524,16 +540,20 @@ class RobotsUI(CareerUI):
     def draw_shop(self):
         gg = self.garage
         scr = self.g.screen
-        for i, (tid, lab) in enumerate((("parts", "PEÇAS"), ("models", "MODELOS"), ("items", "ITENS"))):
-            self.btn((20 + i * 120, 132, 110, 36), lab, lambda t=tid: self.set_shop_tab(t),
+        for i, (tid, lab) in enumerate((("parts", "PEÇAS"), ("models", "MODELOS"), ("items", "ITENS"),
+                                        ("cosmetics", "COSMÉTICOS"))):
+            self.btn((20 + i * 120, 132, 120 if tid == "cosmetics" else 110, 36), lab,
+                     lambda t=tid: self.set_shop_tab(t),
                      color=(50, 160, 220) if self.shop_tab == tid else (16, 44, 70), size=24)
         self.text("Sucata: %d" % gg.scrap, 28, GOLD, midright=(W - 24, 150))
         if self.shop_tab == "models":
             return self.draw_shop_models()
         if self.shop_tab == "items":
             return self.draw_shop_items()
+        if self.shop_tab == "cosmetics":
+            return self.draw_shop_cosmetics()
         for i, (m, lab) in enumerate((("buy", "COMPRAR"), ("sell", "VENDER"))):
-            self.btn((400 + i * 120, 132, 110, 36), lab, lambda m=m: self.set_shop_mode(m),
+            self.btn((520 + i * 120, 132, 110, 36), lab, lambda m=m: self.set_shop_mode(m),
                      color=(0, 140, 110) if (self.shop_mode == m and m == "buy") else (
                          (170, 90, 60) if self.shop_mode == m else (16, 44, 70)), size=24)
         filters = (None,) + (P.SLOTS if gg.mod_on() else P.GEAR_SLOTS)   # 8 slots + TODOS com o Modulo
@@ -546,11 +566,11 @@ class RobotsUI(CareerUI):
         pages = max(1, (len(lst) + SHOP_ROWS - 1) // SHOP_ROWS)
         self.shop_page = min(self.shop_page, pages - 1)
         if pages > 1:
-            self.btn((660, 132, 40, 36), "<", lambda: self.set_shop_page(self.shop_page - 1),
+            self.btn((780, 132, 40, 36), "<", lambda: self.set_shop_page(self.shop_page - 1),
                      enabled=self.shop_page > 0, size=24)
-            self.btn((710, 132, 40, 36), ">", lambda: self.set_shop_page(self.shop_page + 1),
+            self.btn((830, 132, 40, 36), ">", lambda: self.set_shop_page(self.shop_page + 1),
                      enabled=self.shop_page < pages - 1, size=24)
-            self.text("%d/%d" % (self.shop_page + 1, pages), 22, DIM, midleft=(760, 150))
+            self.text("%d/%d" % (self.shop_page + 1, pages), 22, DIM, midleft=(880, 150))
         sell = self.shop_mode == "sell"
         if self.shop_sel is not None and not any(p["id"] == self.shop_sel for p in lst):
             self.shop_sel = None
@@ -648,6 +668,127 @@ class RobotsUI(CareerUI):
             self.text(line, 20, col, topleft=(24, 494 + k * 24))
         for k, line in enumerate(self.wrap(self.msg, 22, 820)[:1]):
             self.text(line, 22, GOLD, topleft=(24, 656 + k * 24))
+
+    # ---- loja: COSMÉTICOS (B13; só visuais)
+    def pick_cosmetic(self, cid):
+        self.cos_sel = cid
+        self.msg = ""
+
+    def do_buy_cosmetic(self):
+        if self.cos_sel is not None:
+            self.act(self.garage.buy_cosmetic(self.cos_sel))
+
+    def cos_card(self, r, cid, sel, status, status_col):
+        """Cartão de cosmético: ícone pronto (sprite cache), nome e uma linha de situação."""
+        scr = self.g.screen
+        pygame.draw.rect(scr, (20, 60, 90) if sel else PANEL, r, border_radius=6)
+        pygame.draw.rect(scr, GOLD if sel else LINE, r, 2 if sel else 1, border_radius=6)
+        if cid is not None:
+            ic = robot_art.cosmetic_icon(self.g.sprites, cid)
+            scr.blit(ic, (r.centerx - robot_art.ICON_SIZE // 2, r.y + 4))
+            self.text(self.fit(P.COSMETIC_NAMES[cid], 20, r.w - 10), 20, TEXT, center=(r.centerx, r.y + 56))
+        if status:
+            self.text(self.fit(status, 18, r.w - 10), 18, status_col, center=(r.centerx, r.bottom - 12))
+
+    def draw_shop_cosmetics(self):
+        gg = self.garage
+        cw, ch = COS_CARD
+        for row, kind in enumerate(LOOK_ORDER):
+            y0 = COS_ROW0 + row * COS_ROW_PITCH
+            price = P.COSMETIC_PRICE[kind]
+            self.text("%s  -  %d de sucata cada" % (P.LOOK_LABELS[kind], price), 20, GOLD, topleft=(24, y0))
+            for k, cid in enumerate(P.LOOK_KINDS[kind]):
+                r = pygame.Rect(20 + k * (cw + 8), y0 + 20, cw, ch)
+                if gg.owns_cosmetic(cid):
+                    st, col = "TENHO", GREEN
+                else:
+                    st, col = str(price), (TEXT if gg.scrap >= price else RED)
+                self.cos_card(r, cid, cid == self.cos_sel, st, col)
+                self.hit(r, lambda c=cid: self.pick_cosmetic(c))
+        cid = self.cos_sel
+        ok = cid is not None and not gg.owns_cosmetic(cid) and gg.scrap >= P.cosmetic_price(cid)
+        lab = "COMPRAR" if cid is None or gg.owns_cosmetic(cid) else "COMPRAR %d" % P.cosmetic_price(cid)
+        self.btn((860, 650, 220, 44), lab, self.do_buy_cosmetic, enabled=ok, size=26)
+        msg = self.msg or ("Cosméticos são só visuais (não mudam a partida). Equipe na bancada, botão VISUAL.")
+        for k, line in enumerate(self.wrap(msg, 20, 820)[:2]):
+            self.text(line, 20, GOLD if self.msg else DIM, topleft=(24, 640 + k * 24))
+
+    # ---- galeria VISUAL (modal da bancada, B13)
+    def open_visual(self):
+        self.vis_open = True
+        self.msg = ""
+
+    def close_visual(self):
+        self.vis_open = False
+
+    def do_look(self, kind, cid):
+        rb = self.bench_robot()
+        if rb is None:
+            return
+        if cid is None:
+            if rb.get("look", {}).get(kind) is not None:
+                self.act(self.garage.unequip_look(rb["id"], kind))
+        elif rb.get("look", {}).get(kind) != cid:
+            self.act(self.garage.equip_look(rb["id"], cid))
+
+    def draw_visual_modal(self):
+        gg = self.garage
+        scr = self.g.screen
+        rb = self.bench_robot()
+        if rb is None:
+            self.vis_open = False
+            return
+        m = VIS_MODAL
+        pygame.draw.rect(scr, (4, 8, 16), m.inflate(16, 16), border_radius=16)
+        self.panel(m, fill=(8, 18, 36))
+        self.text("VISUAL DO ROBÔ", 32, TEXT, topleft=(m.x + 26, m.y + 16), shadow=True)
+        self.text("Só aparência: não muda atributos nem a partida.", 20, DIM, topleft=(m.x + 26, m.y + 48))
+        # vitrine: robô ampliado, nome e navegação
+        lx = m.x + 26
+        pv = pygame.Rect(lx, m.y + 82, 170, 170)
+        pygame.draw.rect(scr, BG, pv, border_radius=10)
+        pygame.draw.rect(scr, LINE, pv, 1, border_radius=10)
+        big = robot_art.robot_sprite_big(self.g.sprites, rb)
+        scr.blit(big, (pv.centerx - big.get_width() // 2, pv.centery - big.get_height() // 2))
+        self.text(self.fit(rb["name"], 26, 170), 26, TEXT, center=(pv.centerx, pv.bottom + 20))
+        self.text("%s  Nv %d" % (rb["chassis"], rb["level"]), 20, DIM, center=(pv.centerx, pv.bottom + 44))
+        self.btn((lx, pv.bottom + 62, 80, 34), "ANT", lambda: self.bench_nav(-1), color=(60, 80, 130), size=22)
+        self.btn((lx + 90, pv.bottom + 62, 80, 34), "PROX", lambda: self.bench_nav(1), color=(60, 80, 130),
+                 size=22)
+        look = rb.get("look", {})
+        for k, kind in enumerate(LOOK_ORDER):
+            cur = look.get(kind)
+            self.text("%s: %s" % (P.LOOK_TITLES[kind], P.COSMETIC_NAMES[cur] if cur else "nenhum"), 18,
+                      GOLD if cur else DIM, topleft=(lx, pv.bottom + 108 + k * 22))
+        # grade: 1 linha por tipo ("nenhum" + catálogo; bloqueados apagados)
+        gx = m.x + 230
+        cw, ch = VIS_CARD
+        for row, kind in enumerate(LOOK_ORDER):
+            y0 = m.y + 72 + row * 106
+            self.text(P.LOOK_LABELS[kind], 20, GOLD, topleft=(gx, y0))
+            cur = look.get(kind)
+            r = pygame.Rect(gx, y0 + 20, cw, ch)
+            self.cos_card(r, None, cur is None, "", DIM)
+            self.text("nenhum", 20, TEXT if cur is None else DIM, center=r.center)
+            self.hit(r, lambda kd=kind: self.do_look(kd, None))
+            for k, cid in enumerate(P.LOOK_KINDS[kind]):
+                r = pygame.Rect(gx + (k + 1) * (cw + 6), y0 + 20, cw, ch)
+                have = gg.owns_cosmetic(cid)
+                if cid == cur:
+                    st, col = "EQUIPADO", (0, 230, 255)
+                elif have:
+                    st, col = "equipar", GREEN
+                else:
+                    st, col = "na LOJA", (110, 125, 120)
+                self.cos_card(r, cid, cid == cur, st, col)
+                if not have:                     # bloqueado: véu escuro (sem Surface: retângulo sólido)
+                    pygame.draw.rect(scr, (24, 30, 40), (r.x + 4, r.y + 4, r.w - 8, 42), border_radius=4)
+                    self.text("?", 30, (90, 100, 110), center=(r.centerx, r.y + 25))
+                self.hit(r, lambda c=cid, kd=kind: self.do_look(kd, c), enabled=have)
+        msg = self.msg or ("Sem cosméticos? Compre na LOJA, aba COSMÉTICOS." if not gg.cosmetics else "")
+        if msg:
+            self.text(self.fit(msg, 20, 560), 20, GOLD, midleft=(gx, m.bottom - 32))
+        self.btn((m.right - 176, m.bottom - 56, 150, 40), "OK", self.close_visual, color=(0, 140, 110), size=26)
 
     def draw_shop_models(self):
         gg = self.garage
@@ -1993,6 +2134,7 @@ class RobotsUI(CareerUI):
         self.panel((735, 178, 345, 474))
         scr.blit(self.g.robot_sprite(rb), (748, 188))
         self.text("OVR %d" % ovr, 30, ovr_color(ovr), midleft=(830, 206))
+        self.btn(VIS_BTN, "VISUAL", self.open_visual, color=(110, 70, 150), size=20)
         self.text("Papel: " + {"GK": "goleiro", "DEF": "defensor", "MID": "meia", "ATT": "atacante"}[rb["role"]],
                   22, DIM, midleft=(830, 234))
         for k, a in enumerate(robots.ATTRS):

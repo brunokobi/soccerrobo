@@ -216,7 +216,7 @@ def test_sanitize_invalid_ids_and_limits():
     mid = d["inventory"][0]["id"]
     r1["slots"]["modulo"] = mid                                    # peca de outro slot no modulo
     d["items"] = {"cera_turbo": 50, "cafe": 0, "xyz": 3, "spray": -1, "fita_isolante": "3", "pilha_reserva": 2.7}
-    d["cosmetics"] = ["raio", "raio", "nada", 3, "bolo"]
+    d["cosmetics"] = ["raio", "raio", "nada", 3, "bolo", "fogo", "mola"]
     d["cap"] = 99
     d["tactic"] = "kamikaze"
     d["flags"] = dict({"f%d" % i: i for i in range(300)}, mod_on=1)
@@ -230,7 +230,7 @@ def test_sanitize_invalid_ids_and_limits():
     assert c["robots"][1]["skills"] == skills.new_robot_skills() and c["robots"][1]["look"] == {}
     assert c["robots"][1]["slots"]["modulo"] is None
     assert c["items"] == {"cera_turbo": 9, "fita_isolante": 3, "pilha_reserva": 2}
-    assert c["cosmetics"] == ["raio", "bolo"]
+    assert c["cosmetics"] == ["raio", "bolo", "fogo", "mola"]
     assert c["tactic"] == skills.DEFAULT_TACTIC
     assert len(c["flags"]) == gm.MAX_FLAGS == 128 and c["flags"]["mod_on"] == 1
     # cap 10 corta niveis acima; cap invalido -> 10
@@ -424,6 +424,54 @@ def test_add_xp_cap_and_equip_rules():
     ok, _ = g.equip(r["id"], m["id"], "motor")
     assert not ok
     assert g.unequip(r["id"], "modulo")[0] and r["slots"]["modulo"] is None
+
+
+def test_cosmetics_buy_grant_equip_and_sanitize():
+    """B13: cosmeticos so visuais - compra (1 vez, sucata), grant, equipar/desequipar por robo, sanitize
+    do look (so ids conhecidos E desbloqueados) e `vis.look` aditivo (sem look o vis e o antigo)."""
+    g = gm.new_game(random.Random(3))
+    rb = g.robots[0]
+    rid = rb["id"]
+    pb = g.pieces_by_id()
+    before = (gm.effective_attrs(rb, pb), g.rating(), gm.match_entry(rb, pb))
+    assert set(before[2]["vis"]) == {"chassis", "paint", "parts", "hot"}
+    g.scrap = 0
+    assert g.buy_cosmetic("raio") == (False, "Sucata insuficiente (precisa de %d)." % parts.cosmetic_price("raio"))
+    assert not g.buy_cosmetic("xyz")[0] and not g.equip_look(rid, "raio")[0]     # invalido / bloqueado
+    g.scrap = 1000
+    ok, msg = g.buy_cosmetic("raio")
+    assert ok and g.scrap == 1000 - parts.COSMETIC_PRICE["decal"] and g.cosmetics == ["raio"]
+    assert not g.buy_cosmetic("raio")[0] and g.scrap == 1000 - parts.COSMETIC_PRICE["decal"]
+    assert g.grant_cosmetic("fogo") and not g.grant_cosmetic("fogo") and not g.grant_cosmetic("nada")
+    assert g.grant_cosmetic("mola") and g.grant_cosmetic("fogos")
+    for cid in ("raio", "fogo", "mola", "fogos"):
+        assert g.equip_look(rid, cid)[0]
+    assert rb["look"] == {"decal": "raio", "trail": "fogo", "antenna": "mola", "celebration": "fogos"}
+    assert not g.equip_look(9999, "raio")[0]
+    # so visual: atributos, rating e o resto da entrada da partida nao mudam
+    e = gm.match_entry(rb, g.pieces_by_id())
+    assert gm.effective_attrs(rb, pb) == before[0] and g.rating() == before[1]
+    assert e["vis"]["look"] == rb["look"] and e["vis"]["look"] is not rb["look"]
+    assert {k: v for k, v in e.items() if k != "vis"} == {k: v for k, v in before[2].items() if k != "vis"}
+    assert g.unequip_look(rid, "trail")[0] and "trail" not in rb["look"]
+    assert not g.unequip_look(rid, "trail")[0] and not g.unequip_look(rid, "xyz")[0]
+    # ida e volta (save em memoria)
+    use_mem()
+    assert g.save()
+    h = gm.Garage.load()
+    assert h.robot(rid)["look"] == {"decal": "raio", "antenna": "mola", "celebration": "fogos"}
+    assert h.cosmetics == ["raio", "fogo", "mola", "fogos"]
+    # sanitize: look com id desbloqueado fica; bloqueado, de outro tipo ou desconhecido sai
+    d = g.to_dict()
+    d["robots"][0]["look"] = {"decal": "estrela", "antenna": "mola", "trail": "raio", "celebration": "fogos"}
+    d["robots"][1]["look"] = {"decal": "raio", "trail": "fogo", "celebration": 5}
+    d["cosmetics"] = ["raio", "fogo", "fogos"]
+    c = gm.Garage.sanitize(d)
+    assert c["robots"][0]["look"] == {"celebration": "fogos"}
+    assert c["robots"][1]["look"] == {"decal": "raio", "trail": "fogo"}
+    # ninguem desbloqueado: nenhum look sobrevive
+    d["cosmetics"] = []
+    assert all(r["look"] == {} for r in gm.Garage.sanitize(d)["robots"])
 
 
 def main():
