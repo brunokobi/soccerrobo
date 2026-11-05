@@ -214,7 +214,7 @@ def test_encoding_and_chars():
 def test_characters_and_vocab():
     need = {"teo", "ambrosio", "vivi", "bia", "dudu", "augusto", "gervasio", "rodolfo", "helena",
             "kenji", "narrador", "ze",
-            "nestor", "valquiria", "gabi", "odete"}             # Ato 2 (C6); spec secao 2
+            "nestor", "valquiria", "gabi", "odete", "ogawa"}    # Ato 2 (C6-C7); spec secao 2
     assert set(st.CHARACTERS) == need
     names = set()
     for cid, c in st.CHARACTERS.items():
@@ -488,35 +488,52 @@ def test_tournaments():
             last_min, last_max = min(os_), max(os_)
 
 
+def reward_variants(r):
+    """A base e cada variante `alt` mesclada (C7)."""
+    out = [r]
+    for cond, over in r.get("alt", ()):
+        check_cond_format(cond, "alt")
+        assert over and "alt" not in over, over
+        out.append(dict(r, **over))
+    return out
+
+
 def test_rewards():
-    recruits = 0
-    for rid, r in st.REWARDS.items():
-        assert set(r) <= {"scrap", "piece", "recruits", "unlock", "xp_hero", "xp_team", "equip_hero_piece", "title",
-                          "skill", "pts"}
-        if r.get("skill"):
-            check_skill(r["skill"])
-        if r.get("pts"):
-            check_pts(r["pts"], 10)
-        for k in ("scrap", "xp_hero", "xp_team"):
-            assert isinstance(r.get(k, 0), int) and 0 <= r.get(k, 0) <= 1000
-        for k in ("piece", "equip_hero_piece"):
-            if r.get(k):
-                check_piece(r[k])
-        for u in r.get("unlock", []):
-            assert u in robots.CHASSIS, u
-        for rc in r.get("recruits", []):
-            recruits += 1
-            assert 1 <= len(rc["name"]) <= 12
-            assert rc["role"] in ("GK", "DEF", "MID", "ATT")
-            assert rc["chassis"] in robots.CHASSIS
-            assert 20 <= rc["base_ovr"] <= 99
-            assert 0 <= rc["level"] <= 10
-            assert len(rc["paint"]) == 3
-            if rc.get("piece"):
-                check_piece(rc["piece"])
-    assert recruits <= 3
-    names = [rc["name"] for r in st.REWARDS.values() for rc in r.get("recruits", [])]
-    assert len(set(names)) == len(names)
+    """Cada recompensa, na base e em cada variante `alt` (C7). Escala: Ato 1 ate 600 de sucata, o Ato 2/3
+    sobe ate 3.000 (spec secao 10). Recrutas: no maximo 6 na campanha inteira, nomes unicos."""
+    names = []
+    for rid, r0 in st.REWARDS.items():
+        alts = r0.get("alt", ())
+        assert all(c is not None for c, _o in alts[:-1]), "so a ultima variante pode ser o padrao (%s)" % rid
+        rec_sets = set()
+        for r in reward_variants(r0):
+            assert set(r) <= {"scrap", "piece", "recruits", "unlock", "xp_hero", "xp_team", "equip_hero_piece",
+                              "title", "skill", "pts", "alt"}, rid
+            if r.get("skill"):
+                check_skill(r["skill"])
+            if r.get("pts"):
+                check_pts(r["pts"], 10)
+            assert isinstance(r.get("scrap", 0), int) and 0 <= r.get("scrap", 0) <= 3000, rid
+            for k in ("xp_hero", "xp_team"):
+                assert isinstance(r.get(k, 0), int) and 0 <= r.get(k, 0) <= 1000, rid
+            for k in ("piece", "equip_hero_piece"):
+                if r.get(k):
+                    check_piece(r[k])
+            for u in r.get("unlock", []):
+                assert u in robots.CHASSIS, u
+            for rc in r.get("recruits", []):
+                assert 1 <= len(rc["name"]) <= 12
+                assert rc["role"] in ("GK", "DEF", "MID", "ATT")
+                assert rc["chassis"] in robots.CHASSIS
+                assert 20 <= rc["base_ovr"] <= 99
+                assert 0 <= rc["level"] <= 10
+                assert len(rc["paint"]) == 3
+                if rc.get("piece"):
+                    check_piece(rc["piece"])
+                rec_sets.add(rc["name"])
+        names += sorted(rec_sets)
+    assert len(names) <= 6, names
+    assert len(set(names)) == len(names), names
 
 
 def test_chapters_structure():
@@ -594,8 +611,8 @@ def test_budget_sanity():
     n = len(st.SCENES)
     lines = sum(len([i for k, i in items(s) if k == "line"]) for s in st.SCENES.values())
     chars = sum(len(ln[2]) for s in st.SCENES.values() for ln in all_lines(s))
-    assert 12 <= n <= 80, n
-    assert 100 <= lines <= 800, lines
+    assert 12 <= n <= 220, n                    # Atos 1-3 + missoes (spec secao 11: ~180 cenas)
+    assert 100 <= lines <= 2600, lines
     assert st.STORY_VERSION == 2
     print("  (cenas=%d falas-principais=%d falas-total=%d caracteres=%d)" % (
         n, lines, sum(len(all_lines(s)) for s in st.SCENES.values()), chars))

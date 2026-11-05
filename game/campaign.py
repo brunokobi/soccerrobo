@@ -920,7 +920,7 @@ class Campaign:
             rep = dict(self._reports.get(rid) or empty)
             rep["applied"] = False
             return rep
-        rw = story.REWARDS[rid]
+        rw = self.reward_spec(rid)
         g = self.garage
         self.done.append(key)
         sync_unlocks(g, self.done)
@@ -963,6 +963,15 @@ class Campaign:
         rep["tier_done"] = g.tier_done
         self._reports[rid] = rep
         return dict(rep)
+
+    def reward_spec(self, rid):
+        """REWARDS[rid] efetivo: a primeira variante `alt` [(cond, {campos}), ...] cuja cond vale e
+        mesclada por cima da base (C7: ex. recruta so se gabi_amigo, senao peca)."""
+        rw = story.REWARDS[rid]
+        for cond, over in rw.get("alt", ()):
+            if self.check_cond(cond):
+                return dict(rw, **over)
+        return rw
 
     def _recruit(self, spec):
         """Cria o recruta (nivel/chassis/peca ja prontos). Elenco cheio: sai o reserva de MENOR nivel

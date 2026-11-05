@@ -136,7 +136,8 @@ def test_mid_cap5_keeps_tournament():
     a = c.next_action()
     assert a["kind"] == "match" and a["stage"] == "SF"
     scenes = play_to_end(c)
-    assert scenes.count("e1_epilogo") == 1 and "c6_nestor" in scenes and c.ch == "7"
+    assert scenes.count("e1_epilogo") == 1 and "c6_nestor" in scenes
+    assert c.ch == next(x["id"] for x in story.CHAPTERS if x.get("draft"))                    # o primeiro capitulo em rascunho
     assert c.garage.stats["titles"] == old["garage"]["stats"]["titles"] + 1
     assert "reward:rw_5" in c.done and c.garage.mod_on() and c.garage.cap == gm.CAMPAIGN_CAP
 

@@ -1330,7 +1330,7 @@ class CampaignUI(RobotsUI):
             return
         cp = self.campaign
         ch = cp.chapter()
-        rw = story.REWARDS.get(ch.get("reward")) or {}
+        rw = cp.reward_spec(ch["reward"]) if ch.get("reward") in story.REWARDS else {}
         rep = act.get("report") or {}
         v = {"title": "%s - %s" % (ch["title"], ch["subtitle"]), "scrap": int(rw.get("scrap", 0)),
              "piece": None, "recruits": [], "unlocked": list(rw.get("unlock", ())),

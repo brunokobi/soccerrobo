@@ -5,9 +5,9 @@ story.py junta estes dicts/listas nos seus (story._extend) e e o unico ponto de 
 do jogo. Mesmas regras e formatos de story.py (ver o docstring de la); ids nao podem repetir os de
 outros modulos. Capitulos aqui levam "act" e entram depois dos do Ato 1, na ordem da lista.
 
-C6: cap. 6 (Taca de Acesso) completo. Os ovr/F seguem os valores iniciais da spec (secao 7) e o
-econ_tier fica em 3 ate o C9 estender a economia (TIER_MUL com 7 entradas) e calibrar o Ato 2.
-Caps. 7-9 sao rascunhos ("em breve") ate os passos C7/C8.
+C6: cap. 6 (Taca de Acesso). C7: cap. 7 (liga, escolha B2) e cap. 8 (copa com quartas). Os ovr/F
+seguem os valores iniciais da spec (secao 7) e o econ_tier fica em 3 ate o C9 estender a economia
+(TIER_MUL com 7 entradas) e calibrar o Ato 2. Cap. 9 e rascunho ("em breve") ate o C8.
 """
 
 # --- elenco novo (spec secao 2) -----------------------------------------------------------------
@@ -21,6 +21,8 @@ CHARACTERS = {
              "hair": ("espetado", (40, 120, 255)), "acc": ["bone"], "outfit": ("camiseta", (250, 210, 40))},
     "odete": {"name": "DONA ODETE", "color": (255, 200, 120), "skin": (180, 130, 95),
               "hair": ("coque", (170, 170, 170)), "acc": ["avental"], "outfit": ("avental", (240, 240, 230))},
+    "ogawa": {"name": "MESTRE OGAWA", "color": (120, 200, 160), "skin": (225, 190, 150),
+              "hair": ("raspado", (60, 60, 60)), "acc": ["bigode"], "outfit": ("kimono", (60, 70, 90))},
 }
 
 # --- times (ordem dos slots = garage.LINEUP_SLOTS: GK, DEF, MID, MID, ATT) ------------------------
@@ -44,6 +46,49 @@ TEAMS = {
     "higiene": {"name": "Brigada Higiene", "color": (120, 230, 255), "ovr": 61,
                 "names": ["BH-01", "BH-02", "BH-03", "BH-04", "BH-05"],
                 "chassis": list(_CH5), "paint": (235, 250, 255), "perfect": True},
+    # ---- Cap. 7 (Superliga: pontos corridos)
+    "esfregao": {"name": "Real Esfregão", "color": (200, 80, 80), "ovr": 51,
+                 "names": ["Cabo", "Felpa", "Torção", "Balde", "Espuma"],
+                 "chassis": list(_CH5), "paint": (210, 90, 90), "perfect": False},
+    "microondas": {"name": "Atlético Micro-ondas", "color": (240, 170, 50), "ovr": 52,
+                   "names": ["Pipoca", "Bandeja", "Timer", "Prato", "Bip"],
+                   "chassis": list(_CH5), "paint": (245, 180, 60), "perfect": False},
+    "poarroz": {"name": "Dínamo Pó de Arroz", "color": (240, 190, 210), "ovr": 52,
+                "names": ["Talco", "Esponjinha", "Pluma", "Pétala", "Blush"],
+                "chassis": list(_CH5), "paint": (245, 200, 215), "perfect": False},
+    "ventilador": {"name": "Sporting Ventilador", "color": (90, 200, 220), "ovr": 53,
+                   "names": ["Hélice", "Brisa", "Rajada", "Giro", "Turbo"],
+                   "chassis": list(_CH5), "paint": (100, 205, 225), "perfect": False},
+    "cera": {"name": "Clube da Cera Líquida", "color": (220, 200, 90), "ovr": 54,
+             "names": ["Brilho", "Lustre", "Escorrega", "Verniz", "Espelho"],
+             "chassis": list(_CH5), "paint": (230, 210, 100), "perfect": False},
+    "impec3": {"name": "Os Impecáveis Mk III", "color": (0, 220, 255), "ovr": 59,
+               "names": ["LX-11", "LX-12", "LX-13", "LX-14", "LX-15"],
+               "chassis": list(_CH5), "paint": (235, 248, 255), "perfect": True},
+    # chefe do cap. 7: Platinum Elite do Rodolfo (perfeitos)
+    "plat_elite": {"name": "Platinum Elite", "color": (200, 210, 230), "ovr": 63,
+                   "names": ["PE-01", "PE-02", "PE-03", "PE-04", "PE-05"],
+                   "chassis": list(_CH5), "paint": (220, 228, 240), "perfect": True},
+    # ---- Cap. 8 (Playoffs da Superliga)
+    "pano": {"name": "Coletivo do Pano", "color": (170, 140, 110), "ovr": 53,
+             "names": ["Flanela", "Microfibra", "Algodão", "Retalho", "Trapo"],
+             "chassis": list(_CH5), "paint": (180, 150, 120), "perfect": False},
+    "sempoeira": {"name": "Os Sem-Poeira", "color": (150, 230, 200), "ovr": 54,
+                  "names": ["Vácuo", "Filtro", "HEPA", "Ciclone", "Ar Puro"],
+                  "chassis": list(_CH5), "paint": (160, 235, 205), "perfect": False},
+    "lavanderia": {"name": "Lavanderia FC", "color": (110, 150, 240), "ovr": 55,
+                   "names": ["Amaciante", "Centrífuga", "Molho", "Varal", "Prendedor"],
+                   "chassis": list(_CH5), "paint": (120, 160, 245), "perfect": False},
+    "bunnies_pro": {"name": "Dust Bunnies Pro", "color": (230, 90, 90), "ovr": 57,
+                    "names": ["Tex Jr.", "Donut II", "Cowboy", "Popcorn", "Jumbo Max"],
+                    "chassis": list(_CH5), "paint": (235, 100, 100), "perfect": False},
+    "kenji2": {"name": "Dojo do Kenji 2.0", "color": (255, 120, 160), "ovr": 60,
+               "names": ["Katana", "Bonsai", "Tofu", "Samurai", "Haiku"],
+               "chassis": list(_CH5), "paint": (245, 245, 250), "perfect": False},
+    # chefe do cap. 8: Guarda Zero da Valquiria (perfeitos, LED vermelho)
+    "guarda_zero": {"name": "Guarda Zero", "color": (230, 40, 60), "ovr": 64,
+                    "names": ["GZ-01", "GZ-02", "GZ-03", "GZ-04", "GZ-05"],
+                    "chassis": list(_CH5), "paint": (40, 40, 48), "perfect": True},
 }
 
 # --- torneios -----------------------------------------------------------------------------------
@@ -57,6 +102,26 @@ TOURNAMENTS = {
         "hooks": {"before": {"G2": "c6_g2_odete", "SF": "c6_gabi_pre", "F": "c6_final_pre"},
                   "after": {"SF": "c6_sf_pos"},
                   "win": "c6_final_win", "lose": "c6_final_lose", "elim": "c6_repescagem"},
+    },
+    # Cap. 7: liga (R1-R5, top 4 a SF) no Estadio Limpex. Estagios (F_rec / O): R1 68,4 / 51; R2 68,7 / 52;
+    # R3 69,0 / 52; R4 69,3 / 53; R5 69,6 / 54; SF 69,9 / 59; F 70,2 / 63 (boss_delta 7,2). B2 depois da R2.
+    "t_c7": {
+        "chapter": "7", "local": "Estádio Limpex", "bg": "estadio", "format": "league",
+        "group": ["esfregao", "microondas", "poarroz", "ventilador", "cera"], "qf": None, "sf": "impec3",
+        "final": "plat_elite", "boss": "plat_elite", "boss_delta": 7.2, "regular_delta": (15, 18),
+        "hooks": {"before": {"R3": "c7_g3_dudu", "SF": "c7_sf_pre", "F": "c7_final_pre"},
+                  "after": {"R2": "c7_contrato"},
+                  "win": "c7_final_win", "lose": "c7_final_lose", "elim": "c7_repescagem"},
+    },
+    # Cap. 8: copa com quartas. Estagios (F_rec / O): G1 70,4 / 53; G2 70,7 / 54; G3 71,0 / 55; QF 71,4 / 57;
+    # SF 71,7 / 60; F 72,0 / 64 (boss_delta 8,0). Grupo +1 sobre a spec (regulares F-O <= 18).
+    "t_c8": {
+        "chapter": "8", "local": "Estádio Limpex (noite)", "bg": "estadio", "format": "cup",
+        "group": ["pano", "sempoeira", "lavanderia"], "qf": "bunnies_pro", "sf": "kenji2",
+        "final": "guarda_zero", "boss": "guarda_zero", "boss_delta": 8.0, "regular_delta": (15, 18),
+        "hooks": {"before": {"G2": "c8_helena", "QF": "c8_qf_pre", "SF": "c8_sf_kenji", "F": "c8_final_pre"},
+                  "after": {},
+                  "win": "c8_final_win", "lose": "c8_final_lose", "elim": "c8_repescagem"},
     },
 }
 
@@ -203,6 +268,266 @@ SCENES = {
         ("nestor", "piscando", "Ótimo. Na casa dos outros, a gente sempre descobre onde fica a cozinha."),
         ("ze", "robo", "Bzzzt. (o Zé aspira o chip de rastreio. Faz um barulho de satisfação. Ninguém tem coragem de impedir.)"),
     ]},
+
+    # ------------------------------------------------------------------ Capitulo 7 (Superliga: pontos corridos)
+    "c7_intro": {"bg": "estadio", "cast": ["teo", "gervasio", "nestor", "vivi", "dudu", "bia", "ze"], "lines": [
+        ("narrador", "neutro", "Estádio Limpex, abertura da Superliga. Fogos, telão de quarenta metros e um mascote: um aspirador inflável gigante chamado Limpinho, com um sorriso de dentes brancos demais."),
+        ("dudu", "euforico", "Chat, olha o tamanho desse estádio! Tem mais cadeira aqui do que gente na minha cidade. Tem escada rolante para a escada rolante!"),
+        ("gervasio", "feliz", "Moreira! Eu vim representar o colégio! Trouxe a faixa da escola. Pintei sozinho. Escrevi \"Santa Faísca\" com um F a mais."),
+        ("narrador", "neutro", "Uma rajada de vento passa pelo estádio. O Limpinho balança, hesita, se inclina com elegância e cai inteiro em cima do Diretor Gervásio."),
+        ("gervasio", "susto", "Eu estou bem! Eu estou dentro do mascote! É macio! Cheira a lavanda corporativa!"),
+        ("nestor", "malicioso", "Na minha época, mascote era um senhor fantasiado de esquilo. Pelo menos ele caía sozinho."),
+        ("vivi", "pensando", "Regulamento da Superliga: seis times, cinco rodadas, pontos corridos. Só os quatro primeiros vão para a semifinal. Não dá para perder ponto bobo."),
+        ("bia", "determinado", "Ponto bobo é com a gente mesmo. Eu reforcei o chinelo do Zé com fita cinza. Agora ele aguenta até mascote caindo."),
+        ("teo", "feliz", "Superliga, Zé! Liga de verdade! A gente começou numa quadra com uma trave torta!"),
+        ("ze", "robo", "Bip. (o Zé aspira um confete. Depois outro. Depois decide que confete é o melhor dia da vida dele.)"),
+    ]},
+
+    "c7_vivi_treino": {"bg": "garagem", "cast": ["vivi", "teo", "bia", "nestor", "ambrosio", "ze"], "lines": [
+        ("narrador", "neutro", "Garagem do Vô Nestor, véspera da primeira rodada. A Vivi trouxe um quadro branco, três canetas coloridas e uma planilha impressa em formato A2."),
+        ("vivi", "determinado", "Pontos corridos funciona assim: vitória vale três, empate vale um, derrota vale tristeza. Ganhar em casa e empatar fora já classifica."),
+        ("teo", "pensando", "Mas na Superliga a gente sempre joga em casa. Eles disseram que o mandante é sempre a gente."),
+        ("vivi", "convencida", "Exato. Então a planilha manda ganhar todas. Está escrito em verde. Verde é obrigatório."),
+        ("bia", "pensando", "E o apito? A gente não pode usar o da Limpex, tem chip de rastreio."),
+        ("narrador", "neutro", "A Vivi pega um pano de prato, enrola na mão e sopra com força. O pano faz um \"fffffff\" murcho. Ela olha para o pano com decepção profunda."),
+        ("vivi", "corada", "Apito de pano. Sem chip, sem GPS, sem som. É seguro. Não é eficiente, mas é seguro."),
+        ("nestor", "feliz", "Na minha época, o técnico apitava com a boca. Às vezes saía um dente. Era mais dramático."),
+        ("ambrosio", "pensando", "Valentina, você virou técnica sem perceber. Com prancheta e tudo. O Rodolfo ficaria orgulhoso. Ou com ciúme."),
+        ("vivi", "bravo", "Eu não virei técnica. Eu sou capitã com responsabilidade administrativa. É diferente. Está na planilha."),
+        ("ze", "robo", "Bip. (o Zé passa por cima da planilha. Agora a tabela tem um rastro de rodinha bem no meio do primeiro lugar.)"),
+    ]},
+
+    "c7_g3_dudu": {"bg": "estadio", "cast": ["dudu", "teo", "bia", "odete", "ze"], "lines": [
+        ("narrador", "neutro", "Terceira rodada. No canto da arquibancada, o Dudu montou um estúdio de transmissão: um celular, uma lanterna e uma cadeira de praia."),
+        ("dudu", "euforico", "Chat, quarenta mil pessoas na live! Quarenta mil! E eu tenho uma cadeira! Uma! Ninguém senta, é a cadeira da sorte!"),
+        ("teo", "susto", "Quarenta mil?! Dudu, ontem eram trezentas!"),
+        ("dudu", "suor", "Um vídeo do Zé aspirando confete viralizou. Agora o chat só pede confete. Eu não tenho confete. Eu tenho uma lanterna."),
+        ("odete", "feliz", "Eu trouxe confete! E bolo! O confete é de papel crepom. O bolo é de cenoura. Não confunde."),
+        ("bia", "pensando", "Se o Zé ver confete no meio da partida, ele vai parar para aspirar. Dona Odete, guarda o confete até o apito final."),
+        ("odete", "piscando", "Guardo sim, querida. Na bolsa, embaixo do guarda-chuva, do lado do bolo. É o meu cofre."),
+        ("dudu", "feliz", "Chat, se o Zé fizer gol, a Dona Odete solta o confete. É uma promessa pública. Agora é contrato."),
+        ("ze", "robo", "Bip. (o Zé olha fixo para a bolsa da Dona Odete. Ele sabe. Ele sempre sabe.)"),
+    ]},
+
+    # B2: renovar o patrocinio da Limpex (renova_limpex) ou ficar independente (spec secao 4)
+    "c7_contrato": {"bg": "camarim", "cast": ["valquiria", "teo", "vivi", "nestor", "ambrosio"], "lines": [
+        ("narrador", "neutro", "Vestiário do Estádio Limpex, depois da segunda rodada. Em cima do banco, um bolo de três andares com o logotipo da Limpex em glacê azul. Ao lado do bolo, um contrato."),
+        ("valquiria", "feliz", "Que campanha linda! Vim pessoalmente, sem holograma. Trouxe bolo e uma proposta. Assina aqui, tem bolo."),
+        ("valquiria", "piscando", "E vocês já assinaram com a gente no Estadual. Eu trouxe a caneta pronta. Destampada. Para economizar tempo.", ("flag", "patroc")),
+        ("vivi", "pensando", "Cláusula sete: a Limpex pode mudar o nome do time. Cláusula nove: o Zé usa adesivo da Limpex. Cláusula doze: o adesivo não sai."),
+        ("valquiria", "neutro", "Em troca: vinte por cento a mais de sucata em cada partida, peças da linha profissional e um vestiário com ar-condicionado. E bolo semanal."),
+        ("nestor", "bravo", "Na minha época, quem dava bolo e contrato no mesmo dia queria o terreno da sua casa."),
+        ("ambrosio", "pensando", "Sem a Limpex, a gente joga com o que tem. Menos sucata, mais treino. O time aprende mais rápido quando passa aperto. Mas passa aperto."),
+        ("teo", "pensando", "Vinte por cento de sucata é muita peça nova. Mas o Zé com adesivo da Limpex... ele ia ficar estranho."),
+        ("valquiria", "feliz", "Sem pressão! Eu só fico aqui, sorrindo, até vocês decidirem. Eu consigo sorrir por quatro horas. É treino."),
+        {"q": "O contrato está na mesa, a caneta está destampada e o bolo está derretendo. O que o time faz?",
+         "opts": [
+             {"t": "Renovar com a Limpex", "fx": {"flag": "renova_limpex", "scrap": 100},
+              "reply": [("valquiria", "euforico", "Maravilha! Bem-vindos à família! O adesivo chega amanhã. Ele brilha no escuro. E não sai."),
+                        ("nestor", "triste", "Tudo bem, Téo. Sucata é sucata. Mas, se o Zé começar a sorrir que nem ela, a gente conversa.")]},
+             {"t": "Ficar independente", "fx": {"flag": "independente", "xp_team": 30},
+              "reply": [("teo", "determinado", "Obrigado, doutora. Mas o Zé joga do jeito dele. Com chinelo e sem adesivo."),
+                        ("valquiria", "feliz", "Que lindo! Independência! Eu respeito muito. Eu vou respeitar de pertinho. (leva o bolo embora)")]},
+         ]},
+    ]},
+
+    "c7_sf_pre": {"bg": "estadio", "cast": ["vivi", "teo", "bia", "ambrosio", "dudu"], "lines": [
+        ("narrador", "neutro", "Semifinal da Superliga. Do outro lado do campo, cinco robôs brancos com listra ciano e o código LX pintado no peito. Os Impecáveis Mk III."),
+        ("vivi", "susto", "São os meus. Quer dizer, eram os meus. A Limpex refez o time inteiro e manteve as minhas jogadas. Eles estão usando as minhas planilhas contra mim."),
+        ("teo", "pensando", "Então você sabe o que eles vão fazer antes deles?"),
+        ("vivi", "determinado", "Eu sei o que eles vão fazer porque eu escrevi. Página quatro: eles sempre abrem pela direita. Página cinco: eles sempre recuam depois do gol."),
+        ("bia", "feliz", "Então a gente lê a página seis antes deles! Qual é a página seis?"),
+        ("vivi", "corada", "A página seis é um desenho de gato. Eu estava cansada naquele dia."),
+        ("ambrosio", "feliz", "Valentina, é a primeira vez que alguém joga contra o próprio passado e leva vantagem. Normalmente o passado ganha."),
+        ("dudu", "euforico", "Chat, é a revanche da Vivi! Ela contra a planilha antiga dela! É o maior clássico do esporte acadêmico!"),
+        ("vivi", "determinado", "Téo, ataca pela esquerda. Eles nunca defendem a esquerda. Eu nunca gostei da esquerda. Agora eu gosto."),
+    ]},
+
+    "c7_final_pre": {"bg": "estadio", "cast": ["rodolfo", "teo", "ambrosio", "vivi", "valquiria", "nestor"], "lines": [
+        ("narrador", "neutro", "Final da Superliga. Entra a Platinum Elite: cinco robôs prateados, polidos até refletir o estádio. Atrás deles, de crachá novo, um homem com uma prancheta."),
+        ("teo", "susto", "Capitão Rodolfo?! O senhor não tinha pedido demissão?"),
+        ("rodolfo", "convencido", "Pedi. E fui recontratado. Eu agora sou coordenador de higiene ESPORTIVA. A palavra esportiva é em maiúsculas. Está no crachá."),
+        ("ambrosio", "pensando", "Rodolfo, você devolveu a prancheta no Mundial. Isso aí é outra prancheta?"),
+        ("rodolfo", "neutro", "É a mesma. Ela voltou para mim. Pranchetas sempre voltam. É a natureza delas."),
+        ("valquiria", "feliz", "O Rodolfo é um talento! Sabe tudo de vocês. Até a cor do chinelo. Ele fez um relatório de trinta páginas sobre a rodinha."),
+        ("nestor", "bravo", "Trinta páginas sobre a minha rodinha? Na minha época, isso se chamava fofoca. Com grampeador."),
+        ("vivi", "determinado", "A Platinum Elite joga igual à Platinum da Copa Brasil, só que mais rápida. Mesma formação. A gente já venceu esse desenho uma vez."),
+        ("teo", "determinado", "Então a gente vence de novo. Bora, Zé. Pontos corridos acabaram. Agora é mata-mata."),
+    ]},
+
+    "c7_final_win": {"bg": "estadio", "cast": ["teo", "rodolfo", "valquiria", "vivi", "odete", "dudu", "ze"], "lines": [
+        ("narrador", "neutro", "Apito final. O placar do Estádio Limpex mostra: Zé Poeira campeão da fase de pontos corridos. A Dona Odete solta o confete. Todo o confete."),
+        ("odete", "euforico", "Promessa é promessa! Confete para todo mundo! Até para o pessoal da Platinum, coitados!"),
+        ("dudu", "euforico", "Chat, cem mil na live! Cem mil! O chat está só escrevendo \"confete\". A gente virou um meme e um campeão no mesmo dia!"),
+        ("teo", "feliz", "A gente ganhou a liga, Vivi! A sua planilha estava certa!"),
+        ("vivi", "corada", "A planilha sempre está certa. O que está errado às vezes é a realidade."),
+        ("rodolfo", "triste", "Eu vou ter que escrever um relatório sobre esta derrota. Com gráfico. Os gráficos de derrota são sempre os mais bonitos."),
+        ("valquiria", "feliz", "Parabéns! Os playoffs começam semana que vem. Com regras novas. Que eu ainda vou inventar. Até lá!"),
+        ("ze", "robo", "Bzzzt. (o Zé aspira o confete do estádio inteiro em doze segundos. A equipe de limpeza da Limpex aplaude, sem saber se deveria.)"),
+    ]},
+
+    "c7_final_lose": {"bg": "estadio", "cast": ["teo", "rodolfo", "vivi", "bia", "ambrosio", "ze"], "lines": [
+        ("narrador", "neutro", "Apito final. A Platinum Elite comemora em silêncio, cada robô girando exatamente uma volta. O Rodolfo anota alguma coisa na prancheta."),
+        ("rodolfo", "convencido", "Vitória da Platinum. Previsto na página dezoito do meu relatório. A página dezenove era sobre a rodinha. Valeu a pena."),
+        ("teo", "triste", "Eles jogaram exatamente o que a Vivi disse, e mesmo assim ganharam."),
+        ("vivi", "pensando", "Porque eles são mais rápidos na saída de bola. A gente precisa de mais aceleração. Ou de menos Rodolfo."),
+        ("bia", "determinado", "Aceleração é comigo. Dá para trocar o motor do Zé por um mais leve. Ou colocar mais fita na rodinha, que deixa ela mais lisa."),
+        ("ambrosio", "feliz", "Regulamento da Superliga, parágrafo único: perder a final libera a revanche. Eu li isso hoje. Na minha mão, a caneta."),
+        ("rodolfo", "neutro", "Revanche aceita. A prancheta já tem uma página reservada para isso. Ela está em branco. Por enquanto."),
+        ("ze", "robo", "Bip. (a rodinha cai. O Rodolfo anota: \"rodinha caiu, de novo, página vinte\".)"),
+    ]},
+
+    "c7_repescagem": {"bg": "lanchonete", "cast": ["teo", "vivi", "dudu", "bia", "nestor"], "lines": [
+        ("narrador", "neutro", "Quinto lugar na Superliga. Fora da semifinal. A lanchonete do Estádio Limpex serve um suco verde chamado \"Recomeço\". Ninguém pede."),
+        ("vivi", "triste", "Faltou um ponto. Um. Eu refiz a conta onze vezes. A conta não muda. Eu odeio quando a conta não muda."),
+        ("dudu", "suor", "Chat, a gente ficou em quinto. Mas o chat votou: a gente é o primeiro em simpatia. Isso não vale ponto. Mas vale like."),
+        ("teo", "triste", "Na Superliga todo mundo é bom. Não dá para ganhar só com coragem."),
+        ("nestor", "neutro", "Coragem sozinha é chinelo sem pé, Téo. Faz barulho, mas não anda. Vamos melhorar o Zé na garagem, peça por peça."),
+        ("bia", "feliz", "E treinar! Eu topo treinar até a fita acabar. A fita nunca acaba. Eu compro em atacado."),
+        ("vivi", "determinado", "Regulamento: a Superliga deixa recomeçar a fase com tabela nova. Tabela nova, planilha nova, eu nova."),
+        ("teo", "feliz", "Tabela nova! A gente volta. E dessa vez sem perder ponto bobo."),
+    ]},
+
+    "c7_end": {"bg": "garagem", "cast": ["teo", "vivi", "bia", "dudu", "nestor", "ze"], "lines": [
+        ("narrador", "neutro", "Garagem do Vô Nestor, noite de domingo. O troféu da fase de pontos corridos está na prateleira, ao lado da panela que o Vô ganhou no bingo."),
+        ("dudu", "feliz", "Chegou mensagem de áudio do Gabi! Vou colocar no viva-voz. Atenção, é um áudio de três segundos."),
+        ("narrador", "neutro", "O áudio começa. O Gabi grita tão alto que, de algum jeito, dá para ouvir as letras maiúsculas: \"PARABÉNS, CHINELO.\" Fim do áudio."),
+        ("teo", "feliz", "Ele mandou parabéns! O Gabi mandou parabéns pra gente!", ("flag", "gabi_amigo")),
+        ("dudu", "pensando", "Ele mandou mais um áudio: \"NOS PLAYOFFS EU TÔ NA TORCIDA. COM BONÉ. SEM CHIP.\" Ele fala em caixa alta até no áudio.", ("flag", "gabi_amigo")),
+        ("dudu", "suor", "Ele mandou mais um áudio: \"APROVEITA, CHINELO. NOS PLAYOFFS EU VOU ESTAR OLHANDO.\" Depois ele mandou um emoji de raio. Doze vezes.", ("flag", "gabi_rival")),
+        ("bia", "pensando", "O adesivo da Limpex chegou. Brilha no escuro mesmo. O Zé fica parecendo um abajur.", ("flag", "renova_limpex")),
+        ("bia", "feliz", "A Limpex mandou uma carta dizendo que respeita a nossa independência. A carta tinha um chip de rastreio. Coloquei na caixa de sapato.", ("flag", "independente")),
+        ("vivi", "pensando", "Playoffs: grupo, quartas, semifinal e final. Times de todas as divisões. Inclusive gente que a gente conhece."),
+        ("nestor", "pensando", "Gente que a gente conhece é sempre o pior adversário. Ela sabe onde a gente guarda o pão de queijo."),
+        ("ze", "robo", "Bip. (o Zé estaciona embaixo do troféu e fica olhando para cima, como quem conta estrelas.)"),
+    ]},
+
+    # ------------------------------------------------------------------ Capitulo 8 (Playoffs da Superliga)
+    "c8_intro": {"bg": "estadio", "cast": ["teo", "vivi", "ambrosio", "valquiria", "dudu", "bia", "ze"], "lines": [
+        ("narrador", "neutro", "Playoffs da Superliga, rodada de abertura, à noite. O Estádio Limpex acende um telão novo. Nele, a Dra. Valquíria, sorrindo, com um anúncio."),
+        ("valquiria", "feliz", "Novidade nos playoffs! Para deixar tudo mais limpo e moderno, a partir de hoje... a bola é cinza!"),
+        ("teo", "susto", "Cinza?! A bola sempre foi branca!"),
+        ("valquiria", "neutro", "Branco mostra sujeira. Cinza esconde. É uma bola mais feliz. A regra vale a partir de agora. Já está no regulamento. Na página que eu acabei de imprimir."),
+        ("vivi", "bravo", "Mudar a regra no meio do campeonato é ilegal. É imoral. E é mal formatado. Ela imprimiu em fonte doze. Regulamento é fonte onze."),
+        ("ambrosio", "pensando", "O sensor do Zé foi calibrado para bola branca. Com bola cinza, ele vai demorar para achar a bola no gramado escuro."),
+        ("bia", "determinado", "Então eu recalibro. Me dá uma bola cinza, uma lanterna e o Dudu segurando a lanterna sem mexer."),
+        ("dudu", "suor", "Chat, eu fui promovido a suporte de lanterna. É um cargo técnico. Eu aceito."),
+        ("ze", "robo", "Bip. (o Zé encosta na bola cinza, desconfiado. Dá uma volta em torno dela. Decide que ela é amiga.)"),
+    ]},
+
+    "c8_ogawa": {"bg": "dojo", "cast": ["ogawa", "kenji", "teo", "bia", "nestor", "ze"], "lines": [
+        ("narrador", "neutro", "Um dojo improvisado nos fundos do estádio, com tatame emprestado e uma lâmpada que pisca. O Kenji trouxe alguém: um senhor de kimono, olhos fechados e bigode impecável."),
+        ("kenji", "feliz", "Téo! Este é o Mestre Ogawa, meu sensei. Ele veio do Japão só para ver os playoffs. E para conhecer o chinelo."),
+        ("ogawa", "calmo", "O chinelo que anda sozinho conhece o caminho. O chinelo que fica parado conhece o pé."),
+        ("teo", "pensando", "Isso... faz sentido?"),
+        ("kenji", "suor", "Não. Nunca faz. Mas no fim sempre funciona. É o método dele."),
+        ("ogawa", "neutro", "Hoje eu ensino a arte de não limpar. Um robô que limpa tudo não enxerga nada. Um robô que deixa um pouco de pó enxerga o caminho do pó."),
+        ("bia", "maravilhado", "Então a sujeira é um mapa? Mestre, eu vivo suja de graxa. Eu sou um mapa ambulante!"),
+        ("ogawa", "piscando", "O pó que cai duas vezes é pó interessado. Siga o pó interessado."),
+        ("nestor", "feliz", "Ogawa, na minha época eu dizia a mesma coisa, só que com menos poesia: \"não varre agora, que eu ainda vou procurar o parafuso\"."),
+        ("ogawa", "feliz", "Nestor-san. O senhor é um mestre sem dojo. Os melhores mestres não têm dojo. Têm garagem."),
+        ("ze", "robo", "Bzzzt. (o Zé deixa de aspirar um montinho de pó, de propósito. O Mestre Ogawa faz uma reverência para ele.)"),
+    ]},
+
+    "c8_helena": {"bg": "estadio", "cast": ["helena", "teo", "bia", "ambrosio", "ze"], "lines": [
+        ("narrador", "neutro", "Antes do segundo jogo do grupo. Entra no gramado a Dra. Helena Régis, juíza da Federação, com uma pasta, um scanner portátil e a samambaia num vaso com rodinhas."),
+        ("helena", "neutro", "Vistoria surpresa da Federação. A Superliga mudou a bola no meio do campeonato. A Federação quer saber o que mais mudou."),
+        ("teo", "feliz", "Doutora Helena! E a samambaia! Ela veio também?"),
+        ("helena", "neutro", "Ela não perde uma vistoria. Ela tem um faro para irregularidades. Ou para adubo. Ainda não sei qual."),
+        ("narrador", "neutro", "O scanner passa pelo Zé Poeira e apita baixinho. Tudo dentro da regra. Então a samambaia, sozinha, se inclina para longe do Zé."),
+        ("helena", "pensando", "A samambaia reprovou o Zé Poeira."),
+        ("bia", "susto", "Reprovou?! Por quê? Ele está limpo! Quer dizer, ele está honestamente sujo!"),
+        ("helena", "neutro", "Ela não gosta de chip de rastreio. E tem um dentro do Zé. Ele aspirou na Taça de Acesso, não aspirou? Está no filtro."),
+        ("ambrosio", "feliz", "O Zé engoliu o chip da Limpex! Doutora, isso conta como prova contra a Limpex ou contra o Zé?"),
+        ("helena", "calmo", "Conta como prova de que o Zé come qualquer coisa. Tirem o chip do filtro e estão liberados. A samambaia vai observar."),
+        ("ze", "robo", "Bip. (a Bia abre o filtro. Sai o chip, três confetes e meia fatia de bolo de cenoura. A samambaia se acalma.)"),
+    ]},
+
+    "c8_qf_pre": {"bg": "estadio", "cast": ["teo", "dudu", "vivi", "bia", "ze"], "lines": [
+        ("narrador", "neutro", "Quartas de final. Entram os Dust Bunnies, os americanos do Mundial. Agora profissionais, com patrocínio novo e chapéus de cowboy ainda maiores."),
+        ("dudu", "euforico", "Chat, os Dust Bunnies voltaram! Os chapéus cresceram! Eu não sabia que chapéu crescia!"),
+        ("vivi", "pensando", "Os chapéus aumentaram trinta por cento. Os robôs, dez. Tem mais chapéu do que robô ali. É uma escolha estética arriscada."),
+        ("bia", "feliz", "Chapéu grande atrapalha o sensor de cima. Se a bola for alta, eles não enxergam. Téo, joga pelo alto!"),
+        ("teo", "pensando", "O Zé não joga pelo alto. O Zé é um aspirador. Ele joga pelo chão."),
+        ("bia", "determinado", "Então joga pelo chão rápido, que eles demoram para olhar para baixo. O chapéu tem aba."),
+        ("narrador", "neutro", "Do outro lado, o capitão dos Dust Bunnies tira o chapéu e acena para o Téo. O chapéu é tão grande que faz sombra no meio-campo."),
+        ("dudu", "feliz", "Chat, ele acenou! Isso é respeito internacional! Ou ele estava abanando o calor do chapéu!"),
+        ("ze", "robo", "Bip. (o Zé estaciona na sombra do chapéu. Está mais fresquinho ali.)"),
+    ]},
+
+    "c8_sf_kenji": {"bg": "estadio", "cast": ["kenji", "teo", "ogawa", "vivi", "ze"], "lines": [
+        ("narrador", "neutro", "Semifinal dos playoffs. Do outro lado, o Dojo do Kenji 2.0, robôs brancos com faixa vermelha. O Kenji atravessa o campo e se curva na frente do Téo."),
+        ("kenji", "feliz", "Téo-san. No Mundial, vocês me mostraram que perfeição sem coração é só cálculo. Eu vim agradecer. Com uma reverência e um time novo."),
+        ("teo", "feliz", "Kenji! Que bom te ver! Mas... hoje a gente joga um contra o outro."),
+        ("kenji", "pensando", "Eu pensei em perder de propósito. Como agradecimento. Seria uma honra."),
+        ("ogawa", "calmo", "Perder de propósito é a maior falta de respeito que existe. O adversário que entrega o jogo rouba a vitória do outro."),
+        ("kenji", "determinado", "O sensei tem razão. Esqueça o que eu disse, Téo-san. Hoje eu jogo com tudo. Ou não. Ou sim. Sim. Com tudo."),
+        ("vivi", "pensando", "Ele disse \"ou não\" e depois \"sim\". Estatisticamente, isso quer dizer que ele vai jogar com tudo e vai se arrepender um pouco."),
+        ("ogawa", "piscando", "O aluno que hesita na frente do amigo ainda tem muito a aprender. E muito coração. As duas coisas são boas."),
+        ("ze", "robo", "Bzzzt. (o Zé se curva também. A rodinha cai na reverência. O Kenji pega e devolve, com as duas mãos.)"),
+    ]},
+
+    "c8_final_pre": {"bg": "estadio", "cast": ["valquiria", "teo", "ambrosio", "nestor", "vivi", "bia"], "lines": [
+        ("narrador", "neutro", "Final dos playoffs, à noite. As luzes do estádio apagam. Acende um único holofote no túnel. Saem cinco robôs pretos, com uma linha de LED vermelho no peito: a Guarda Zero."),
+        ("narrador", "neutro", "Um dos robôs se adianta e fala com a voz da Valquíria, gravada: \"A Valquíria mandou lembranças. E uma intimação para as lembranças.\""),
+        ("teo", "susto", "Uma intimação para as lembranças? Isso nem faz sentido!"),
+        ("valquiria", "feliz", "Faz, sim! Se vocês ganharem, as lembranças são intimadas a comparecer ao meu escritório. Eu coleciono lembranças. E patentes."),
+        ("ambrosio", "pensando", "LED vermelho no peito. Isso não é design. Isso é um aviso. Esses robôs não são da linha de varejo."),
+        ("nestor", "bravo", "Na minha época, robô de LED vermelho era o do alarme da fábrica. Quando ele acendia, alguém ia ser demitido."),
+        ("vivi", "determinado", "A Guarda Zero não perdeu nenhum jogo nos playoffs. Nenhum gol sofrido. Quer dizer que ninguém tentou jogar diferente."),
+        ("bia", "determinado", "Diferente é com a gente. A bola é cinza, o Zé é amarelo de fita e o chinelo é marrom. Ninguém aqui é padrão."),
+        ("teo", "determinado", "Bora, Zé. Pela Superliga. E pelo pão de queijo da Dona Odete."),
+    ]},
+
+    "c8_final_win": {"bg": "estadio", "cast": ["teo", "valquiria", "vivi", "bia", "nestor", "dudu", "ze"], "lines": [
+        ("narrador", "neutro", "Apito final. A Guarda Zero para no meio do campo. Os cinco LEDs vermelhos piscam uma vez, e apagam. O Zé Poeira é campeão dos playoffs da Superliga."),
+        ("dudu", "euforico", "Chat, campeões da Superliga! A equipe que começou numa quadra com trave torta! Duzentos mil na live! Minha mãe está chorando! Eu também!"),
+        ("bia", "euforico", "A fita! A fita aguentou a final inteira! Eu vou escrever uma carta para a fábrica de fita!"),
+        ("nestor", "chorando", "Na minha época... não, esquece a minha época. Essa época é melhor. Essa época tem vocês."),
+        ("valquiria", "feliz", "Parabéns! Vocês são incríveis! Incrivelmente teimosos. A Limpex adora gente teimosa. A gente aprende muito estudando gente teimosa."),
+        ("vivi", "pensando", "Ela está sorrindo demais para quem perdeu a final com o time dela. Isso não está em nenhuma planilha."),
+        ("valquiria", "piscando", "Ah, a Guarda Zero não era o meu melhor time. Era só um rascunho. O melhor ainda está no laboratório. Ele é a cara de vocês. Literalmente."),
+        ("teo", "pensando", "A cara da gente? O que ela quis dizer com isso?"),
+        ("ze", "robo", "Bip. (o Zé olha para o telão, onde por um segundo aparece a silhueta de um robô igual a ele. Sem chinelo.)"),
+    ]},
+
+    "c8_final_lose": {"bg": "estadio", "cast": ["teo", "valquiria", "vivi", "bia", "ambrosio", "nestor", "ze"], "lines": [
+        ("narrador", "neutro", "Apito final. A Guarda Zero volta para o túnel em fila, sem comemorar. Os LEDs vermelhos continuam acesos, como se nada tivesse acontecido."),
+        ("valquiria", "feliz", "Que final bonita! Perder para a Guarda Zero é normal. Todo mundo perde. É como perder para a gravidade."),
+        ("teo", "triste", "Eles nem comemoram. É como jogar contra uma parede que faz gol."),
+        ("nestor", "pensando", "Parede também tem rachadura, Téo. A gente só precisa achar onde a tinta descasca.", ("done", "c6_nestor")),
+        ("vivi", "pensando", "Paredes têm padrão. A Guarda Zero marca sempre no mesmo canto, depois de três passes. Três. Sempre três. Vou contar no próximo jogo."),
+        ("bia", "determinado", "E a defesa deles sobe toda junta quando a bola vai para o meio. Se o Zé ficar no canto, ele fica sozinho com o goleiro."),
+        ("ambrosio", "feliz", "Regulamento dos playoffs, nota de rodapé: o finalista derrotado tem direito a revanche. Eu escrevi a nota de rodapé ontem. Em letra pequena."),
+        ("ze", "robo", "Bip. (a rodinha cai. Um LED vermelho da Guarda Zero pisca na direção dela. A rodinha volta sozinha para o Zé. Ninguém explica.)"),
+    ]},
+
+    "c8_repescagem": {"bg": "lanchonete", "cast": ["teo", "dudu", "vivi", "odete", "nestor"], "lines": [
+        ("narrador", "neutro", "Eliminados no grupo dos playoffs. A lanchonete agora vende a bola cinza em versão chocolate. É cinza por dentro também."),
+        ("dudu", "suor", "Chat, a gente caiu no grupo. Mas o chocolate cinza é bom. Muito bom. Eu não queria admitir. Nota oito."),
+        ("teo", "triste", "A bola cinza atrapalhou a gente o jogo inteiro."),
+        ("vivi", "pensando", "Atrapalhou todo mundo igual. O problema é que os outros times treinaram com bola cinza a semana toda. A Limpex avisou eles antes."),
+        ("odete", "bravo", "Avisou antes?! Isso é como contar a sobremesa só para metade da sala! Eu vou falar com essa moça!"),
+        ("nestor", "feliz", "Calma, Odete. A gente não ganha delas reclamando. A gente ganha treinando com bola cinza até sonhar com bola cinza."),
+        ("odete", "feliz", "Então eu faço bolo cinza. Para treinar os olhos. É só colocar bastante chocolate. E um pouco de fé."),
+        ("teo", "feliz", "Sorteio novo! Grupo novo! A gente volta. E com bolo cinza."),
+    ]},
+
+    "c8_end": {"bg": "garagem", "cast": ["teo", "ambrosio", "nestor", "vivi", "bia", "augusto", "ze"], "lines": [
+        ("narrador", "neutro", "Garagem do Vô Nestor, depois dos playoffs. O troféu da Superliga ocupa a prateleira inteira. A panela do bingo foi rebaixada para o chão."),
+        ("narrador", "neutro", "De repente, o rádio velho do Vô chia e projeta um holograma tremido no meio da garagem. É o Dr. Augusto. De roupão. E de cueca por baixo do roupão."),
+        ("augusto", "calmo", "Ambrósio. Nestor. Garotos. Não olhem para as minhas canelas. Eu estou no meu período de reflexão."),
+        ("ambrosio", "susto", "Augusto?! Você está de cueca!"),
+        ("augusto", "espirro", "É uma cueca de reflexão! É de linho! ATCHIM! Eu não tenho muito tempo. A minha irmã monitora todas as frequências. Até a do rádio do Nestor."),
+        ("augusto", "neutro", "A Valquíria achou a planta do Aspiradex nos arquivos da antiga Limpex. A cópia que eu guardei. Ela fez um clone do Zé Poeira. Perfeito. Sem chinelo."),
+        ("nestor", "bravo", "Um clone do Zé?! Augusto, aquela planta era minha! Você guardou uma cópia da minha planta?"),
+        ("augusto", "triste", "Eu guardei tudo, Nestor. Era o meu jeito de não perder os amigos. Não funcionou. Mas a pasta ficou muito organizada."),
+        ("vivi", "determinado", "Onde está o clone? No laboratório da Limpex? A gente precisa ver com os próprios olhos."),
+        ("augusto", "espirro", "No subsolo. Nível menos três. O código da porta é o aniversário do Nestor. Ela é sentimental do jeito errado. ATCHIM! (o holograma some)"),
+        ("bia", "pensando", "Vô Nestor... qual é o seu aniversário?"),
+        ("nestor", "pensando", "Eu não lembro. Mas eu sei quem lembra. (olha para o Zé) Ele tem a data gravada no chip. Desde sempre."),
+        ("ze", "robo", "Bip. Bip. Bip. (o Zé pisca o LED três vezes, devagar, como quem guarda um segredo há trinta anos.)"),
+    ]},
 }
 
 # --- recompensas --------------------------------------------------------------------------------
@@ -211,6 +536,19 @@ REWARDS = {
     # liberado no fim do Ato 1, rw_5)
     "rw_6": {"scrap": 700, "piece": {"model": "Servo Ágil", "rar": 2}, "recruits": [], "unlock": [],
              "xp_hero": 0, "xp_team": 20, "equip_hero_piece": {"model": "Módulo Arrancada", "rar": 0}},
+    # Cap. 7: se o Gabi virou amigo (B1), o Relampago dele entra no time; senao, Mola Dupla (Rara).
+    # Skill Succao Magnetica nv 1 para o heroi.
+    "rw_7": {"scrap": 900, "piece": None, "recruits": [], "unlock": [], "xp_hero": 0, "xp_team": 0,
+             "equip_hero_piece": None, "skill": {"robot": "hero", "id": "succao", "rank": 1},
+             "alt": [(("flag", "gabi_amigo"),
+                      {"recruits": [{"name": "Relâmpago", "role": "ATT", "chassis": "Velocista",
+                                     "base_ovr": 68, "level": 7, "paint": (60, 140, 255),
+                                     "piece": {"model": "Turbina", "rar": 1}}]}),
+                     (None, {"piece": {"model": "Mola Dupla", "rar": 1}})]},
+    # Cap. 8: reliquia Pao de Queijo Termico (bateria unica), XP do time e Chute em Curva nv 1
+    "rw_8": {"scrap": 1100, "piece": {"model": "Pão de Queijo Térmico", "rar": 3}, "recruits": [],
+             "unlock": [], "xp_hero": 0, "xp_team": 30, "equip_hero_piece": None,
+             "skill": {"robot": "hero", "id": "curva", "rank": 1}},
 }
 SIDES = {}
 
@@ -225,10 +563,14 @@ CHAPTERS = [
                ("tournament", "t_c6"), ("scene", "c6_end"), ("chapter_end", "6")]},
     {"id": "7", "act": "2", "title": "Capítulo 7", "subtitle": "Superliga: Pontos Corridos",
      "local": "Estádio Limpex", "F_start": 68.4, "F_end": 70.2, "econ_tier": 3,
-     "tier_done_on_close": 3, "reward": None, "nodes": [], "draft": True},
+     "tier_done_on_close": 3, "reward": "rw_7",
+     "nodes": [("scene", "c7_intro"), ("scene", "c7_vivi_treino"), ("tournament", "t_c7"),
+               ("scene", "c7_end"), ("chapter_end", "7")]},
     {"id": "8", "act": "2", "title": "Capítulo 8", "subtitle": "Playoffs da Superliga",
-     "local": "Estádio Limpex", "F_start": 70.4, "F_end": 72.0, "econ_tier": 3,
-     "tier_done_on_close": 3, "reward": None, "nodes": [], "draft": True},
+     "local": "Estádio Limpex (noite)", "F_start": 70.4, "F_end": 72.0, "econ_tier": 3,
+     "tier_done_on_close": 3, "reward": "rw_8",
+     "nodes": [("scene", "c8_intro"), ("scene", "c8_ogawa"), ("tournament", "t_c8"),
+               ("scene", "c8_end"), ("chapter_end", "8")]},
     {"id": "9", "act": "2", "title": "Capítulo 9", "subtitle": "O Clone",
      "local": "Laboratório da Limpex", "F_start": 72.4, "F_end": 73.8, "econ_tier": 3,
      "tier_done_on_close": 3, "reward": None, "nodes": [], "draft": True},

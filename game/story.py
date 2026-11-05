@@ -34,7 +34,8 @@ CHAPTERS: lista ordenada; "act" = "1".."3" (aba do mapa); "nodes" em ordem: ("sc
     C4: ("scene", id, cond) e ("tournament", id, cond) sao pulados quando cond e falsa; ("end", "AUTO")
     escolhe o final em ENDINGS.
     "draft": True = esqueleto (nodes vazio) que o teste de alcancabilidade ignora.
-REWARDS[id]: aplicado UMA vez ao fechar o capitulo (chave "reward:<id>" em `done`): scrap, piece,
+REWARDS[id]: aplicado UMA vez ao fechar o capitulo (chave "reward:<id>" em `done`). C7: "alt" =
+    [(cond, {campos}), ...] (a primeira que vale substitui esses campos da base). Campos: scrap, piece,
     recruits [{"name","role","chassis","base_ovr","level","paint","piece"?}], unlock [chassis],
     xp_hero, xp_team, equip_hero_piece ({"model","rar"} ou None); B11 (Onda B): skill (como no fx, ou
     lista) e pts (int 1..10 para o heroi, ou {"robot": "hero"|"team", "n": 1..10}).

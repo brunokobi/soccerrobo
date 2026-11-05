@@ -631,7 +631,11 @@ def check_final_state(c):
     assert all(not ch.get("draft") for ch in story.CHAPTERS if ch["reward"])
     assert g.stats["titles"] == 1, g.stats
     names = {r["name"] for r in g.robots}
-    assert {"Gambiarra", "Pixelado", "Majestade"} <= names and len(g.robots) == gm.MAX_SQUAD
+    # recrutas: Gambiarra, Pixelado, Majestade e (com gabi_amigo) Relampago. Com o elenco cheio, o reserva
+    # de menor nivel sai para o recruta entrar (Campaign._recruit), entao no maximo um some.
+    recs = {"Gambiarra", "Pixelado", "Majestade", "Relâmpago"}
+    assert "Majestade" in names and len(names & recs) >= 3 and len(g.robots) == gm.MAX_SQUAD, names
+    assert ("Relâmpago" in names) == bool(g.flags.get("gabi_amigo")), names
     assert sum(len(story.REWARDS[x].get("recruits", ())) for x in story.REWARDS) == 3
     for ch in story.CHAPTERS:                               # todas as recompensas aplicadas, uma vez
         if ch["reward"] is None:                            # ponte provisoria do cap. 6
@@ -657,12 +661,15 @@ def test_full_campaign_autoplay_all_policies():
         for seed in seeds:
             c, n, _ = full_run(seed, policy)
             check_final_state(c)
-            assert c.ch == "7" and c.chapter().get("draft") and "c6_end" in c.done
+            assert c.ch == next(x["id"] for x in story.CHAPTERS if x.get("draft")) and "c6_end" in c.done
             tot.setdefault(policy, []).append(n)
     for p, v in tot.items():
         print("     autoplay %s: partidas media %.1f max %d" % (p, sum(v) / len(v), max(v)))
-    # sempre vence: 1 treino + 5+5+5+5 + 6 (Mundial) + 5 (cap. 6) = 32 partidas
-    assert set(tot["win"]) == {32}, tot["win"]
+    # sempre vence: 1 treino + uma partida por estagio de cada torneio jogavel (Ato 1: 26; cap. 6: 5;
+    # cap. 7, liga: 7; cap. 8, copa com quartas: 6; ...)
+    want = 1 + sum(len(cm.stages_of(story.TOURNAMENTS[n[1]])) for ch in story.CHAPTERS if not ch.get("draft")
+                   for n in ch["nodes"] if n[0] == "tournament" and n[1] != "t_p_treino")
+    assert want >= 45 and set(tot["win"]) == {want}, (want, tot["win"])
 
 
 def test_full_campaign_save_load_every_chapter():
@@ -1139,6 +1146,27 @@ def test_side_cancel_keeps_tournament_and_save_roundtrip():
         assert c2.side is None and c2.tour == tour_before and c2.available_sides() == ["s_t"]
         a = c2.next_action()
         assert a.get("side") is None and a["kind"] in ("scene", "match")
+
+
+def test_conditional_reward_rw7_by_gabi_choice():
+    """rw_7 (C7): com gabi_amigo entra o recruta Relampago; sem, a peca Mola Dupla. A skill vale nos dois."""
+    for amigo in (True, False):
+        c = new(51)
+        if amigo:
+            c.garage.flags["gabi_amigo"] = 1
+        spec = c.reward_spec("rw_7")
+        assert ("alt" in spec) and (bool(spec["recruits"]) == amigo) and ((spec["piece"] is None) == amigo)
+        n_rob, n_inv = len(c.garage.robots), len(c.garage.inventory)
+        rep = c.apply_chapter_rewards("7")
+        assert rep["applied"] and rep["scrap"] == 900 and rep["skills"]
+        if amigo:
+            assert rep["recruits"] == ["Relâmpago"] and rep["piece"] is None
+            r = next(x for x in c.garage.robots if x["name"] == "Relâmpago")
+            assert r["chassis"] == "Velocista" and r["level"] == 7 and len(c.garage.robots) == n_rob + 1
+        else:
+            assert rep["recruits"] == [] and rep["piece"] and len(c.garage.inventory) == n_inv + 1
+            assert all(x["name"] != "Relâmpago" for x in c.garage.robots)
+        assert c.apply_chapter_rewards("7")["applied"] is False        # uma vez so
 
 
 def main():

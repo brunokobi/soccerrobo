@@ -1391,13 +1391,15 @@ def test_flow_full_campaign_by_clicks_reaches_ending():
     cp = ui.campaign
     assert ui.end_view["draft"] is True and cp.next_action() == {"kind": "end", "draft": True}
     assert cp.garage.stats["titles"] == 1 and "e1_epilogo" in cp.done and "c5_antidoping" in cp.done
-    assert {"Gambiarra", "Pixelado", "Majestade"} <= {r["name"] for r in cp.garage.robots}
+    names = {r["name"] for r in cp.garage.robots}                 # elenco cheio: um reserva pode sair
+    assert "Majestade" in names and len(names & {"Gambiarra", "Pixelado", "Majestade", "Relâmpago"}) >= 3
     allsc = {k for k in cp.done if k in story.SCENES}
     assert len(allsc) >= 40, len(allsc)
     assert not FORBIDDEN
     saved = cm.Campaign.load()
     assert saved is not None, saved
-    assert saved.ch == "7" and "e1_epilogo" in saved.done and "c6_end" in saved.done, (saved.ch, saved.node, saved.done[-4:], saved.warnings)
+    assert saved.ch == next(x["id"] for x in story.CHAPTERS if x.get("draft")), (saved.ch, saved.node, saved.warnings)
+    assert "e1_epilogo" in saved.done and "c6_end" in saved.done and "c8_end" in saved.done
     assert "reward:rw_6" in saved.done
     ui.to_menu()
 

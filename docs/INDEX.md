@@ -18,10 +18,11 @@ Planejamento e especificações do jogo. O código e os comandos do dia a dia es
 - Fase 4 (Campanha Expandida): **Onda A (torcida, robôs detalhados, retratos, cenários e câmera de
   estádio) e Onda B (peças novas, sets, relíquias, slot Módulo, 16 skills, itens de partida, Mochila e
   cosméticos) prontas**. Onda C (Atos 2 e 3) em andamento na branch `feat/fase4-onda-c-estrutura`:
-  C1-C6 prontos (fachada do `story.py`, save v2 com migração, torneios de liga e série, nós
-  condicionais, finais, missões secundárias, mapa por Ato e o cap. 6 "Taça de Acesso" jogável, com
-  Vô Nestor, Dra. Valquíria, Gabi Trovão e Dona Odete). Caps. 7-13 aparecem como "em breve"; quem
-  termina o cap. 6 fica esperando no cap. 7 (posição válida de save). O cap. 6 usa os valores
-  iniciais da spec e ainda não foi calibrado (C9). Próximo: C7 (cap. 7, liga, e cap. 8, playoffs).
+  C1-C7 prontos (fachada do `story.py`, save v2 com migração, torneios de liga e série, nós
+  condicionais, finais, missões secundárias, mapa por Ato, recompensas com variante e os caps. 6-8
+  jogáveis: Taça de Acesso, Superliga em pontos corridos com a escolha B2 e Playoffs, com Vô Nestor,
+  Dra. Valquíria, Gabi Trovão, Dona Odete e Mestre Ogawa). Caps. 9-13 aparecem como "em breve"; quem
+  termina o conteúdo fica esperando no primeiro rascunho (posição válida de save). Os caps. 6-8 usam
+  os valores iniciais da spec e ainda não foram calibrados (C9). Próximo: C8 (cap. 9, o clone).
   Onda D (pós-campanha) planejada. Passos em [specs/plano-de-implementacao.md](specs/plano-de-implementacao.md)
 - Fase 5 (Editor de firmware): planejada
