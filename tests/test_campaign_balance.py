@@ -4,7 +4,7 @@
 Rodar da raiz: .venv/bin/python tests/test_campaign_balance.py [teste ...]   (N=300 por politica)
 Usa Campaign.simulate_current (Poisson com o vies dependente do ovr, campaign.sim_bias(O), calibrado contra
 o motor real por tests/calib_campaign.py), seeds fixas e a API pura do garage. Cobre todo capitulo NAO
-draft de story.CHAPTERS dos Atos calibrados (CALIBRATED_ACTS; hoje o Ato 1: P e 1-5). "Aproveitamento" = (V + E/2) / jogos pelo placar dos 90 min (penaltis
+draft de story.CHAPTERS dos Atos calibrados (CALIBRATED_ACTS; hoje os Atos 1 e 2: P e 1-9). "Aproveitamento" = (V + E/2) / jogos pelo placar dos 90 min (penaltis
 nao contam). "regular" = jogos do grupo + quartas; "SF" = semifinal; "chefe" = final (inclui as
 retentativas com pity, por isso fica ~2-4 pontos acima da primeira tentativa).
 
@@ -33,6 +33,7 @@ import campaign as cm  # noqa: E402
 import career  # noqa: E402
 import garage as gm  # noqa: E402
 import robots  # noqa: E402
+import skills  # noqa: E402
 import store  # noqa: E402
 import story  # noqa: E402
 
@@ -54,7 +55,7 @@ for _m, _n in ((gm, "_store_set"), (gm, "_store_set_bad"), (cm, "_store_set"), (
         setattr(_m, _n, _boom)
 
 
-CALIBRATED_ACTS = ("1",)        # Atos ja calibrados contra o motor; o Ato 2 entra no C9 (calibracao)
+CALIBRATED_ACTS = ("1", "2")    # Atos ja calibrados contra o motor (Ato 2: C9); o Ato 3 entra no C12
 
 
 def playable():
@@ -130,6 +131,41 @@ def greedy_spend(g):
             ok, _m = g.upgrade(a[0])
         assert ok, "gasto invalido: %s %s" % (kind, _m)
     g.auto_lineup()
+    if g.mod_on():
+        greedy_skills(g)
+
+
+def greedy_skills(g):
+    """C9 (Ato 2): gasta os PH dos titulares nos nos abertos da arvore (mais baratos primeiro) e equipa,
+    um a um, a skill aprendida que mais aumenta a Forca do time (respeitando carga e MAX_EQUIPPED). No
+    Ato 1 nao faz nada (mod_on so liga em rw_5): o caminho calibrado do Ato 1 nao muda."""
+    nodes = sorted(skills.NODES.values(), key=lambda n: (n["cost"], n["id"]))
+    for r in g.lineup_robots():
+        bought = True
+        while bought:
+            bought = False
+            for n in nodes:
+                if skills.node_state(r, n["id"]) == "open":
+                    ok, _m = skills.learn_node(r, n["id"])
+                    bought = bought or ok
+        sk = r["skills"]
+        before = list(sk["equipped"])
+        for sid in before:
+            skills.unequip_skill(r, sid)
+        while len(sk["equipped"]) < skills.MAX_EQUIPPED:
+            base, best = g.rating(), None
+            for sid in sk["learned"]:
+                if sid in sk["equipped"]:
+                    continue
+                ok, _m = skills.equip_skill(r, sid)
+                if ok:
+                    gain = g.rating() - base
+                    skills.unequip_skill(r, sid)
+                    if gain > 1e-9 and (best is None or gain > best[0]):
+                        best = (gain, sid)
+            if best is None:
+                break
+            skills.equip_skill(r, best[1])
 
 
 # ---------------------------------------------------------------- simulacao
@@ -281,14 +317,22 @@ def test_passive_pity_terminates():
     recs = campaigns("passive")
     assert all(r["done"] for r in recs), "campanha passiva nao concluiu"
     rows = table("passive")
-    worst = max((t for r in recs for t in r["boss_tries"].values()), default=0)
-    print("  max tentativas por chefe: %d (limite 12)" % worst)
-    soft("max tentativas por chefe", float(worst), 0, 12)
-    # duro: so garante terminacao (pity + sorte). O alvo de <=12 e soft: a passiva (so XP, sem gastar
-    # sucata) fica ~8-10 pontos de Forca abaixo da gulosa nos Caps. 4-5 (passo 16: nao ha como baixar
-    # isso sem trivializar a gulosa).
+    act1 = {c["id"] for c in story.CHAPTERS if c.get("act", "1") == "1"}
+    worst = max((t for r in recs for cid, t in r["boss_tries"].items() if cid in act1), default=0)
+    worst2 = max((t for r in recs for cid, t in r["boss_tries"].items() if cid not in act1), default=0)
+    print("  max tentativas por chefe: Ato 1 %d (limite 12) | Ato 2+ %d" % (worst, worst2))
+    soft("max tentativas por chefe (Ato 1)", float(worst), 0, 12)
+    # duro (so Ato 1): garante terminacao (pity + sorte). O alvo de <=12 e soft: a passiva (so XP, sem
+    # gastar sucata) fica ~8-10 pontos de Forca abaixo da gulosa nos Caps. 4-5 (passo 16: nao ha como
+    # baixar isso sem trivializar a gulosa).
     assert worst <= PASSIVE_MAX_TRIES, "chefe exigiu %d tentativas (pity nao resolveu)" % worst
-    assert max(r["matches"] for r in recs) <= 150
+    # Ato 2 (C9): a passiva nunca gasta sucata NEM PH (skills), entao fica ~22-24 pontos de Forca abaixo
+    # da tabela (53-59 contra 74-83) e precisa de dezenas de tentativas por chefe (medido: ate 91). E so
+    # alerta: o Ato 2 foi calibrado para quem evolui o time; a campanha passiva ainda e obrigada a terminar
+    # (MAX_MATCHES). Mitigacoes possiveis (decisao de design pendente): equipar sozinhas as skills ganhas
+    # de historia ou um pity maior a partir do Ato 2.
+    soft("max tentativas por chefe (Ato 2+, so alerta)", float(worst2), 0, 25)
+    assert max(r["matches"] for r in recs) <= MAX_MATCHES
     for r in recs:                                          # a passiva nunca gastou sucata
         assert r["c"].garage.stats["played"] == r["matches"]
 

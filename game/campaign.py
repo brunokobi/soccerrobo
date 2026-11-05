@@ -873,7 +873,9 @@ class Campaign:
 
     # ------------------------------------------------------------------ treino
     def training_ovr(self):
-        return max(TRAIN_MIN_OVR, int(round(self.chapter()["F_start"])) - TRAIN_DELTA)
+        """Forca de inicio do capitulo - delta (capitulo pode ter "train_delta" proprio; C9: Ato 2 = 18)."""
+        ch = self.chapter()
+        return max(TRAIN_MIN_OVR, int(round(ch["F_start"])) - int(ch.get("train_delta", TRAIN_DELTA)))
 
     def training_econ_tier(self):
         return G.clamp(self.econ_tier() - 1, 0, len(G.TIER_MUL) - 1)

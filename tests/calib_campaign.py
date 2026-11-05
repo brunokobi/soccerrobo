@@ -87,6 +87,42 @@ com skills.team_skill_force, aqui no teto 4,0) contra a mesma garage SEM skills 
   COM <= 3 pontos: sim_bias NAO foi ajustado. O vies negativo com skills vem do teto SK_CAP: o kit soma
   ~6,5 F por robo e so 4,0 entram no F (o SIMULAR fica um pouco pessimista, a favor do jogador).
   Ato 1 nao tem skills (mod_on so liga em rw_5): a coluna SEM e o mesmo caminho de antes (ruido n=200).
+
+C9 - ATO 2 (05/11/2026, --skills, caps. 6-8 n=200, cap. 9 n=300). F_start/F_end medidos com a politica
+gulosa do test_campaign_balance (que no Ato 2 compra nos da arvore e equipa skills): 74,1->75,6 | 76,5->78,1 |
+79,8->81,7 | 83,1->83,5. A spec previa 66,6 -> 73,8 (teto de skills 4,0); com SK_CAP 9,0 a Forca do
+Ato 2 fica ~8 pontos acima, entao os ovr foram refeitos (regulares F-O ~16-17, SF ~11-12, chefes ~7-8) e o
+treino do Ato 2 usa train_delta 18 (o 12 do Ato 1 dava ~55%).
+  checkpoint                 F    O  motor  SIM(O)  dif
+  6 treino                 74.0   56   70.0   71.8  +1.8
+  6 G1 Brigada da Pia      74.0   57   65.2   69.8  +4.5
+  6 G2 Esquadrão do Rodo   74.0   58   63.0   67.7  +4.7
+  6 G3 Faxineiros Mk III   75.0   58   65.2   69.8  +4.5
+  6 SF Gabi e os Trovões   75.0   64   52.8   56.8  +4.0
+  6 F Brigada Higiene      75.5   68   51.8   48.8  -3.0
+  7 treino                 76.5   58   74.8   72.8  -2.0
+  7 R1 Real Esfregão       76.5   60   62.5   68.8  +6.3
+  7 R2 Atlético Micro-on   76.5   60   62.5   68.8  +6.3
+  7 R3 Dínamo Pó de Arro   77.5   61   67.5   68.8  +1.3
+  7 R4 Sporting Ventilad   77.5   62   63.5   66.7  +3.2
+  7 R5 Clube da Cera Líq   77.5   62   63.5   66.7  +3.2
+  7 SF Impecáveis Mk III   77.5   65   54.2   60.1  +5.9
+  7 F Platinum Elite       77.5   71   46.0   46.5  +0.5
+  8 treino                 79.5   62   72.5   70.8  -1.7
+  8 G1 Coletivo do Pano    79.5   63   64.8   68.8  +4.0
+  8 G2 Os Sem-Poeira       80.4   64   66.8   68.7  +1.9
+  8 G3 Lavanderia FC       80.4   64   66.8   68.7  +1.9
+  8 QF Dust Bunnies Pro    81.4   66   59.8   66.5  +6.8
+  8 SF Dojo do Kenji 2.0   81.4   69   52.8   60.0  +7.2
+  8 F Guarda Zero          81.4   74   50.8   48.6  -2.1
+  9 treino                 83.3   65   68.7   72.4  +3.8
+  9 S1 Droides de Plantão  83.3   67   65.2   68.4  +3.2
+  9 S2 Reserva da Valquír  83.3   69   54.3   64.2  +9.8   (duelo do meio da serie: meta de SF)
+  9 S3 Zé Perfeito e a G   83.3   76   49.7   48.4  -1.3
+  motor: treino 60-75 (68,7-74,8) | regulares 59,8-67,5 | SF/duelo do meio 52,8-54,3 | chefes 46,0-51,8.
+  |SIM - motor| media ~4; o SIMULAR fica otimista (+6 a +10) contra adversarios de O 66-69 fora do chefe
+  (sim_bias satura em 8 a partir de O 42). Nao foi mexido: mudar sim_bias desloca o Ato 1 calibrado; fica
+  como ponto de atencao para o C12 (um sim_bias por Ato, se o Ato 3 repetir o padrao).
 """
 import argparse
 import math
@@ -169,6 +205,9 @@ def build_garage_for(F, with_skills=False):
     g = cm.new_campaign(random.Random(7)).garage
     ladder = [(None, 0, lv) for lv in range(1, 11)]                      # so nivel
     ladder += [(rar, lvl, 10) for rar in (0, 1, 2, 3) for lvl in (0, 3, 5)]
+    if with_skills:                                                       # C9 (Ato 2): nivel ate 15
+        g.cap = gm.CAMPAIGN_CAP
+        ladder += [(3, 5, lv) for lv in range(11, gm.CAMPAIGN_CAP + 1)]
     for rar, lvl, level in ladder:
         for r in g.robots:
             r["level"], r["xp"] = level, 0
@@ -285,7 +324,7 @@ def table_cells(chapters=None):
             sp = story.TEAMS[tr["final"]]
             out.append(("P treino %s" % sp["name"], "ptrain", tr["final"], sp["ovr"], ch["F_start"]))
             continue
-        tov = max(cm.TRAIN_MIN_OVR, int(round(ch["F_start"])) - cm.TRAIN_DELTA)
+        tov = max(cm.TRAIN_MIN_OVR, int(round(ch["F_start"])) - int(ch.get("train_delta", cm.TRAIN_DELTA)))
         out.append(("%s treino" % ch["id"], "train", None, tov, ch["F_start"]))
         stages = cm.stages_of(tr)
         for i, st in enumerate(stages):

@@ -23,7 +23,11 @@ Planejamento e especificações do jogo. O código e os comandos do dia a dia es
   jogável** (caps. 6-9: Taça de Acesso, Superliga, Playoffs e O Clone, com as escolhas B1, B2 e B3,
   Vô Nestor, Dra. Valquíria, Gabi Trovão, Dona Odete, Mestre Ogawa e Zé Perfeito). O Ato 3 (caps.
   10-13) aparece como "em breve"; quem termina o conteúdo fica esperando no primeiro rascunho
-  (posição válida de save). O Ato 2 usa os valores iniciais da spec e ainda não foi calibrado.
-  Próximo: C9 (calibração e economia do Ato 2). **Deploy só depois do C9.**
+  (posição válida de save). C9 pronto: economia do Ato 2 (tiers 4-6, loja, XP até o nível 15, bônus
+  da escolha B2) e calibração no motor (tabela em `tests/calib_campaign.py`); a Força real do Ato 2 é
+  74 → 83,5, ~8 pontos acima da spec, por causa das skills. **Ponto de atenção:** quem nunca evolui o
+  time (não gasta sucata nem PH) trava no Ato 2; ideias em aberto: equipar sozinhas as skills de
+  história ou pity maior no Ato 2. Próximo: C10 (caps. 10 e 11). Deploy pendente: falta saber onde o
+  site é hospedado.
   Onda D (pós-campanha) planejada. Passos em [specs/plano-de-implementacao.md](specs/plano-de-implementacao.md)
 - Fase 5 (Editor de firmware): planejada

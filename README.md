@@ -166,7 +166,7 @@ O jogador controlado troca sozinho (o mais perto da bola).
 | 1 | Robôs com chassis e 8 atributos, bateria, arena tecnológica (neon) | pronta |
 | 2 | Garagem e laboratório: peças, upgrades, XP, evolução, loja e liga (Modo Robôs) | pronta e jogável |
 | 3 | **Campanha** "A Garagem do Vô": história, diálogos, torneios, chefes e treino (escola -> mundial) | pronta e jogável |
-| 4 | **Campanha Expandida**: torcida realista, câmera de estádio e desenhos mais detalhados (Onda A), peças/sets/relíquias/itens/cosméticos e 16 skills dos robôs (Onda B), Atos 2 e 3, missões secundárias e 3 finais (Ondas C e D) | Ondas A e B prontas; Onda C em andamento (C1-C8: estrutura pronta e Ato 2 jogável; Ato 3 em breve); D planejada ([docs/roadmap.md](docs/roadmap.md)) |
+| 4 | **Campanha Expandida**: torcida realista, câmera de estádio e desenhos mais detalhados (Onda A), peças/sets/relíquias/itens/cosméticos e 16 skills dos robôs (Onda B), Atos 2 e 3, missões secundárias e 3 finais (Ondas C e D) | Ondas A e B prontas; Onda C em andamento (C1-C9: estrutura pronta e Ato 2 jogável e calibrado; Ato 3 em breve); D planejada ([docs/roadmap.md](docs/roadmap.md)) |
 | 5 | Editor de firmware (regras da IA em blocos) | planejada |
 
 O planejamento detalhado fica em [`docs/`](docs/INDEX.md).
