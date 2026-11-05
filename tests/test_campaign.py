@@ -566,7 +566,7 @@ def test_autoplay_sim_many_seeds_terminates():
 
 
 def full_run(seed, policy, save_each_chapter=False):
-    """Joga a campanha INTEIRA (P->1->2->3->4->5->epilogo) pela API pura. policy: "sim" (simulate_current),
+    """Joga a campanha INTEIRA (P->1->...->6, ate o primeiro capitulo em rascunho) pela API pura. policy: "sim" (simulate_current),
     "win" (sempre vence 2x0) ou "pity" (perde a final ate o pity zerar o chefe, vence o resto).
     Devolve (campanha, n_partidas, [saves round-trip por capitulo])."""
     rng = random.Random(seed)
@@ -600,7 +600,7 @@ def full_run(seed, policy, save_each_chapter=False):
                 assert c.chapter()["nodes"][c.node][0] == "end"
         elif k == "end":
             ends += 1
-            assert a == {"kind": "end", "draft": False}
+            assert a == {"kind": "end", "draft": True} and c.chapter().get("draft")      # o proximo capitulo ainda e rascunho
             break
         else:
             raise AssertionError(k)
@@ -627,8 +627,8 @@ def copy_json(d):
 
 def check_final_state(c):
     g = c.garage
-    assert c.next_action() == {"kind": "end", "draft": False}
-    assert all(not ch.get("draft") for ch in story.CHAPTERS)
+    assert c.next_action() == {"kind": "end", "draft": True} and c.chapter().get("draft")
+    assert all(not ch.get("draft") for ch in story.CHAPTERS if ch["reward"])
     assert g.stats["titles"] == 1, g.stats
     names = {r["name"] for r in g.robots}
     assert {"Gambiarra", "Pixelado", "Majestade"} <= names and len(g.robots) == gm.MAX_SQUAD
@@ -650,19 +650,19 @@ def check_final_state(c):
 
 
 def test_full_campaign_autoplay_all_policies():
-    """Autoplay COMPLETO P->1->2->3->4->5 (varias seeds; sim aleatorio, sempre vence, perde a final
+    """Autoplay COMPLETO P->1->...->6 (varias seeds; sim aleatorio, sempre vence, perde a final
     ate o pity): termina em kind=="end" (draft False) sem erro."""
     tot = {}
     for policy, seeds in (("sim", range(12)), ("win", range(3)), ("pity", range(3))):
         for seed in seeds:
             c, n, _ = full_run(seed, policy)
             check_final_state(c)
-            assert c.ch == "6" and c.chapter()["nodes"][c.node] == ("end", "e1_epilogo")
+            assert c.ch == "7" and c.chapter().get("draft") and "c6_end" in c.done
             tot.setdefault(policy, []).append(n)
     for p, v in tot.items():
         print("     autoplay %s: partidas media %.1f max %d" % (p, sum(v) / len(v), max(v)))
-    # sempre vence: 1 treino + 5+5+5+5 + 6 = 1 + 20 + 6 = 27 partidas
-    assert set(tot["win"]) == {27}, tot["win"]
+    # sempre vence: 1 treino + 5+5+5+5 + 6 (Mundial) + 5 (cap. 6) = 32 partidas
+    assert set(tot["win"]) == {32}, tot["win"]
 
 
 def test_full_campaign_save_load_every_chapter():
@@ -674,19 +674,20 @@ def test_full_campaign_save_load_every_chapter():
 
 def test_advance_chapter_last_chapter_enters_end_node():
     c, _, _ = full_run(1, "win")
-    # fim: node no ("end"), cena ja jogada -> {"kind":"end","draft":False}; advance_chapter nao esta no chapter_end
+    # fim: capitulo em rascunho -> {"kind":"end","draft":True}; advance_chapter nao esta no chapter_end
     assert c.advance_chapter() is None
     # cap. 5 no chapter_end -> cap. 6, cujo no 0 e o epilogo (C2)
     c2 = new(7)
     c2.ch = "5"
     c2.node = [k for k, _ in story.CHAPTERS[5]["nodes"]].index("chapter_end")
     assert c2.advance_chapter() == "6" and c2.node == 0 and c2.tour is None
-    assert c2.chapter()["nodes"][0] == ("end", "e1_epilogo")
+    assert c2.chapter()["nodes"][0] == ("scene", "e1_epilogo")
     a = c2.next_action()
     assert a["kind"] == "scene" and a["id"] == "e1_epilogo"
     c2.finish_scene("e1_epilogo")
-    assert c2.next_action() == {"kind": "end", "draft": False}
-    assert c2.advance_chapter() is None                      # ja no "end": nao avanca mais
+    a = c2.next_action()                                     # C6: o Ato 2 segue (volta do Vo Nestor)
+    assert a["kind"] == "scene" and a["id"] == "c6_nestor"
+    assert c2.advance_chapter() is None                      # nao esta no chapter_end
     # ultimo capitulo com chapter_end seguido de "end" (sintetico, formato do cap. 13): END_ID
     import copy
     orig = story.CHAPTERS

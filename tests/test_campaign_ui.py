@@ -1192,33 +1192,34 @@ def _buttons_with(label_pred):
 
 
 def test_map_act_tabs_14_nodes_and_no_surface():
-    extra = [_draft_ch(c, "2") for c in ("7", "8", "9")] + [_draft_ch(c, "3") for c in ("10", "11", "12", "13")]
-    with story_patch(extra=extra):
-        fresh_campaign(31)
-        assert ui.shown_act() == "1"
-        total = 0
-        for act, n in (("1", 6), ("2", 4), ("3", 4)):
-            ui.set_map_tab(act)
-            frame()
-            chs = ui.act_chapters(act)
-            assert len(chs) == n, (act, len(chs))
-            total += n
-            dx = cui.node_dx(n)
-            assert cui.NODE_X0 + (n - 1) * dx <= cui.NODE_X_MAX
-            assert all(text_cache_has(c["subtitle"].split()[0]) for c in chs), act
-            assert _no_surface_frames() == 0, act
-            shot("map_act%s" % act)
-        assert total == 14
-        ui.set_map_tab(None)
-    fresh_campaign(31)                                   # dados reais: Ato 3 sem capitulos = aba desligada
+    """Dados reais: Ato 1 (P-5), Ato 2 (6 jogavel + 7-9 rascunho), Ato 3 (10-13 rascunho) = 14 nos."""
+    fresh_campaign(31)
+    assert ui.shown_act() == "1"
+    total = 0
+    for act, n in (("1", 6), ("2", 4), ("3", 4)):
+        ui.set_map_tab(act)
+        frame()
+        chs = ui.act_chapters(act)
+        assert len(chs) == n, (act, len(chs))
+        total += n
+        dx = cui.node_dx(n)
+        assert cui.NODE_X0 + (n - 1) * dx <= cui.NODE_X_MAX
+        assert all(text_cache_has(c["subtitle"].split()[0]) for c in chs), act
+        assert _no_surface_frames() == 0, act
+        shot("map_act%s" % act)
+    assert total == 14
+    ui.set_map_tab(None)
     x, y, w, h = cui.ACT_TAB
     tabs = _buttons_with(lambda r: r.y == y and r.h == h)
-    assert [en for _r, en in tabs] == [True, True, False], tabs
-    click(tabs[1][0].center)
+    assert [en for _r, en in tabs] == [True, True, True], tabs
+    click(tabs[2][0].center)
     frame()
-    assert ui.map_tab == "2" and text_cache_has("Taça de Acesso")
-    click(tabs[2][0].center)                             # desligada: nada muda
-    assert ui.map_tab == "2"
+    assert ui.map_tab == "3" and text_cache_has("Intercâmbio") and text_cache_has("em breve")
+    with story_patch():                                  # Ato sem capitulos: aba desligada
+        story.CHAPTERS = [c for c in story.CHAPTERS if c.get("act") != "3"]
+        ui.set_map_tab(None)
+        tabs = _buttons_with(lambda r: r.y == y and r.h == h)
+        assert [en for _r, en in tabs] == [True, True, False], tabs
     ui.to_menu()
 
 
@@ -1362,8 +1363,8 @@ def test_flow_prologue_cap1_all_simulated_by_clicks():
 
 
 def test_flow_full_campaign_by_clicks_reaches_ending():
-    """Autoplay por cliques P->1->2->3->4->5 + epilogo: cobre TODAS as cenas jogaveis e termina na tela
-    "ending" com a campanha concluida (cena e1_epilogo jogada, 1 titulo, 3 recrutas)."""
+    """Autoplay por cliques P->1->...->6: cobre TODAS as cenas jogaveis e termina na tela "ending" em
+    rascunho (cap. 7 "em breve"), com o epilogo e o cap. 6 jogados, 1 titulo e 3 recrutas."""
     fresh_campaign(5)
     seen = set()
     for _ in range(6000):
@@ -1388,14 +1389,16 @@ def test_flow_full_campaign_by_clicks_reaches_ending():
     else:
         raise AssertionError("autoplay nao chegou ao ending")
     cp = ui.campaign
-    assert ui.end_view["draft"] is False and cp.next_action() == {"kind": "end", "draft": False}
+    assert ui.end_view["draft"] is True and cp.next_action() == {"kind": "end", "draft": True}
     assert cp.garage.stats["titles"] == 1 and "e1_epilogo" in cp.done and "c5_antidoping" in cp.done
     assert {"Gambiarra", "Pixelado", "Majestade"} <= {r["name"] for r in cp.garage.robots}
     allsc = {k for k in cp.done if k in story.SCENES}
     assert len(allsc) >= 40, len(allsc)
     assert not FORBIDDEN
     saved = cm.Campaign.load()
-    assert saved is not None and saved.ch == "6" and "e1_epilogo" in saved.done
+    assert saved is not None, saved
+    assert saved.ch == "7" and "e1_epilogo" in saved.done and "c6_end" in saved.done, (saved.ch, saved.node, saved.done[-4:], saved.warnings)
+    assert "reward:rw_6" in saved.done
     ui.to_menu()
 
 

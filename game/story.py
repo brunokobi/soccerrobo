@@ -33,8 +33,6 @@ CHAPTERS: lista ordenada; "act" = "1".."3" (aba do mapa); "nodes" em ordem: ("sc
     | ("end", scene_id)  [o ultimo capitulo da campanha termina com ("end", cena de epilogo)].
     C4: ("scene", id, cond) e ("tournament", id, cond) sao pulados quando cond e falsa; ("end", "AUTO")
     escolhe o final em ENDINGS.
-    Ponte provisoria: enquanto o Ato 2 esta em producao, o ultimo capitulo pode ser so [("end", cena)]
-    (sem chapter_end e com reward None): o cap. 6 comeca pelo epilogo do Ato 1.
     "draft": True = esqueleto (nodes vazio) que o teste de alcancabilidade ignora.
 REWARDS[id]: aplicado UMA vez ao fechar o capitulo (chave "reward:<id>" em `done`): scrap, piece,
     recruits [{"name","role","chassis","base_ovr","level","paint","piece"?}], unlock [chassis],
@@ -1095,8 +1093,8 @@ SCENES = {
         ("narrador", "neutro", "Vô Nestor, rindo: \"Eu sei, filho. Escondi o chip no Zé de propósito. Quem tem um chinelo e um chip honesto não precisa de overclock.\""),
         ("ambrosio", "feliz", "Nestor, seu velho gambiarreiro. Você planejou isso por trinta anos?"),
         ("narrador", "neutro", "Vô Nestor: \"Cochilei em vinte e nove. Mas deu certo. Agora desligo, que vai começar o bingo.\" Clique. Bingo."),
-        ("narrador", "neutro", "Créditos: Téo, Prof. Ambrósio, Vivi, Bia, Dudu, Vô Nestor e o chinelo (estrutural). Nenhuma poeira foi ferida durante a produção."),
-        ("ze", "robo", "Bzzzt. (a rodinha esquerda cai e rola até a porta. Fim. Pode pegar a rodinha.)"),
+        ("narrador", "neutro", "Créditos do Ato 1: Téo, Prof. Ambrósio, Vivi, Bia, Dudu, Vô Nestor e o chinelo (estrutural). Nenhuma poeira foi ferida durante a produção."),
+        ("ze", "robo", "Bzzzt. (a rodinha esquerda cai e rola até a porta. E para. Num chinelo. Num chinelo que não é do Zé.)"),
     ]},
 }
 

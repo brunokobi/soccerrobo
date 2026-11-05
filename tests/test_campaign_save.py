@@ -357,13 +357,26 @@ def test_ch_invalid_goes_to_first_unrewarded_chapter():
     r = cm.Campaign.from_dict(d)
     assert r.ch == "P" and r.node == 0 and r.repaired
     c = chapter_end_cap1()
+    assert "reward:rw_1" in c.done
     d = c.to_dict()
-    d["c"]["ch"] = "2"
+    d["c"].update(ch="2", node=0, tour=None, pity=0)
     with drafted("2", "3", "4", "5", "6"):
+        # P e 1 fechados: o rascunho seguinte e uma posicao valida (espera conteudo), sem reparo
         r = cm.Campaign.from_dict(d)
-        assert r.ch == "1" and r.repaired  # todos os jogaveis fechados -> ultimo jogavel
-        assert cm.Campaign.sanitize(d) is not None
-        c2 = cm.Campaign.from_dict(c.to_dict())
+        assert r.ch == "2" and not r.repaired and r.next_action() == {"kind": "end", "draft": True}
+        assert cm.Campaign.from_dict(r.to_dict()).to_dict() == r.to_dict()
+        d2 = copy.deepcopy(d)
+        d2["c"]["node"] = 3                             # rascunho com node/torneio: normaliza com aviso
+        r2 = cm.Campaign.from_dict(d2)
+        assert r2.ch == "2" and r2.node == 0 and r2.repaired
+        d3 = copy.deepcopy(d)
+        d3["c"]["ch"] = "zzz"                           # capitulo invalido: reparo leva ao rascunho
+        r3 = cm.Campaign.from_dict(d3)
+        assert r3.ch == "2" and r3.repaired
+        d4 = copy.deepcopy(d)
+        d4["c"]["ch"] = "4"                             # rascunho alem do proximo: cap. 2-3 nao fechados
+        r4 = cm.Campaign.from_dict(d4)
+        assert r4.ch == "2" and r4.repaired
     c3 = cm.Campaign.from_dict(c.to_dict())
     assert c3 is not None and c3.ch == "1"  # sem o patch, o estado real do cap. 1 e valido
 

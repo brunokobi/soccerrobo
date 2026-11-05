@@ -1078,14 +1078,32 @@ def _valid_chapters():
     return [c for c in story.CHAPTERS if not c.get("draft") and c["nodes"]]
 
 
+def _draft_waiting(ch_id, done):
+    """True se `ch_id` e o PRIMEIRO capitulo em rascunho e todos os jogaveis antes dele ja foram
+    fechados (recompensa em done): o jogador terminou o conteudo que existe e espera o proximo
+    (posicao valida de save, node 0, sem torneio)."""
+    for c in story.CHAPTERS:
+        if c["id"] == ch_id:
+            return bool(c.get("draft") or not c["nodes"])
+        if c.get("draft") or not c["nodes"]:
+            return False                                 # ha um rascunho antes: nao e o proximo
+        if c.get("reward") is None or ("reward:%s" % c["reward"]) not in done:
+            return False
+    return False
+
+
 def _repair_chapter(done):
-    """Capitulo de reparo quando `ch` e invalido/draft: o primeiro jogavel cuja recompensa ainda nao
-    esta em done; se todos ja foram fechados, o ultimo jogavel."""
-    play = _valid_chapters()
-    for c in play:
+    """Capitulo de reparo quando `ch` e invalido: o primeiro jogavel cuja recompensa ainda nao esta em
+    done; se todos antes de um rascunho ja foram fechados, esse rascunho (espera conteudo); senao o
+    ultimo jogavel."""
+    for c in story.CHAPTERS:
+        if c.get("draft") or not c["nodes"]:
+            if _draft_waiting(c["id"], done):
+                return c["id"]
+            continue
         if c.get("reward") is None or ("reward:%s" % c["reward"]) not in done:
             return c["id"]
-    return play[-1]["id"]
+    return _valid_chapters()[-1]["id"]
 
 
 def _done_keys(raw):
@@ -1206,7 +1224,11 @@ def _sanitize(data):
         warns.append("Roteiro atualizado: voltando ao inicio do capitulo.")
     ch = c.get("ch")
     chapter = next((x for x in story.CHAPTERS if x["id"] == ch), None) if isinstance(ch, str) else None
-    if chapter is None or chapter.get("draft") or not chapter["nodes"]:
+    if chapter is not None and (chapter.get("draft") or not chapter["nodes"]) and _draft_waiting(ch, done):
+        node, tour, pity = 0, None, 0                    # esperando o proximo capitulo ("em breve")
+        if c.get("node") != 0 or c.get("tour") is not None or c.get("pity") != 0:
+            warns.append("Campanha inconsistente: voltando ao inicio do capitulo.")
+    elif chapter is None or chapter.get("draft") or not chapter["nodes"]:
         ch = _repair_chapter(done)
         chapter = next(x for x in story.CHAPTERS if x["id"] == ch)
         rewind = True

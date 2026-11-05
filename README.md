@@ -118,9 +118,13 @@ No menu (teclas 1-6): `1 - AMISTOSO`, `2 - AMISTOSO`, `3 - NOVA CARREIRA`, `4 - 
      Colégio Santa Faísca. No caminho conhece Vivi (Valentina), Bia e Dudu, e passa a
      enfrentar a corporação Limpex e o chip X-9 do Dr. Augusto Brilhante, do torneio
      escolar ao mundial.
-   - **Estrutura:** Prólogo + 5 capítulos (Copa Interclasses, Taça Vale do Pó, Estadual
-     Limpex Cup, Copa Brasil e Mundial de Aspiradores) + epílogo, com ~53 cenas de
-     diálogo. Retratos e cenários são **desenhados por código** (sem imagens externas).
+   - **Estrutura:** **Ato 1** "A Garagem do Vô": Prólogo + 5 capítulos (Copa Interclasses,
+     Taça Vale do Pó, Estadual Limpex Cup, Copa Brasil e Mundial de Aspiradores) + epílogo.
+     **Ato 2** "A Superliga Limpex": o Capítulo 6 (Taça de Acesso) já é jogável, com o Vô
+     Nestor de volta, a Dra. Valquíria, o rival Gabi Trovão e a Dona Odete; os capítulos 7 a
+     13 (Atos 2 e 3) aparecem no mapa como "em breve". São ~63 cenas de diálogo. Retratos e
+     cenários são **desenhados por código** (sem imagens externas). O mapa tem uma aba por Ato
+     e um botão de **MISSÕES** secundárias (as missões entram com o roteiro dos próximos passos).
    - **Escolhas:** algumas cenas oferecem 2-3 opções que mudam falas seguintes e podem dar
      recompensas (sucata, XP, peça). Esc na cena abre um mini-menu; PULAR CENA pede
      confirmação (e, se há escolha, assume a opção 1).
@@ -160,7 +164,7 @@ O jogador controlado troca sozinho (o mais perto da bola).
 | 1 | Robôs com chassis e 8 atributos, bateria, arena tecnológica (neon) | pronta |
 | 2 | Garagem e laboratório: peças, upgrades, XP, evolução, loja e liga (Modo Robôs) | pronta e jogável |
 | 3 | **Campanha** "A Garagem do Vô": história, diálogos, torneios, chefes e treino (escola -> mundial) | pronta e jogável |
-| 4 | **Campanha Expandida**: torcida realista, câmera de estádio e desenhos mais detalhados (Onda A), peças/sets/relíquias/itens/cosméticos e 16 skills dos robôs (Onda B), Atos 2 e 3, missões secundárias e 3 finais (Ondas C e D) | Ondas A e B prontas; Onda C em andamento (estrutura C1-C5 pronta: save v2, liga/série, finais, missões, mapa por Ato; falta o roteiro dos Atos 2 e 3); D planejada ([docs/roadmap.md](docs/roadmap.md)) |
+| 4 | **Campanha Expandida**: torcida realista, câmera de estádio e desenhos mais detalhados (Onda A), peças/sets/relíquias/itens/cosméticos e 16 skills dos robôs (Onda B), Atos 2 e 3, missões secundárias e 3 finais (Ondas C e D) | Ondas A e B prontas; Onda C em andamento (C1-C6: estrutura pronta e cap. 6 jogável; caps. 7-13 em breve); D planejada ([docs/roadmap.md](docs/roadmap.md)) |
 | 5 | Editor de firmware (regras da IA em blocos) | planejada |
 
 O planejamento detalhado fica em [`docs/`](docs/INDEX.md).

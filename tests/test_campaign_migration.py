@@ -80,7 +80,7 @@ def play_to_end(c, max_steps=400):
         elif k == "chapter_end":
             assert c.advance_chapter() is not None
         elif k == "end":
-            assert a == {"kind": "end", "draft": False}
+            assert a == {"kind": "end", "draft": True} and c.chapter().get("draft")      # ate o 1o rascunho
             return scenes
     raise AssertionError("nao chegou ao fim")
 
@@ -136,7 +136,7 @@ def test_mid_cap5_keeps_tournament():
     a = c.next_action()
     assert a["kind"] == "match" and a["stage"] == "SF"
     scenes = play_to_end(c)
-    assert scenes.count("e1_epilogo") == 1 and c.ch == "6"
+    assert scenes.count("e1_epilogo") == 1 and "c6_nestor" in scenes and c.ch == "7"
     assert c.garage.stats["titles"] == old["garage"]["stats"]["titles"] + 1
     assert "reward:rw_5" in c.done and c.garage.mod_on() and c.garage.cap == gm.CAMPAIGN_CAP
 
@@ -153,7 +153,7 @@ def test_chapter_end_cap5_goes_to_cap6_epilogue():
     a = c.next_action()
     assert a["kind"] == "scene" and a["id"] == "e1_epilogo"
     c.finish_scene("e1_epilogo")
-    assert c.next_action() == {"kind": "end", "draft": False}
+    assert c.next_action()["id"] == "c6_nestor"                   # o Ato 2 segue
     assert c.garage.stats["titles"] == max(titles, 1)              # titulo do Mundial uma vez so
 
 
@@ -163,14 +163,15 @@ def test_epilogue_cap5_moves_to_cap6_and_plays_epilogue():
     a = c.next_action()
     assert a["kind"] == "scene" and a["id"] == "e1_epilogo"
     c.finish_scene("e1_epilogo")
-    assert c.next_action() == {"kind": "end", "draft": False}
+    assert c.next_action()["id"] == "c6_nestor"
 
 
 def test_finished_moves_to_cap6_and_skips_epilogue():
     old = v1("finished")
     c = load("finished")
     assert (c.ch, c.node, c.tour, c.pity) == ("6", 0, None, 0)
-    assert c.next_action() == {"kind": "end", "draft": False}    # epilogo ja jogado: nao repete
+    a = c.next_action()                                           # epilogo ja jogado: nao repete
+    assert a["kind"] == "scene" and a["id"] == "c6_nestor"       # quem terminou o Ato 1 entra no Ato 2
     assert c.done == old["c"]["done"] and c.garage.stats["titles"] == 1
     g = c.garage
     assert g.mod_on() and g.cap == gm.CAMPAIGN_CAP                # Ato 2 liberado (nivel 15, modulo)

@@ -12,4 +12,18 @@ TOURNAMENTS = {}
 SCENES = {}
 REWARDS = {}
 SIDES = {}
-CHAPTERS = []
+# Rascunhos ("em breve") ate os passos C10/C11; F da spec (secao 7), econ_tier 3 ate o C9/C12.
+CHAPTERS = [
+    {"id": "10", "act": "3", "title": "Capítulo 10", "subtitle": "Intercâmbio",
+     "local": "Aeroporto e Dojo", "F_start": 74.4, "F_end": 76.0, "econ_tier": 3,
+     "tier_done_on_close": 3, "reward": None, "nodes": [], "draft": True},
+    {"id": "11", "act": "3", "title": "Capítulo 11", "subtitle": "A Fábrica",
+     "local": "Fábrica da Limpex", "F_start": 76.4, "F_end": 77.6, "econ_tier": 3,
+     "tier_done_on_close": 3, "reward": None, "nodes": [], "draft": True},
+    {"id": "12", "act": "3", "title": "Capítulo 12", "subtitle": "Copa dos Campeões",
+     "local": "Coliseu", "F_start": 77.8, "F_end": 79.4, "econ_tier": 3,
+     "tier_done_on_close": 3, "reward": None, "nodes": [], "draft": True},
+    {"id": "13", "act": "3", "title": "Capítulo 13", "subtitle": "O Chip Zero",
+     "local": "Coliseu em apagão", "F_start": 79.6, "F_end": 81.0, "econ_tier": 3,
+     "tier_done_on_close": 3, "reward": None, "nodes": [], "draft": True},
+]

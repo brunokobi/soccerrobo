@@ -4,7 +4,7 @@
 Rodar da raiz: .venv/bin/python tests/test_campaign_balance.py [teste ...]   (N=300 por politica)
 Usa Campaign.simulate_current (Poisson com o vies dependente do ovr, campaign.sim_bias(O), calibrado contra
 o motor real por tests/calib_campaign.py), seeds fixas e a API pura do garage. Cobre todo capitulo NAO
-draft de story.CHAPTERS (P e 1-5). "Aproveitamento" = (V + E/2) / jogos pelo placar dos 90 min (penaltis
+draft de story.CHAPTERS dos Atos calibrados (CALIBRATED_ACTS; hoje o Ato 1: P e 1-5). "Aproveitamento" = (V + E/2) / jogos pelo placar dos 90 min (penaltis
 nao contam). "regular" = jogos do grupo + quartas; "SF" = semifinal; "chefe" = final (inclui as
 retentativas com pity, por isso fica ~2-4 pontos acima da primeira tentativa).
 
@@ -54,8 +54,12 @@ for _m, _n in ((gm, "_store_set"), (gm, "_store_set_bad"), (cm, "_store_set"), (
         setattr(_m, _n, _boom)
 
 
+CALIBRATED_ACTS = ("1",)        # Atos ja calibrados contra o motor; o Ato 2 entra no C9 (calibracao)
+
+
 def playable():
-    return [c for c in story.CHAPTERS if not c.get("draft") and c["nodes"]]
+    return [c for c in story.CHAPTERS if not c.get("draft") and c["nodes"]
+            and c.get("act", "1") in CALIBRATED_ACTS]
 
 
 # ---------------------------------------------------------------- politica de gasto (API pura do garage)
