@@ -544,7 +544,7 @@ def test_chapters_structure():
     prev_f = 0
     for c in st.CHAPTERS:
         assert c["act"] in ("1", "2", "3"), c["id"]
-        assert 0 <= c["econ_tier"] <= 3 and -1 <= c["tier_done_on_close"] <= 3
+        assert 0 <= c["econ_tier"] <= 6 and -1 <= c["tier_done_on_close"] <= 3        # tiers 4-6: C9
         assert c["F_start"] <= c["F_end"] and c["F_start"] >= prev_f - 3
         prev_f = c["F_end"]
         assert c["reward"] is None or c["reward"] in st.REWARDS

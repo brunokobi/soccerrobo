@@ -6,9 +6,8 @@ do jogo. Mesmas regras e formatos de story.py (ver o docstring de la); ids nao p
 outros modulos. Capitulos aqui levam "act" e entram depois dos do Ato 1, na ordem da lista.
 
 C6: cap. 6 (Taca de Acesso). C7: cap. 7 (liga, escolha B2) e cap. 8 (copa com quartas). C8: cap. 9
-(serie contra o Ze Perfeito, escolha B3) e o fim do Ato 2 (a2_fim). Os ovr/F seguem os valores
-iniciais da spec (secao 7) e o econ_tier fica em 3 ate o C9 estender a economia (TIER_MUL com 7
-entradas) e calibrar o Ato 2.
+(serie contra o Ze Perfeito, escolha B3) e o fim do Ato 2 (a2_fim). C9: econ_tier 4 (caps. 6-7) e 5
+(caps. 8-9), spec secao 10; F e ovr calibrados contra o motor (tests/calib_campaign.py).
 """
 
 # --- elenco novo (spec secao 2) -----------------------------------------------------------------
@@ -717,25 +716,26 @@ SIDES = {}
 
 # --- capitulos ----------------------------------------------------------------------------------
 # O no 0 do cap. 6 e o epilogo do Ato 1 (saves migrados do roteiro 1 ficam em ch "6", node 0 com o
-# epilogo ja em `done` e seguem para o c6_nestor). econ_tier/tier_done_on_close = 3 ate o C9.
+# epilogo ja em `done` e seguem para o c6_nestor). tier_done_on_close fica em 3 (o maior tier do
+# Modo Robos); a economia do Ato 2 vem do econ_tier 4-5.
 CHAPTERS = [
     {"id": "6", "act": "2", "title": "Capítulo 6", "subtitle": "Taça de Acesso",
-     "local": "Ginásio Limpex Park", "F_start": 66.6, "F_end": 68.0, "econ_tier": 3,
+     "local": "Ginásio Limpex Park", "F_start": 66.6, "F_end": 68.0, "econ_tier": 4,
      "tier_done_on_close": 3, "reward": "rw_6",
      "nodes": [("scene", "e1_epilogo"), ("scene", "c6_nestor"), ("scene", "c6_convite"),
                ("tournament", "t_c6"), ("scene", "c6_end"), ("chapter_end", "6")]},
     {"id": "7", "act": "2", "title": "Capítulo 7", "subtitle": "Superliga: Pontos Corridos",
-     "local": "Estádio Limpex", "F_start": 68.4, "F_end": 70.2, "econ_tier": 3,
+     "local": "Estádio Limpex", "F_start": 68.4, "F_end": 70.2, "econ_tier": 4,
      "tier_done_on_close": 3, "reward": "rw_7",
      "nodes": [("scene", "c7_intro"), ("scene", "c7_vivi_treino"), ("tournament", "t_c7"),
                ("scene", "c7_end"), ("chapter_end", "7")]},
     {"id": "8", "act": "2", "title": "Capítulo 8", "subtitle": "Playoffs da Superliga",
-     "local": "Estádio Limpex (noite)", "F_start": 70.4, "F_end": 72.0, "econ_tier": 3,
+     "local": "Estádio Limpex (noite)", "F_start": 70.4, "F_end": 72.0, "econ_tier": 5,
      "tier_done_on_close": 3, "reward": "rw_8",
      "nodes": [("scene", "c8_intro"), ("scene", "c8_ogawa"), ("tournament", "t_c8"),
                ("scene", "c8_end"), ("chapter_end", "8")]},
     {"id": "9", "act": "2", "title": "Capítulo 9", "subtitle": "O Clone",
-     "local": "Laboratório da Limpex", "F_start": 72.4, "F_end": 73.8, "econ_tier": 3,
+     "local": "Laboratório da Limpex", "F_start": 72.4, "F_end": 73.8, "econ_tier": 5,
      "tier_done_on_close": 3, "reward": "rw_9",
      "nodes": [("scene", "c9_intro"), ("scene", "c9_lab"), ("scene", "c9_ze_perfeito"),
                ("tournament", "t_c9"), ("scene", "c9_end"), ("scene", "a2_fim"), ("chapter_end", "9")]},

@@ -129,6 +129,7 @@ UNLOCK_REWARD = "rw_5"       # fim do Ato 1: liga modulos/skills (mod_on) e o ni
 END_ID = "END"      # valor devolvido por advance_chapter() ao entrar no epilogo (no "end")
 AUTO_END = "AUTO"   # ("end", "AUTO"): o final vem de story.ENDINGS (C4)
 SIDE_DELTA = 14     # missao secundaria: adversario = Forca atual - delta (spec 6)
+B2_SCRAP_MUL, B2_XP_MUL = 1.20, 1.15   # escolha B2 do cap. 7: renova_limpex / independente (C9)
 
 
 def shootout(rating_h, rating_a, rng):
@@ -344,6 +345,14 @@ class Campaign:
 
     def econ_tier(self):
         return self.chapter()["econ_tier"]
+
+    def econ_mults(self):
+        """(scrap_mul, xp_mul) da escolha B2 (C9, spec secao 10): do Ato 2 em diante, renova_limpex da
+        +20% de sucata e independente +15% de XP nas partidas (torneio, missao e treino)."""
+        if self.chapter().get("act", "1") == "1":
+            return 1.0, 1.0
+        f = self.garage.flags
+        return (B2_SCRAP_MUL if f.get("renova_limpex") else 1.0), (B2_XP_MUL if f.get("independente") else 1.0)
 
     def hero_robot(self):
         return self.garage.robot(self.hero)
@@ -622,7 +631,8 @@ class Campaign:
         pids = [e["pid"] for e in (events or ()) if e.get("team") == 0 and not e.get("own")
                 and e.get("pid") is not None]
         tier = self.econ_tier()
-        rew = G.match_rewards(g, my, opp, pids, tier, self._rng("rw"))
+        sm, xm = self.econ_mults()
+        rew = G.match_rewards(g, my, opp, pids, tier, self._rng("rw"), sm, xm)
         g.refresh_shop(tier, self._rng("shop"))
         g.consume_backpack()
         self.stats["matches"] += 1
@@ -794,7 +804,8 @@ class Campaign:
         pids = [e["pid"] for e in (events or ()) if e.get("team") == 0 and not e.get("own")
                 and e.get("pid") is not None]
         tier = self.econ_tier()
-        rew = G.match_rewards(g, my, opp, pids, tier, self._rng("rw"))
+        sm, xm = self.econ_mults()
+        rew = G.match_rewards(g, my, opp, pids, tier, self._rng("rw"), sm, xm)
         g.refresh_shop(tier, self._rng("shop"))
         g.consume_backpack()                               # consumiveis da Mochila (B8): gastos na partida
         self.stats["matches"] += 1
@@ -892,7 +903,8 @@ class Campaign:
         pids = [e["pid"] for e in (events or ()) if e.get("team") == 0 and not e.get("own")
                 and e.get("pid") is not None]
         tier = self.training_econ_tier()
-        rew = G.match_rewards(g, my, opp, pids, tier, self._rng("rw"))
+        sm, xm = self.econ_mults()
+        rew = G.match_rewards(g, my, opp, pids, tier, self._rng("rw"), sm, xm)
         g.refresh_shop(tier, self._rng("shop"))
         g.consume_backpack()
         self.stats["trained"] += 1

@@ -27,7 +27,8 @@ MOD_ON_TIER = 0                # Modo Robos: modulos/skills ligam ao concluir o 
 BASE_OVR = 46   # starter (Disco, sem bonus de papel de chassis): compensa ~-10 pts vs chassis de papel do oponente
 MIN_SQUAD, MAX_SQUAD = 5, 8
 MAX_INVENTORY = 200
-TIER_MUL = (1.0, 1.5, 2.2, 3.2)
+# tiers 0-3: Modo Robos e Ato 1; 4-6: so a campanha (Ato 2/3, C9; spec secao 10). As 4 primeiras nao mudam.
+TIER_MUL = (1.0, 1.5, 2.2, 3.2, 4.2, 5.2, 6.4)
 TIER_OVR = (42, 50, 58, 66)
 ROBOT_PRICES = (150, 250, 400, 650)
 START_SCRAP = 150
@@ -52,6 +53,9 @@ DROP_CHANCE = 0.20
 SHOP_COMMONS = 6
 EPIC_CHANCE, EPIC_MIN_TIER = 0.25, 1
 LEGEND_CHANCE, LEGEND_MIN_TIER = 0.10, 3
+# C9: chances (Epica, Lendaria) da loja nos tiers da campanha 4-6; ate o tier 3 vale o par acima (o stream
+# do RNG da loja nao muda)
+SHOP_CHANCE_BY_TIER = {4: (0.35, 0.18), 5: (0.45, 0.25), 6: (0.55, 0.32)}
 # B16 (spec 7.3: modulos vem da loja e de drops): com mod_on a loja ganha 1 Modulo e 1 drop em
 # MODULE_DROP_SHARE vira Modulo. Sorteios num RNG DERIVADO (seed ^ sal), nunca no stream da loja/drops:
 # sem mod_on (Ato 1, Modo Robos antes do tier 1) tudo fica identico ao da v1.
@@ -226,7 +230,10 @@ def match_entry(robot, pieces_by_id, mod_on=False):
 
 # --- XP -----------------------------------------------------------------------------
 def xp_need(level):
-    """XP para ir do nivel `level` ao seguinte."""
+    """XP para ir do nivel `level` ao seguinte. Do 10 em diante (so a campanha passa do 10, cap 15):
+    560 + 40*(level-10) (C9; spec secao 10: 560, 600, 640, 680, 720)."""
+    if level >= 10:
+        return 560 + 40 * (level - 10)
     return 40 + 25 * (level - 1) + 5 * (level - 1) ** 2
 
 
@@ -755,16 +762,17 @@ class Garage:
 
     # ---------------------------------------------------------------- loja
     def refresh_shop(self, tier, rng):
-        """Novo estoque: 6 Comuns, 1 Rara garantida, Epica 25% (tier>=1), Lendaria 10% (tier>=3).
-        Modelos: parts.shop_models(tier, rar) = CORE_MODELS ate o tier 3 (stream do RNG identico ao
-        da v1), ALL_MODELS a partir do tier 4."""
+        """Novo estoque: 6 Comuns, 1 Rara garantida, Epica 25% (tier>=1), Lendaria 10% (tier>=3); nos
+        tiers 4-6 da campanha as chances sobem (SHOP_CHANCE_BY_TIER, C9). Modelos: parts.shop_models(tier,
+        rar) = CORE_MODELS ate o tier 3 (stream do RNG identico ao da v1), ALL_MODELS a partir do tier 4."""
         seed = rng.getrandbits(31)
         r = random.Random(seed)
         stock = [self.new_piece(r.choice(parts.shop_models(tier, 0)), 0) for _ in range(SHOP_COMMONS)]
         stock.append(self.new_piece(r.choice(parts.shop_models(tier, 1)), 1))
-        if tier >= EPIC_MIN_TIER and r.random() < EPIC_CHANCE:
+        epic, legend = SHOP_CHANCE_BY_TIER.get(tier, (EPIC_CHANCE, LEGEND_CHANCE))
+        if tier >= EPIC_MIN_TIER and r.random() < epic:
             stock.append(self.new_piece(r.choice(parts.shop_models(tier, 2)), 2))
-        if tier >= LEGEND_MIN_TIER and r.random() < LEGEND_CHANCE:
+        if tier >= LEGEND_MIN_TIER and r.random() < legend:
             stock.append(self.new_piece(r.choice(parts.shop_models(tier, 3)), 3))
         if self.mod_on():                               # B16: 1 Modulo (RNG derivado: o resto nao muda)
             mr = random.Random(seed ^ MODULE_SHOP_SALT)
@@ -807,8 +815,9 @@ def new_game(rng, team_name="Meu Time"):
 
 
 # --- recompensas -------------------------------------------------------------------
-def match_rewards(garage, my_goals, opp_goals, scorer_pids, tier, rng):
-    """Calcula E APLICA as recompensas de uma partida do usuario.
+def match_rewards(garage, my_goals, opp_goals, scorer_pids, tier, rng, scrap_mul=1.0, xp_mul=1.0):
+    """Calcula E APLICA as recompensas de uma partida do usuario. scrap_mul/xp_mul (C9): bonus da
+    campanha (escolha B2 do Ato 2); 1,0 = sem bonus (Modo Robos, Ato 1).
 
     Devolve {"result","scrap","xp":{rid:int},"levels":{rid:int},"drop":piece|None}.
     Determinístico dado (estado, entradas, rng).
@@ -820,7 +829,7 @@ def match_rewards(garage, my_goals, opp_goals, scorer_pids, tier, rng):
         res, base, bonus = "d", SCRAP_DRAW, XP_DRAW
     else:
         res, base, bonus = "l", SCRAP_LOSS, 0
-    scrap = int(round((base + SCRAP_PER_GOAL * min(my_goals, SCRAP_GOAL_CAP)) * TIER_MUL[tier]))
+    scrap = int(round((base + SCRAP_PER_GOAL * min(my_goals, SCRAP_GOAL_CAP)) * TIER_MUL[tier] * scrap_mul))
     goals = {}
     for pid in scorer_pids or ():
         goals[pid] = goals.get(pid, 0) + 1
@@ -831,6 +840,8 @@ def match_rewards(garage, my_goals, opp_goals, scorer_pids, tier, rng):
             amt = XP_BASE + bonus + XP_GOAL * goals.get(r["id"], 0)
         else:
             amt = int((XP_BASE + bonus) * XP_RESERVE_PCT)
+        if xp_mul != 1.0:
+            amt = int(round(amt * xp_mul))
         xp[r["id"]] = amt
         levels[r["id"]] = add_xp(r, amt, garage.cap)
     garage.scrap += scrap

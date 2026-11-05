@@ -1193,6 +1193,47 @@ def test_cap9_series_variant_and_rw9_by_choice():
             assert "Zé Perfeito" not in names
 
 
+def test_act2_economy_tiers_xp_and_b2_bonus():
+    """C9: tiers 4-6 so na campanha, XP dos niveis 10-14 da spec e o bonus da escolha B2 no Ato 2."""
+    assert gm.TIER_MUL[:4] == (1.0, 1.5, 2.2, 3.2) and len(gm.TIER_MUL) == 7
+    assert [gm.xp_need(l) for l in range(10, 15)] == [560, 600, 640, 680, 720]
+    assert {c["id"]: c["econ_tier"] for c in story.CHAPTERS if c["id"] in ("6", "7", "8", "9")} == \
+        {"6": 4, "7": 4, "8": 5, "9": 5}
+    rewards = {}
+    for flag in (None, "renova_limpex", "independente"):
+        c = new(61)
+        c.ch, c.node = "7", 0
+        if flag:
+            c.garage.flags[flag] = 1
+        sm, xm = c.econ_mults()
+        assert (sm, xm) == {None: (1.0, 1.0), "renova_limpex": (cm.B2_SCRAP_MUL, 1.0),
+                            "independente": (1.0, cm.B2_XP_MUL)}[flag]
+        c.start_tournament("t_c7")
+        r = c.record_match(2, 0)["rewards"]
+        rewards[flag] = (r["scrap"], sum(r["xp"].values()))
+    base_s, base_x = rewards[None]
+    assert rewards["renova_limpex"][0] == int(round(base_s * 1.2)) and rewards["renova_limpex"][1] == base_x
+    assert rewards["independente"][0] == base_s and rewards["independente"][1] > base_x
+    c = new(62)                                              # Ato 1: a flag nao tem efeito
+    c.garage.flags["renova_limpex"] = 1
+    assert c.econ_mults() == (1.0, 1.0)
+
+
+def test_shop_tiers_4_to_6_use_better_chances():
+    import random as _r
+    hits = {}
+    for tier in (3, 4, 6):
+        epic = legend = 0
+        for seed in range(400):
+            g = gm.Garage()
+            stock = g.refresh_shop(tier, _r.Random(seed)) or g.shop["stock"]
+            rars = [p["rar"] for p in stock]
+            epic += 2 in rars
+            legend += 3 in rars
+        hits[tier] = (epic / 400, legend / 400)
+    assert hits[3][0] < hits[4][0] < hits[6][0] and hits[3][1] < hits[4][1] < hits[6][1], hits
+
+
 def main():
     names = sys.argv[1:] or [n for n in globals() if n.startswith("test_")]
     for n in names:
