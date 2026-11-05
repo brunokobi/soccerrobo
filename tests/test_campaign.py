@@ -631,12 +631,11 @@ def check_final_state(c):
     assert all(not ch.get("draft") for ch in story.CHAPTERS if ch["reward"])
     assert g.stats["titles"] == 1, g.stats
     names = {r["name"] for r in g.robots}
-    # recrutas: Gambiarra, Pixelado, Majestade e, no Ato 2, Relampago (gabi_amigo) e Ze Perfeito
-    # (poupou_ze). Com o elenco cheio sai o reserva mais fraco (Campaign._recruit), entao os recrutas
-    # fortes (Majestade 64, Relampago 68, Ze Perfeito 70) ficam.
-    assert "Majestade" in names and len(g.robots) == gm.MAX_SQUAD, names
-    assert ("Relâmpago" in names) == bool(g.flags.get("gabi_amigo")), names
-    assert ("Zé Perfeito" in names) == bool(g.flags.get("poupou_ze")), names
+    # recrutas: Gambiarra, Pixelado, Majestade; Ato 2: Relampago (gabi_amigo), Ze Perfeito (poupou_ze);
+    # Ato 3: Samurai (gabi_amigo) ou Ronin. Com o elenco cheio (MAX_SQUAD) sai o reserva mais fraco
+    # (Campaign._recruit, com aviso); o recruta mais recente sempre fica.
+    assert len(g.robots) == gm.MAX_SQUAD, names
+    assert ("Samurai" if g.flags.get("gabi_amigo") else "Ronin") in names, names
     assert sum(len(story.REWARDS[x].get("recruits", ())) for x in story.REWARDS) == 3
     for ch in story.CHAPTERS:                               # todas as recompensas aplicadas, uma vez
         if ch["reward"] is None:                            # ponte provisoria do cap. 6
@@ -668,8 +667,12 @@ def test_full_campaign_autoplay_all_policies():
         print("     autoplay %s: partidas media %.1f max %d" % (p, sum(v) / len(v), max(v)))
     # sempre vence: 1 treino + uma partida por estagio de cada torneio jogavel (Ato 1: 26; cap. 6: 5;
     # cap. 7, liga: 7; cap. 8, copa com quartas: 6; ...)
-    want = 1 + sum(len(cm.stages_of(story.TOURNAMENTS[n[1]])) for ch in story.CHAPTERS if not ch.get("draft")
-                   for n in ch["nodes"] if n[0] == "tournament" and n[1] != "t_p_treino")
+    def ch_matches(ch):                                     # versoes condicionais (cap. 11): so uma e jogada
+        tours = [n for n in ch["nodes"] if n[0] == "tournament" and n[1] != "t_p_treino"]
+        plain = [n for n in tours if len(n) < 3]
+        cond = [n for n in tours if len(n) > 2]
+        return sum(len(cm.stages_of(story.TOURNAMENTS[n[1]])) for n in plain + cond[:1])
+    want = 1 + sum(ch_matches(ch) for ch in story.CHAPTERS if not ch.get("draft"))
     assert want >= 45 and set(tot["win"]) == {want}, (want, tot["win"])
 
 
@@ -1232,6 +1235,23 @@ def test_shop_tiers_4_to_6_use_better_chances():
             legend += 3 in rars
         hits[tier] = (epic / 400, legend / 400)
     assert hits[3][0] < hits[4][0] < hits[6][0] and hits[3][1] < hits[4][1] < hits[6][1], hits
+
+
+def test_cap11_version_by_b2_and_rw11():
+    """C10: o cap. 11 joga a versao corp (renova_limpex) ou rebel (independente) e a Lendaria de rw_11 segue."""
+    for renova in (True, False):
+        c = new(71)
+        c.ch, c.node = "11", 0
+        c.garage.flags["renova_limpex" if renova else "independente"] = 1
+        for sid in ("c11_intro", "c11_dudu_hack", "c11_bia"):
+            c.done.append(sid)
+        a = c.next_action()
+        assert a["kind"] == "match" and a["tournament"] == ("t_c11_corp" if renova else "t_c11_rebel"), a
+        assert a["stage"] == "S1"
+        d = copy_json(c.to_dict())
+        assert cm.Campaign.from_dict(d).tour == c.tour                # save no meio da versao escolhida
+        spec = c.reward_spec("rw_11")
+        assert spec["piece"]["model"] == ("Railgun de Bolso" if renova else "Sonar Quântico")
 
 
 def main():

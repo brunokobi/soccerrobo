@@ -178,7 +178,11 @@ def test_campaign_matches_and_training_use_tournament_venue():
                 camp.advance_chapter()
             else:
                 break
-        assert seen == set(story.TOURNAMENTS), seen               # todos os torneios do roteiro
+        # todos os torneios sem condicao; dos condicionais (ex.: cap. 11 corp/rebel) so uma versao por partida
+        plain = {n[1] for c in story.CHAPTERS for n in c["nodes"] if n[0] == "tournament" and len(n) < 3}
+        conds = [{n[1] for n in c["nodes"] if n[0] == "tournament" and len(n) > 2} for c in story.CHAPTERS]
+        assert plain <= seen <= set(story.TOURNAMENTS), seen
+        assert all(len(grp & seen) == 1 for grp in conds if grp), seen
     finally:
         g.start_robot_match = real
         ui.campaign = None

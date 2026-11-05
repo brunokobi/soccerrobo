@@ -27,7 +27,9 @@ Planejamento e especificações do jogo. O código e os comandos do dia a dia es
   da escolha B2) e calibração no motor (tabela em `tests/calib_campaign.py`); a Força real do Ato 2 é
   74 → 83,5, ~8 pontos acima da spec, por causa das skills. **Ponto de atenção:** quem nunca evolui o
   time (não gasta sucata nem PH) trava no Ato 2; ideias em aberto: equipar sozinhas as skills de
-  história ou pity maior no Ato 2. Próximo: C10 (caps. 10 e 11). Deploy pendente: falta saber onde o
+  história ou pity maior no Ato 2. C10 pronto: caps. 10 (Intercâmbio) e 11 (A Fábrica, em duas
+  versões pela escolha B2, com a escolha B4) jogáveis e o X-Ômega, com ovr/Força provisórios até o
+  C12. Próximo: C11 (caps. 12 e 13, os 3 finais e os créditos). Deploy pendente: falta saber onde o
   site é hospedado.
   Onda D (pós-campanha) planejada. Passos em [specs/plano-de-implementacao.md](specs/plano-de-implementacao.md)
 - Fase 5 (Editor de firmware): planejada

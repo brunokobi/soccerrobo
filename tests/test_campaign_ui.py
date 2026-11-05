@@ -1392,9 +1392,8 @@ def test_flow_full_campaign_by_clicks_reaches_ending():
     assert ui.end_view["draft"] is True and cp.next_action() == {"kind": "end", "draft": True}
     assert cp.garage.stats["titles"] == 1 and "e1_epilogo" in cp.done and "c5_antidoping" in cp.done
     names = {r["name"] for r in cp.garage.robots}                 # elenco cheio: um reserva pode sair
-    assert "Majestade" in names, names                           # recruta forte nunca sai (C8)
-    assert ("Relâmpago" in names) == bool(cp.garage.flags.get("gabi_amigo")), names
-    assert ("Zé Perfeito" in names) == bool(cp.garage.flags.get("poupou_ze")), names
+    assert len(names) == gm.MAX_SQUAD, names                     # elenco cheio: sai o reserva mais fraco
+    assert ("Samurai" if cp.garage.flags.get("gabi_amigo") else "Ronin") in names, names
     allsc = {k for k in cp.done if k in story.SCENES}
     assert len(allsc) >= 40, len(allsc)
     assert not FORBIDDEN

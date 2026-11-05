@@ -215,7 +215,7 @@ def test_characters_and_vocab():
     need = {"teo", "ambrosio", "vivi", "bia", "dudu", "augusto", "gervasio", "rodolfo", "helena",
             "kenji", "narrador", "ze",
             "nestor", "valquiria", "gabi", "odete", "ogawa",    # Ato 2 (C6-C8); spec secao 2
-            "zeperfeito"}
+            "zeperfeito", "xomega"}                              # Ato 3 (C10)
     assert set(st.CHARACTERS) == need
     names = set()
     for cid, c in st.CHARACTERS.items():
@@ -533,7 +533,7 @@ def test_rewards():
                     check_piece(rc["piece"])
                 rec_sets.add(rc["name"])
         names += sorted(rec_sets)
-    assert len(names) <= 6, names
+    assert len(names) <= 8, names                       # variantes contam os dois nomes (ex.: Samurai/Ronin)
     assert len(set(names)) == len(names), names
 
 

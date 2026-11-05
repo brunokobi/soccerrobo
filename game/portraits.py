@@ -2398,7 +2398,7 @@ def draw_robot(scr, cx, base_y, R, mood="robo", k=1.0, ch=None, bob=0, blink=Fal
     """Robo-aspirador (disco com LED, chinelo preso por fita). base_y = chao. blink = LED vira um
     traco; mouth = quadro de fala (LED claro + ondas de som). Variante (C8, Ze Perfeito): personagem
     robo SEM "chinelo" em acc sai sem chinelo e sem fita, com a tampa na cor da roupa."""
-    led_raw = _LED.get(mood, (0, 230, 255))
+    led_raw = tuple(ch["led"]) if ch is not None and ch.get("led") else _LED.get(mood, (0, 230, 255))   # C10: LED fixo
     led = shade(led_raw, k)
     y = base_y + bob
     w = int(2.7 * R)
@@ -2410,7 +2410,8 @@ def draw_robot(scr, cx, base_y, R, mood="robo", k=1.0, ch=None, bob=0, blink=Fal
         x = cx - 0.8 * R + i * 0.4 * R
         _line(scr, shade((70, 78, 92), k), (x, y - 0.55 * R), (x, y - 0.3 * R), max(1, int(R * 0.05)))
     pygame.draw.ellipse(scr, body, (int(cx - w / 2), int(y - 1.35 * R), w, int(0.9 * R)))                                 # tampa
-    pygame.draw.ellipse(scr, shade((205, 212, 224), k), (int(cx - w / 2 + 0.2 * R), int(y - 1.3 * R), int(w - 0.4 * R), int(0.4 * R)))
+    top = (205, 212, 224) if slipper else lighter(tuple(ch["outfit"][1]), 0.25)
+    pygame.draw.ellipse(scr, shade(top, k), (int(cx - w / 2 + 0.2 * R), int(y - 1.3 * R), int(w - 0.4 * R), int(0.4 * R)))
     pygame.draw.ellipse(scr, shade((34, 42, 62), k), (int(cx - 0.6 * R), int(y - 1.25 * R), int(1.2 * R), int(0.6 * R)))   # visor
     if blink:
         pygame.draw.rect(scr, led, (int(cx - 0.22 * R), int(y - 0.98 * R), int(0.44 * R), max(2, int(0.07 * R))))
