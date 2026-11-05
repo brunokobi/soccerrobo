@@ -743,6 +743,207 @@ def test_hero_never_in_reserve_swap_when_no_reserves():
     assert g.robot(c.hero) is not None and w
 
 
+# --- C3: formatos league e series (torneios sinteticos; o Ato 1 so usa cup/single) --------------
+LEAGUE = {"chapter": "1", "local": "Liga de teste", "bg": "arena", "format": "league",
+          "group": ["turma3b", "fundao", "gremio", "teatro", "padaria"], "qf": None, "sf": "academia",
+          "final": "faxina", "boss": "faxina", "boss_delta": 0, "regular_delta": (0, 0),
+          "hooks": {"before": {"R1": "c1_intro"}, "after": {}, "win": None, "lose": "c1_final_lose",
+                    "elim": "c2_repescagem"}}
+SERIES = {"chapter": "1", "local": "Serie de teste", "bg": "arena", "format": "series",
+          "series": ["coral", "detetives", "imaculados"], "group": [], "qf": None, "sf": None,
+          "final": "imaculados", "boss": "imaculados", "boss_delta": 0, "regular_delta": (0, 0),
+          "hooks": {"before": {}, "after": {}, "win": None, "lose": "c1_final_lose", "elim": None}}
+
+
+class synthetic:
+    """Troca o no de torneio do cap. 1 por um torneio sintetico `tr` (restaura ao sair)."""
+
+    def __init__(self, tr, tid="t_test"):
+        self.tr, self.tid = tr, tid
+
+    def __enter__(self):
+        import copy as _copy
+        self.orig_ch = story.CHAPTERS
+        chs = _copy.deepcopy(story.CHAPTERS)
+        cap1 = next(c for c in chs if c["id"] == "1")
+        cap1["nodes"] = [("tournament", self.tid), ("chapter_end", "1")]
+        story.CHAPTERS = chs
+        story.TOURNAMENTS[self.tid] = _copy.deepcopy(self.tr)
+        return self
+
+    def __exit__(self, *exc):
+        story.CHAPTERS = self.orig_ch
+        story.TOURNAMENTS.pop(self.tid, None)
+        return False
+
+
+def at_cap1(seed=3):
+    c = new(seed)
+    c.ch, c.node = "1", 0
+    return c
+
+
+def next_match(c):
+    a, seen = play_scenes(c)
+    assert a["kind"] == "match", a["kind"]
+    return a, seen
+
+
+def test_round_pairs_each_pair_once():
+    for m in (1, 3, 5, 7):
+        seen = []
+        for r in range(m):
+            pr = cm.round_pairs(m, r)
+            flat = [x for p in pr for x in p]
+            assert r not in flat and len(flat) == len(set(flat)) == m - 1, (m, r, pr)
+            assert all(a < b for a, b in pr)
+            seen += pr
+        assert len(seen) == len(set(seen)) == m * (m - 1) // 2, m
+    # copa (3 adversarios): o mesmo emparelhamento de antes do C3 (resultados do Ato 1 identicos)
+    assert [cm.round_pairs(3, r) for r in range(3)] == [[(1, 2)], [(0, 2)], [(0, 1)]]
+
+
+def test_stage_helpers_by_format():
+    cup = story.TOURNAMENTS["t_c1"]
+    assert cm.stages_of(cup)[-2:] == ["SF", "F"] and cm.boss_stages(cup) == ["F"]
+    assert cm.round_stages(cup) == ["G1", "G2", "G3"] and cm.advance_pos(cup) == 2
+    assert cm.stages_of(LEAGUE) == ["R1", "R2", "R3", "R4", "R5", "SF", "F"]
+    assert cm.round_stages(LEAGUE) == ["R1", "R2", "R3", "R4", "R5"] and cm.advance_pos(LEAGUE) == 4
+    assert [cm.stage_team(LEAGUE, s) for s in cm.stages_of(LEAGUE)] == LEAGUE["group"] + ["academia", "faxina"]
+    assert cm.stages_of(SERIES) == ["S1", "S2", "S3"] and cm.round_stages(SERIES) == []
+    assert [cm.stage_team(SERIES, s) for s in cm.stages_of(SERIES)] == SERIES["series"]
+    assert cm.boss_stages(SERIES) == ["S3"] and cm.boss_stages(dict(SERIES, boss_stages=["S2", "S3"])) == ["S2", "S3"]
+    assert cm.boss_stages(story.TOURNAMENTS["t_p_treino"]) == []
+    assert cm.STAGE_NAMES["R3"] == "Rodada 3" and cm.STAGE_NAMES["S2"] == "Duelo 2"
+
+
+def test_league_win_path_table_and_champion():
+    with synthetic(LEAGUE):
+        c = at_cap1()
+        a, seen = next_match(c)
+        assert seen == ["c1_intro"] and a["stage"] == "R1" and not a["knockout"] and not a["boss"]
+        assert a["stage_name"] == "Rodada 1" and a["opp"]["name"] == story.TEAMS["turma3b"]["name"]
+        for i in range(5):
+            a, _ = next_match(c)
+            assert a["stage"] == "R%d" % (i + 1)
+            out = c.record_match(1, 1)                       # empate na liga: sem penaltis
+            assert out["pen"] is None and out["result"] == "d"
+            if i < 4:
+                assert out["advanced"] and "group_pos" not in out
+                assert len(c.group_league()["results"]) == 3 * (i + 1)
+        # 5 empates: o desfecho depende dos outros jogos simulados (eliminado reinicia do zero)
+        if out["outcome"] == "elim":
+            assert out["group_pos"] > 4 and c.tour["results"] == [] and c.tour["attempt"] == 1
+        else:
+            assert out["group_pos"] <= 4 and c.tour["stage"] == "SF"
+            _league_finish(c)
+
+
+def _league_finish(c):
+    a, _ = next_match(c)
+    assert a["stage"] == "SF" and a["knockout"] and not a["boss"]
+    out = c.record_match(0, 0, pen=(4, 2))                   # mata-mata: penaltis
+    assert out["pen"] == (4, 2) and out["advanced"]
+    a, _ = next_match(c)
+    assert a["stage"] == "F" and a["boss"]
+    c.pity = 0
+    assert c.record_match(0, 1)["outcome"] == "retry" and c.pity == 1
+    a, seen = next_match(c)
+    assert "c1_final_lose" in seen and a["stage"] == "F" and a["O"] == story.TEAMS["faxina"]["ovr"] - 1
+    out = c.record_match(3, 0)
+    assert out["outcome"] == "champion" and c.pity == 0 and c.tour["stage"] == cm.DONE
+    assert c.next_action()["kind"] == "chapter_end"
+
+
+def test_league_win_path_table_and_champion_forced():
+    with synthetic(LEAGUE):
+        c = at_cap1(4)
+        for _ in range(5):
+            next_match(c)
+            out = c.record_match(5, 0)                       # 5 vitorias: 15 pts, 1o lugar
+        assert out["group_pos"] == 1 and out["advanced"] and c.tour["stage"] == "SF"
+        lg = c.group_league()
+        assert len(lg["teams"]) == 6 and len(lg["results"]) == 15
+        assert all(r["p"] == 5 for r in c.group_table())     # turno unico: todos jogam 5
+        assert len({tuple(sorted((r[1], r[2]))) for r in lg["results"]}) == 15     # cada par uma vez
+        _league_finish(c)
+
+
+def test_league_cut_at_fourth_and_elim_restarts():
+    with synthetic(LEAGUE):
+        for pos, elim in ((4, False), (5, True), (6, True)):
+            c = at_cap1(5)
+            for i in range(5):
+                next_match(c)
+                if i == 4:
+                    c.user_group_pos = lambda p=pos: p
+                out = c.record_match(1, 0)
+            assert out["group_pos"] == pos
+            if elim:
+                assert out["outcome"] == "elim" and c.tour["attempt"] == 1 and c.tour["stage"] == "R1"
+                assert c.tour["results"] == []
+                a, seen = next_match(c)
+                assert "c2_repescagem" in seen and a["stage"] == "R1"
+            else:
+                assert out["advanced"] and c.tour["stage"] == "SF"
+        c = at_cap1(6)
+        for _ in range(5):                                   # perde tudo: lanterna, elimina de verdade
+            next_match(c)
+            out = c.record_match(0, 3)
+        assert out["outcome"] == "elim" and out["group_pos"] == 6
+
+
+def test_series_duels_retry_pity_only_on_boss():
+    with synthetic(SERIES):
+        c = at_cap1()
+        a, _ = next_match(c)
+        assert a["stage"] == "S1" and a["knockout"] and not a["boss"] and a["stage_name"] == "Duelo 1"
+        out = c.record_match(0, 2)                           # perder um duelo comum: repete, sem pity
+        assert out["outcome"] == "retry" and c.pity == 0 and c.tour["stage"] == "S1"
+        a, seen = next_match(c)
+        assert seen == [] and a["stage"] == "S1"             # cena "lose" so contra o chefe
+        assert c.record_match(1, 1, pen=(3, 5))["outcome"] == "retry"      # empate: penaltis decidem
+        assert c.record_match(2, 1)["advanced"] and c.tour["stage"] == "S2"
+        next_match(c)
+        c.record_match(1, 0)
+        a, _ = next_match(c)
+        assert a["stage"] == "S3" and a["boss"] and a["O"] == story.TEAMS["imaculados"]["ovr"]
+        c.record_match(0, 1)
+        assert c.pity == 1
+        a, seen = next_match(c)
+        assert seen == ["c1_final_lose"] and a["O"] == story.TEAMS["imaculados"]["ovr"] - 1
+        out = c.record_match(1, 0)
+        assert out["outcome"] == "champion" and c.pity == 0 and c.tour["stage"] == cm.DONE
+        assert c.next_action()["kind"] == "chapter_end"
+    with synthetic(dict(SERIES, boss_stages=["S2", "S3"])):
+        c = at_cap1()
+        next_match(c)
+        c.record_match(1, 0)
+        a, _ = next_match(c)
+        assert a["stage"] == "S2" and a["boss"]
+        c.record_match(0, 1)
+        assert c.pity == 1
+
+
+def test_league_and_series_save_roundtrip_and_sanitize():
+    for tr, mid in ((LEAGUE, 3), (SERIES, 2)):
+        with synthetic(tr):
+            c = at_cap1(8)
+            for _ in range(mid):
+                next_match(c)
+                c.record_match(2, 0)
+            d = copy_json(c.to_dict())
+            c2 = cm.Campaign.from_dict(d)
+            assert c2 is not None and not c2.repaired and c2.to_dict() == c.to_dict()
+            assert c2.next_action()["stage"] == c.next_action()["stage"]
+            if tr is LEAGUE:
+                assert c2.group_table() == c.group_table()
+            bad = copy_json(c.to_dict())
+            bad["c"]["tour"]["stage"] = "R6" if tr is LEAGUE else "S4"
+            r = cm.Campaign.from_dict(bad)
+            assert r is not None and r.repaired and r.node == 0 and r.tour is None
+
+
 def main():
     names = sys.argv[1:] or [n for n in globals() if n.startswith("test_")]
     for n in names:

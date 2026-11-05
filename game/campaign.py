@@ -19,7 +19,10 @@ Estado (segue a secao SAVE do plano):
 Convencoes
 ----------
 * O usuario e sempre o MANDANTE (lado 0) nas partidas da campanha. Pares sem pen: pen (0,0) = sem penaltis.
-* Estagios: G1 G2 G3 [QF] SF F; "single" (treino do Prologo) so tem F e qualquer resultado conclui.
+* Estagios por formato (stages_of): "cup" G1 G2 G3 [QF] SF F; "league" R1..Rn SF F (n = len(group),
+  impar; top ADVANCE_POS["league"] vai a SF); "series" S1..Sn (duelos obrigatorios, n = len(series));
+  "single" (treino do Prologo) so tem F e qualquer resultado conclui. Grupo/liga (G*/R*) nao tem
+  penaltis; o resto e mata-mata. Chefe (pity, cena `lose`): tr["boss_stages"] ou o ultimo estagio.
 * Ordem do grupo FIXA (a do story.py): G1=group[0], G2=group[1], G3=group[2] (as cenas amarram o
   adversario ao estagio). A "semente do torneio" varia o jitter dos adversarios e os jogos simulados
   do resto do grupo. Os outros jogos do grupo sao re-derivados da semente (nada disso e persistido).
@@ -66,6 +69,10 @@ TEAM_NAMES = ("Meu Time", "Os Cabos Soltos", "Pó de Ferro", "Aspira Mais", "Suc
               "Turbo Rodinhas", "Faísca Elétrica", "Zumbidos", "Engrenagem", "Rolo Compressor")
 STAGE_NAMES = {"G1": "Grupo - rodada 1", "G2": "Grupo - rodada 2", "G3": "Grupo - rodada 3",
                "QF": "Quartas de final", "SF": "Semifinal", "F": "Final"}
+STAGE_NAMES.update({"R%d" % i: "Rodada %d" % i for i in range(1, 6)})
+STAGE_NAMES.update({"S%d" % i: "Duelo %d" % i for i in range(1, 4)})
+FORMATS = ("single", "cup", "league", "series")
+ADVANCE_POS = {"cup": 2, "league": 4}      # posicao maxima na tabela que avanca ao mata-mata
 PEN_SLOPE, PEN_BASE, PEN_CAP = 0.008, 0.72, 60
 
 # --- persistencia (padrao de garage.py; chave PROPRIA, nunca a do modo livre) ---------------
@@ -155,9 +162,53 @@ def sim_match(user_F, O, rng):
 
 
 def stages_of(tr):
-    if tr["format"] == "single":
+    fmt = tr["format"]
+    if fmt == "single":
         return ["F"]
+    if fmt == "league":
+        return ["R%d" % (i + 1) for i in range(len(tr["group"]))] + ["SF", "F"]
+    if fmt == "series":
+        return ["S%d" % (i + 1) for i in range(len(tr["series"]))]
     return ["G1", "G2", "G3"] + (["QF"] if tr.get("qf") else []) + ["SF", "F"]
+
+
+def round_stages(tr):
+    """Estagios de pontos (grupo da copa ou rodadas da liga), na ordem; [] nos outros formatos."""
+    return [s for s in stages_of(tr) if s[0] in "GR"]
+
+
+def advance_pos(tr):
+    return ADVANCE_POS.get(tr["format"], 0)
+
+
+def stage_team(tr, stage):
+    """Id (story.TEAMS) do adversario do usuario no estagio."""
+    if stage in ("QF", "SF", "F"):                 # antes do S<n>: "SF" tambem comeca com S
+        return {"QF": tr.get("qf"), "SF": tr.get("sf"), "F": tr["final"]}[stage]
+    if stage[0] in "GR":
+        return tr["group"][int(stage[1:]) - 1]
+    return tr["series"][int(stage[1:]) - 1]
+
+
+def boss_stages(tr):
+    """Estagios de chefe (pity e cena `lose`): tr["boss_stages"] se definido; senao o ultimo estagio
+    (F da copa/liga, ultimo duelo da serie). O "single" (treino) nao tem chefe."""
+    if tr["format"] == "single":
+        return []
+    if tr.get("boss_stages"):
+        return list(tr["boss_stages"])
+    return [stages_of(tr)[-1]]
+
+
+def is_boss_stage(tr, stage):
+    return stage in boss_stages(tr)
+
+
+def round_pairs(m, r):
+    """Outros jogos da rodada r (0-based) entre m adversarios (m impar) enquanto o usuario enfrenta o
+    adversario r: pares (a, b) 0-based, a < b. Em m rodadas cada par se enfrenta exatamente uma vez
+    (a + b = 2r mod m). Com m = 3 da o mesmo emparelhamento do grupo da copa (Ato 1)."""
+    return [tuple(sorted(((r + k) % m, (r - k) % m))) for k in range(1, (m + 1) // 2)]
 
 
 def new_campaign(rng):
@@ -481,12 +532,10 @@ class Campaign:
         return self.tour
 
     def _stage_team(self, tr, stage):
-        if stage[0] == "G":
-            return tr["group"][int(stage[1]) - 1]
-        return {"QF": tr.get("qf"), "SF": tr.get("sf"), "F": tr["final"]}[stage]
+        return stage_team(tr, stage)
 
     def _is_boss(self, tr, stage):
-        return tr["format"] == "cup" and stage == "F"
+        return is_boss_stage(tr, stage)
 
     def pity_delta(self):
         return -min(self.pity, PITY_MAX) * PITY_STEP
@@ -530,7 +579,7 @@ class Campaign:
             self.tour = None
             return None
         stage = stages[idx]
-        if stage == "F" and tour["loses"] > 0:
+        if self._is_boss(tr, stage) and tour["loses"] > 0:
             sid = hooks.get("lose")
             if sid and ("%s#%d" % (sid, tour["loses"])) not in self.done:
                 return self._scene_action(sid)
@@ -547,7 +596,7 @@ class Campaign:
         frac = stages.index(stage) / max(1, len(stages) - 1)
         return {"kind": "match", "tournament": tour["id"], "stage": stage, "bg": tr.get("bg"),
                 "stage_name": STAGE_NAMES[stage], "boss": self._is_boss(tr, stage),
-                "knockout": stage[0] != "G", "training": False, "opp": opp,
+                "knockout": stage[0] not in "GR", "training": False, "opp": opp,
                 "home": self.garage.match_cfg(), "away": RL.match_cfg(opp),
                 "user_F": self.garage.match_F(), "O": opp["ovr"],
                 "F_rec": ch["F_start"] + (ch["F_end"] - ch["F_start"]) * frac,
@@ -555,24 +604,25 @@ class Campaign:
 
     # ---- grupo -------------------------------------------------------------------------
     def group_league(self):
-        """Dict liga-like {"teams":[user,g0,g1,g2],"results":[[rodada,h,a,hg,ag],..]} do grupo atual:
-        resultados do usuario (do tour) + outros jogos simulados (re-derivados da semente)."""
+        """Dict liga-like {"teams":[user,g0..g(m-1)],"results":[[rodada,h,a,hg,ag],..]} do grupo (copa)
+        ou da liga atual: resultados do usuario (do tour) + outros jogos da rodada simulados
+        (round_pairs; re-derivados da semente, um RNG por rodada). Vazio fora de grupo/liga."""
         tour = self.tour
         tr = story.TOURNAMENTS[tour["id"]]
-        gid = tr["group"]
+        gid = tr["group"] if tr["format"] in ADVANCE_POS else []
         specs = [story.TEAMS[t] for t in gid]
         teams = [{"name": self.garage.team["name"], "color": list(self.garage.team["color"])}]
         teams += [{"name": s["name"], "color": list(s["color"])} for s in specs]
         results = []
         for r in tour["results"]:
-            if r[0][0] != "G":
+            if r[0][0] not in "GR":
                 continue
-            i = int(r[0][1]) - 1
+            i = int(r[0][1:]) - 1
             results.append([i, 0, i + 1, r[1], r[2]])
-            a, b = [j for j in (1, 2, 3) if j != i + 1]
             rng = random.Random("%d|grp|%d" % (tour["seed"], i))
-            hg, ag = RL.quick_sim(specs[a - 1]["ovr"], specs[b - 1]["ovr"], rng)
-            results.append([i, a, b, hg, ag])
+            for a, b in round_pairs(len(specs), i):
+                hg, ag = RL.quick_sim(specs[a]["ovr"], specs[b]["ovr"], rng)
+                results.append([i, a + 1, b + 1, hg, ag])
         return {"teams": teams, "results": results}
 
     def group_table(self):
@@ -596,7 +646,7 @@ class Campaign:
         stage = tour["stage"]
         si = stages.index(stage)
         single = tr["format"] == "single"
-        ko = stage[0] != "G"
+        ko = stage[0] not in "GR"
         my, opp = G.clamp(int(my), 0, 99), G.clamp(int(opp), 0, 99)
         O = self._opp_ovr(tr, stage)
         pids = [e["pid"] for e in (events or ()) if e.get("team") == 0 and not e.get("own")
@@ -624,12 +674,12 @@ class Campaign:
             tour["stage"] = DONE
             out.update(outcome="done", advanced=True)
             return out
-        if not ko:                                         # grupo
+        if not ko:                                         # grupo (copa) ou rodada (liga)
             tour["results"].append([stage, my, opp, 0, 0])
-            if stage == stages[2]:                         # G3: decide
+            if stage == round_stages(tr)[-1]:              # ultima rodada: decide
                 pos = self.user_group_pos()
                 out["group_pos"] = pos
-                if pos <= 2:
+                if pos <= advance_pos(tr):
                     tour["stage"] = stages[si + 1]
                     out["advanced"] = True
                 else:
@@ -643,7 +693,7 @@ class Campaign:
             tour["results"].append([stage, my, opp, pm, po])
             tour["loses"] = 0
             out["advanced"] = True
-            if stage == "F":
+            if si == len(stages) - 1:                      # ultimo estagio (F ou ultimo duelo)
                 tour["stage"] = DONE
                 self.pity = 0
                 out["outcome"] = "champion"
@@ -934,7 +984,7 @@ def _tour(t, ch_id, node_entry):
         return None
     tid = t.get("id")
     tr = story.TOURNAMENTS.get(tid) if isinstance(tid, str) else None
-    if tr is None or tr["chapter"] != ch_id or tuple(node_entry) != ("tournament", tid):
+    if tr is None or tr["chapter"] != ch_id or tuple(node_entry)[:2] != ("tournament", tid):
         return None
     stages = stages_of(tr)
     attempt, seed = _sint(t.get("attempt"), 0, 999), _sint(t.get("seed"), 0, 2 ** 31 - 1)

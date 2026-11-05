@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.join(ROOT, "game"))
 import parts  # noqa: E402
 import robots  # noqa: E402
 import skills  # noqa: E402
+import campaign as cm  # noqa: E402
 import story as st  # noqa: E402
 
 PASS, FAIL = [], []
@@ -87,9 +88,7 @@ def chapters(draft=False):
 
 
 def stages_of(t):
-    if t["format"] == "single":
-        return ["F"]
-    return ["G1", "G2", "G3"] + (["QF"] if t.get("qf") else []) + ["SF", "F"]
+    return cm.stages_of(t)
 
 
 def hook_scenes(t):
@@ -135,7 +134,7 @@ def walk(policy):
                     for s in stages:
                         visit(h["before"].get(s))
                         if policy == "lose":
-                            if s == "G3" and attempts == 1 and t["format"] == "cup":
+                            if attempts == 1 and cm.round_stages(t) and s == cm.round_stages(t)[-1]:
                                 assert h["elim"], "torneio %s sem hook de eliminacao" % ref
                                 visit(h["elim"])
                                 failed = True
@@ -145,7 +144,7 @@ def walk(policy):
                                 visit(h["lose"])
                                 failed = True
                                 break
-                            if s == "F" and t["format"] == "cup" and losses_f < st.PITY_MAX:
+                            if cm.is_boss_stage(t, s) and losses_f < st.PITY_MAX:
                                 assert h["lose"], "torneio %s sem hook de derrota" % ref
                                 visit(h["lose"])
                                 losses_f += 1
@@ -390,8 +389,9 @@ def test_tournaments():
     chap = {c["id"]: c for c in st.CHAPTERS}
     for tid, t in st.TOURNAMENTS.items():
         assert t["chapter"] in chap and t["bg"] in st.BGS and len(t["local"]) <= 40
-        assert t["format"] in ("single", "cup")
+        assert t["format"] in cm.FORMATS
         assert t["boss"] in st.TEAMS and t["final"] == t["boss"]
+        assert set(t.get("boss_stages") or ()) <= set(stages_of(t)), tid
         assert isinstance(t["boss_delta"], (int, float))
         lo, hi = t["regular_delta"]
         assert lo <= hi
@@ -417,6 +417,14 @@ def test_tournaments():
             assert 1 <= c["F_start"] - st.TEAMS[t["sf"]]["ovr"] <= 11
             ids = t["group"] + [t["sf"], t["boss"]] + ([t["qf"]] if t.get("qf") else [])
             assert len(set(ids)) == len(ids), tid
+        elif t["format"] == "league":
+            assert len(t["group"]) == 5 and len(set(t["group"])) == 5, tid
+            assert all(g in st.TEAMS for g in t["group"]) and t["sf"] in st.TEAMS and not t.get("qf")
+            ids = t["group"] + [t["sf"], t["boss"]]
+            assert len(set(ids)) == len(ids), tid
+        elif t["format"] == "series":
+            assert 2 <= len(t["series"]) <= 3 and all(x in st.TEAMS for x in t["series"]), tid
+            assert t["final"] == t["series"][-1] and not t["group"] and t["sf"] is None, tid
         else:
             assert not t["group"] and t["sf"] is None
     # ovr nao decrescente entre capitulos (min e max por capitulo)
@@ -426,7 +434,8 @@ def test_tournaments():
         for kind, ref in c["nodes"]:
             if kind == "tournament":
                 t = st.TOURNAMENTS[ref]
-                os_ += [st.TEAMS[i]["ovr"] for i in t["group"] + [t["sf"], t["boss"], t.get("qf")] if i]
+                os_ += [st.TEAMS[i]["ovr"] for i in t["group"] + t.get("series", []) +
+                        [t["sf"], t["boss"], t.get("qf")] if i]
         if os_:
             assert min(os_) >= last_min and max(os_) >= last_max, c["id"]
             last_min, last_max = min(os_), max(os_)

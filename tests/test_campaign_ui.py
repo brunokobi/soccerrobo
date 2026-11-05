@@ -5,6 +5,7 @@ NUNCA toca ~/.soccerpy_*.json: stores de campaign/garage/career vao para dicts e
 ANTES de criar o Game. garage._store_set e career._store_set sao sentinelas que FALHAM se chamadas.
 """
 import json
+import copy
 import os
 import random
 import shutil
@@ -1074,6 +1075,81 @@ def fresh_campaign(seed=11):
 
 def text_cache_has(sub):
     return any(sub in k[0] for k in g.text_cache)
+
+
+# --- C3: tela de torneio com liga (6 times) e serie de duelos ------------------------------------
+def _synthetic_tour(tr):
+    """Troca o torneio do cap. 1 por `tr` (id t_test); devolve a funcao que restaura."""
+    orig = story.CHAPTERS
+    chs = copy.deepcopy(orig)
+    next(c for c in chs if c["id"] == "1")["nodes"] = [("tournament", "t_test"), ("chapter_end", "1")]
+    story.CHAPTERS = chs
+    story.TOURNAMENTS["t_test"] = tr
+
+    def restore():
+        story.CHAPTERS = orig
+        story.TOURNAMENTS.pop("t_test", None)
+    return restore
+
+
+def _no_surface_frames(n=60):
+    real = pygame.Surface
+    count = [0]
+
+    class Counting(real):
+        def __init__(self, *a, **k):
+            count[0] += 1
+            super().__init__(*a, **k)
+
+    for _ in range(3):
+        frame()
+    pygame.Surface = Counting
+    try:
+        for _ in range(n):
+            frame()
+    finally:
+        pygame.Surface = real
+    return count[0]
+
+
+def test_tourney_screen_league_and_series():
+    hooks = {"before": {}, "after": {}, "win": None, "lose": None, "elim": None}
+    league = {"chapter": "1", "local": "Liga de teste", "bg": "arena", "format": "league",
+              "group": ["turma3b", "fundao", "gremio", "teatro", "padaria"], "qf": None,
+              "sf": "academia", "final": "faxina", "boss": "faxina", "boss_delta": 0,
+              "regular_delta": (0, 0), "hooks": hooks}
+    series = {"chapter": "1", "local": "Serie de teste", "bg": "arena", "format": "series",
+              "series": ["coral", "detetives", "imaculados"], "group": [], "qf": None, "sf": None,
+              "final": "imaculados", "boss": "imaculados", "boss_delta": 0, "regular_delta": (0, 0),
+              "hooks": hooks}
+    for tr in (league, series):
+        restore = _synthetic_tour(tr)
+        try:
+            fresh_campaign(21)
+            cp = ui.campaign
+            cp.ch, cp.node = "1", 0
+            ui.do_story()
+            frame()
+            assert ui.screen_id == "tourney", ui.screen_id
+            v = ui.tview
+            if tr is league:
+                assert len(v["rows"]) == 6 and [b["stage"] for b in v["ko"]] == ["SF", "F"]
+                assert text_cache_has("LIGA (TOP 4") and text_cache_has("LIGA - RODADA 1")
+                for _ in range(3):
+                    cp.record_match(2, 0)
+                ui.enter_tourney()
+                frame()
+                assert ui.tview["rows"][0]["p"] == 3 and text_cache_has("LIGA - RODADA 4")
+                shot("tourney_league")
+            else:
+                assert v["rows"] == [] and [b["stage"] for b in v["ko"]] == ["S1", "S2", "S3"]
+                assert text_cache_has("SÉRIE DE DUELOS") and text_cache_has("DUELO 1")
+                shot("tourney_series")
+            assert _no_surface_frames() == 0
+            assert not FORBIDDEN
+        finally:
+            restore()
+            ui.to_menu()
 
 
 def test_latin1_source():

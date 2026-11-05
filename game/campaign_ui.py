@@ -67,6 +67,10 @@ DARK = (10, 16, 30)
 TOAST_SECONDS = 4.0
 KIND_SCREEN = {"scene": "dialog", "match": "tourney", "chapter_end": "chapter_end", "end": "ending"}
 STAGE_TITLES = {"QF": "QUARTAS DE FINAL", "SF": "SEMIFINAL", "F": "FINAL"}
+STAGE_TITLES.update({"S%d" % i: "DUELO %d" % i for i in range(1, 4)})
+RULES_TEXT = {"cup": "Grupo: os 2 primeiros avançam. Mata-mata: empate vai para os pênaltis.",
+              "league": "Liga: os 4 primeiros vão à semifinal. Mata-mata: empate vai para os pênaltis.",
+              "series": "Série: cada duelo é mata-mata; empate vai para os pênaltis."}
 BOX_BG = (14, 30, 52)
 HILITE = (22, 70, 100)
 
@@ -113,14 +117,14 @@ def stage_label(stage, single=False):
         return "PARTIDA ÚNICA"
     if stage[0] == "G":
         return "GRUPO - JOGO %s/3" % stage[1]
+    if stage[0] == "R":
+        return "LIGA - RODADA %s" % stage[1:]
     return STAGE_TITLES.get(stage, stage)
 
 
 def stage_team(tr, stage):
     """Id do time (story.TEAMS) que o usuario enfrenta no estagio."""
-    if stage[0] == "G":
-        return tr["group"][int(stage[1]) - 1]
-    return {"QF": tr.get("qf"), "SF": tr.get("sf"), "F": tr["final"]}[stage]
+    return C.stage_team(tr, stage)
 
 
 def force_text(lo, hi):
@@ -770,12 +774,13 @@ class CampaignUI(RobotsUI):
         single = tr["format"] == "single"
         v = {"single": single, "title": cp.chapter()["subtitle"], "local": tr["local"],
              "label": stage_label(act["stage"], single), "rows": [], "ko": [],
-             "names": [e["name"] for e in act["opp"]["squad"]]}
+             "names": [e["name"] for e in act["opp"]["squad"]], "fmt": tr["format"],
+             "adv": C.advance_pos(tr)}
         if not single:
-            v["rows"] = cp.group_table()
+            v["rows"] = cp.group_table() if C.round_stages(tr) else []
             res = {r[0]: r for r in tour["results"]}
             for st in C.stages_of(tr):
-                if st[0] == "G":
+                if st[0] in "GR":
                     continue
                 v["ko"].append({"stage": st, "name": story.TEAMS[stage_team(tr, st)]["name"],
                                 "res": res.get(st), "cur": st == act["stage"]})
@@ -973,29 +978,47 @@ class CampaignUI(RobotsUI):
                     "peneira e a história segue; vencer ou perder rende sucata e experiência.", 26, 980)):
                 self.text(line, 26, DIM, topleft=(44, 236 + k * 30))
         else:
-            self.draw_group_panel(v)
+            if v.get("fmt") == "series":
+                self.draw_series_panel(v)
+            else:
+                self.draw_group_panel(v)
             self.draw_bracket_panel(v, act)
         self.draw_match_panel(v, act)
 
     def draw_group_panel(self, v):
         scr = self.g.screen
         self.panel((20, 172, 520, 190))
-        self.text("GRUPO", 22, GOLD, topleft=(38, 180))
+        league = v.get("fmt") == "league"
+        self.text("LIGA (TOP %d AVANÇA)" % v["adv"] if league else "GRUPO", 22, GOLD, topleft=(38, 180))
         for lab, x in (("PTS", 300), ("J", 340), ("V", 380), ("E", 420), ("D", 460), ("SG", 515)):
             self.text(lab, 20, DIM, midright=(x, 206))
-        for k, row in enumerate(v["rows"]):
-            y = 218 + k * 34
+        rows = v["rows"]
+        rh, fs = (34, 22) if len(rows) <= 4 else (23, 19)      # liga: 6 linhas cabem no painel
+        for k, row in enumerate(rows):
+            y = 218 + k * rh
             me = row["idx"] == 0
             if me:
-                pygame.draw.rect(scr, HILITE, (28, y, 504, 30), border_radius=6)
-                pygame.draw.rect(scr, GOLD, (28, y, 504, 30), 2, border_radius=6)
-            self.text(str(k + 1), 22, GOLD if me else DIM, midright=(52, y + 15))
-            pygame.draw.rect(scr, tuple(row["color"]), (62, y + 6, 12, 18), border_radius=3)
-            self.text(self.fit(row["name"], 22, 190), 22, TEXT if me else (200, 215, 205), midleft=(82, y + 15))
+                pygame.draw.rect(scr, HILITE, (28, y, 504, rh - 4), border_radius=6)
+                pygame.draw.rect(scr, GOLD, (28, y, 504, rh - 4), 2, border_radius=6)
+            if league and k == v["adv"]:                       # linha de corte da classificacao
+                pygame.draw.line(scr, RED, (32, y - 2), (528, y - 2), 1)
+            cy = y + (rh - 4) // 2
+            self.text(str(k + 1), fs, GOLD if me else DIM, midright=(52, cy))
+            pygame.draw.rect(scr, tuple(row["color"]), (62, cy - 9, 12, 18), border_radius=3)
+            self.text(self.fit(row["name"], fs, 190), fs, TEXT if me else (200, 215, 205), midleft=(82, cy))
             for val, x in ((row["pts"], 300), (row["p"], 340), (row["w"], 380), (row["d"], 420),
                            (row["l"], 460), (row["gd"], 515)):
-                self.text(("%+d" % val) if x == 515 and val else str(val), 22,
-                          GOLD if (me and x == 300) else TEXT, midright=(x, y + 15))
+                self.text(("%+d" % val) if x == 515 and val else str(val), fs,
+                          GOLD if (me and x == 300) else TEXT, midright=(x, cy))
+
+    def draw_series_panel(self, v):
+        self.panel((20, 172, 520, 190))
+        self.text("SÉRIE DE DUELOS", 22, GOLD, topleft=(38, 180))
+        n = len(v["ko"])
+        txt = ("%d duelos obrigatórios, um depois do outro. Perder um duelo repete só aquele duelo; "
+               "o último é o chefe." % n)
+        for k, line in enumerate(self.wrap(txt, 24, 470)):
+            self.text(line, 24, DIM, topleft=(38, 216 + k * 28))
 
     def draw_bracket_panel(self, v, act):
         scr = self.g.screen
@@ -1016,7 +1039,7 @@ class CampaignUI(RobotsUI):
             last = i == n - 1
             label = STAGE_TITLES[b["stage"]] + (" (CHEFE)" if last else "")
             self.text(label, 18, RED if last else DIM, center=(x + cw // 2, py + 40))
-            ys = [ymid - bh // 2] if last else [yu, yo]
+            ys = [ymid - bh // 2] if (last or v.get("fmt") == "series") else [yu, yo]
             for j, y in enumerate(ys):
                 user_box = last or j == 0
                 r = pygame.Rect(x, y, cw, bh)
@@ -1044,7 +1067,9 @@ class CampaignUI(RobotsUI):
                     self.text(self.fit(names[k], 20, cw - 52), 20, cols[k], midleft=(x + 8, yy))
                     if sc[k]:
                         self.text(sc[k], 20, TEXT, midright=(x + cw - 8, yy))
-            if not last:                                    # liga ao proximo estagio
+            if not last and v.get("fmt") == "series":       # serie: uma linha reta entre os duelos
+                pygame.draw.line(scr, LINE, (x + cw, ymid), (x + cw + gap, ymid), 2)
+            elif not last:                                  # liga ao proximo estagio
                 nx = x + cw + gap
                 nlast = i + 1 == n - 1
                 for ya in (yu, yo):
@@ -1087,8 +1112,7 @@ class CampaignUI(RobotsUI):
         if v["single"]:
             self.text("Peneira: qualquer resultado conclui.", 20, DIM, topleft=(40, 640))
         else:
-            self.text("Grupo: os 2 primeiros avançam. Mata-mata: empate vai para os pênaltis.", 20, DIM,
-                      topleft=(40, 640))
+            self.text(RULES_TEXT.get(v.get("fmt"), RULES_TEXT["cup"]), 20, DIM, topleft=(40, 640))
         self.btn((700, 390, 360, 76), "ASSISTIR", self.do_watch_match, size=36)
         self.btn((700, 478, 360, 56), "SIMULAR", self.do_sim_match, size=30, color=(60, 80, 130))
         self.btn((700, 546, 360, 50), "TREINO", lambda: self.open_training("tourney"), size=26,

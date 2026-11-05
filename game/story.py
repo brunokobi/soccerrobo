@@ -214,6 +214,11 @@ TEAMS = {
 # format "single": 1 partida (treino; resultado nao bloqueia). format "cup": grupo de 4 (jogador + 3
 #   adversarios "group", 3 jogos, top 2 avanca) + semifinal "sf" + final "final" (+ quartas "qf" no
 #   Mundial). O chefe ("boss") e sempre o adversario da final. Estagios: G1 G2 G3 [QF] SF F.
+# Onda C (C3): format "league": pontos corridos contra os "group" (5, numero impar; R1..R5, um jogo
+#   por rodada, os outros jogos simulados), top 4 vai a "sf" e "final"; 5o-6o = eliminado (como o
+#   grupo). format "series": duelos obrigatorios "series" (2-3 ids; S1..Sn, mata-mata); "final" =
+#   "boss" = series[-1]; "group" = [] e "sf" = None. "boss_stages" (opcional): estagios de chefe
+#   (pity e cena "lose"); padrao = o ultimo estagio.
 # Calibragem (passo 16, contra o MOTOR REAL; tabela em tests/calib_campaign.py): F_start/F_end = Forca
 #   da politica gulosa no inicio do capitulo / na final (os estagios interpolam, ver F_rec). Os ovr dos
 #   adversarios ficam bem abaixo da Forca porque o motor e mais duro que o Poisson: regulares ~F-11..-13
@@ -222,8 +227,8 @@ TEAMS = {
 #   repete aquela partida (pity no chefe).
 # hooks: cenas amarradas ao torneio (jogadas uma vez, controladas por `done`):
 #   "before": {estagio: cena} antes da partida; "after": {estagio: cena} apos VENCER o estagio;
-#   "win": cena ao vencer a final; "lose": cena apos perder SF/final; "elim": cena apos eliminacao
-#   no grupo (o torneio recomeca em seguida).
+#   "win": cena ao vencer o ultimo estagio; "lose": cena apos perder contra o chefe; "elim": cena
+#   apos eliminacao no grupo/liga (o torneio recomeca em seguida).
 TOURNAMENTS = {
     "t_p_treino": {
         "chapter": "P", "local": "Quadra do Colégio Santa Faísca", "bg": "quadra", "format": "single",

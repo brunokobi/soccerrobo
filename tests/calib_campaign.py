@@ -289,12 +289,10 @@ def table_cells(chapters=None):
         out.append(("%s treino" % ch["id"], "train", None, tov, ch["F_start"]))
         stages = cm.stages_of(tr)
         for i, st in enumerate(stages):
-            t = {"QF": tr.get("qf"), "SF": tr.get("sf"), "F": tr["final"]}.get(st)
-            if st[0] == "G":
-                t = tr["group"][int(st[1]) - 1]
+            t = cm.stage_team(tr, st)
             frac = i / max(1, len(stages) - 1)
             F = ch["F_start"] + (ch["F_end"] - ch["F_start"]) * frac
-            kind = {"G": "reg", "QF": "reg", "SF": "sf", "F": "boss"}[st[0] if st[0] == "G" else st]
+            kind = "boss" if cm.is_boss_stage(tr, st) else ("sf" if st == "SF" else "reg")
             out.append(("%s %s %s" % (ch["id"], st, story.TEAMS[t]["name"][:16]), kind, t,
                         story.TEAMS[t]["ovr"], F))
     return out
