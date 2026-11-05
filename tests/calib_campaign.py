@@ -277,7 +277,7 @@ def table_cells(chapters=None):
     for ch in story.CHAPTERS:
         if ch.get("draft") or not ch["nodes"] or (chapters and ch["id"] not in chapters):
             continue
-        tid = next((a for k, a in ch["nodes"] if k == "tournament"), None)
+        tid = next((n[1] for n in ch["nodes"] if n[0] == "tournament"), None)
         tr = story.TOURNAMENTS.get(tid)
         if tr is None:
             continue

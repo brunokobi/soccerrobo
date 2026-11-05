@@ -98,6 +98,38 @@ def hook_scenes(t):
     return out
 
 
+def check_cond_format(cond, where):
+    """Formato de cond (o mesmo de Campaign.check_cond): None | ("flag"|"noflag", f) | ("done", id) |
+    ("count", prefixo, n) | ("all"|"any", [conds])."""
+    if cond is None:
+        return
+    assert isinstance(cond, tuple) and cond, (where, cond)
+    k = cond[0]
+    if k in ("flag", "noflag"):
+        assert len(cond) == 2 and FLAG_RE.match(cond[1]), (where, cond)
+    elif k == "done":
+        d = cond[1]
+        assert len(cond) == 2 and (d in st.SCENES or (d.startswith("reward:") and d[7:] in st.REWARDS)
+                                   or (d.startswith("side:") and d[5:] in st.SIDES)), (where, cond)
+    elif k == "count":
+        assert len(cond) == 3 and isinstance(cond[1], str) and cond[1], (where, cond)
+        assert isinstance(cond[2], int) and 1 <= cond[2] <= 50, (where, cond)
+    elif k in ("all", "any"):
+        assert len(cond) == 2 and len(cond[1]) >= 1, (where, cond)
+        for c in cond[1]:
+            check_cond_format(c, where)
+    else:
+        raise AssertionError("cond desconhecida em %s: %r" % (where, cond))
+
+
+def ending_scenes():
+    return [x for _c, sc in st.ENDINGS for x in ([sc] if isinstance(sc, str) else sc)]
+
+
+def side_scenes():
+    return [x for sp in st.SIDES.values() for x in sp["scenes"].values() if x]
+
+
 def walk(policy):
     """Percorre o grafo de nos das campanhas nao-draft; devolve (ordem de cenas, terminou_em_end).
 
@@ -116,8 +148,13 @@ def walk(policy):
     for ch in chapters():
         nodes = ch["nodes"]
         assert nodes, "capitulo %s sem nos" % ch["id"]
-        for kind, ref in nodes:
-            if kind in ("scene", "end"):
+        for n in nodes:                     # nos condicionais: visita os dois ramos (todas as cenas)
+            kind, ref = n[0], n[1]
+            if kind == "end" and ref == cm.AUTO_END:
+                for sid in ending_scenes():
+                    visit(sid)
+                ended = True
+            elif kind in ("scene", "end"):
                 visit(ref)
                 if kind == "end":
                     ended = True
@@ -156,6 +193,8 @@ def walk(policy):
                 visit(h["win"])
             elif kind == "chapter_end":
                 assert ref == ch["id"]
+    for sid in side_scenes():               # missoes secundarias: pre/win/lose
+        visit(sid)
     return order, ended
 
 
@@ -258,11 +297,8 @@ def test_scene_structure_and_refs():
             assert mood in st.MOODS, (sid, mood)
             if len(ln) == 4:
                 cond = ln[3]
-                assert cond[0] in ("flag", "noflag", "done") and len(cond) == 2, (sid, cond)
-                if cond[0] == "done":
-                    assert cond[1] in st.SCENES and cond[1] != sid
-                else:
-                    assert FLAG_RE.match(cond[1])
+                check_cond_format(cond, sid)
+                assert cond != ("done", sid), sid
 
 
 def test_effects_valid():
@@ -392,6 +428,15 @@ def test_tournaments():
         assert t["format"] in cm.FORMATS
         assert t["boss"] in st.TEAMS and t["final"] == t["boss"]
         assert set(t.get("boss_stages") or ()) <= set(stages_of(t)), tid
+        for cond, over in t.get("alt", ()):             # variantes: trocam o time, nao o ovr (+-1)
+            check_cond_format(cond, tid)
+            assert over and set(over) <= {"qf", "sf", "final", "series", "group"}, (tid, over)
+            for key, val in over.items():
+                old = t.get(key)
+                vals, olds = (val, old) if isinstance(val, list) else ([val], [old])
+                assert len(vals) == len(olds), (tid, key)
+                for a, b in zip(vals, olds):
+                    assert a in st.TEAMS and abs(st.TEAMS[a]["ovr"] - st.TEAMS[b]["ovr"]) <= 1, (tid, key, a)
         assert isinstance(t["boss_delta"], (int, float))
         lo, hi = t["regular_delta"]
         assert lo <= hi
@@ -431,7 +476,8 @@ def test_tournaments():
     last_min = last_max = 0
     for c in chapters():
         os_ = []
-        for kind, ref in c["nodes"]:
+        for n in c["nodes"]:
+            kind, ref = n[0], n[1]
             if kind == "tournament":
                 t = st.TOURNAMENTS[ref]
                 os_ += [st.TEAMS[i]["ovr"] for i in t["group"] + t.get("series", []) +
@@ -487,15 +533,21 @@ def test_chapters_structure():
         if c.get("draft"):
             assert c["nodes"] == []
             continue
-        kinds = [k for k, _ in c["nodes"]]
+        kinds = [n[0] for n in c["nodes"]]
         if kinds == ["end"]:                    # ponte provisoria (cap. 6 enquanto o Ato 2 e produzido)
             assert c is st.CHAPTERS[-1] and c["reward"] is None, c["id"]
             assert c["nodes"][0][1] in st.SCENES
             continue
         assert c["reward"] in st.REWARDS
-        for k, ref in c["nodes"]:
+        for n in c["nodes"]:
+            k, ref = n[0], n[1]
             assert k in ("scene", "tournament", "chapter_end", "end")
-            if k in ("scene", "end"):
+            assert len(n) == 2 or (len(n) == 3 and k in ("scene", "tournament")), (c["id"], n)
+            if len(n) == 3:
+                check_cond_format(n[2], c["id"])
+            if k == "end" and ref == cm.AUTO_END:
+                assert st.ENDINGS, "no AUTO sem story.ENDINGS"
+            elif k in ("scene", "end"):
                 assert ref in st.SCENES
             if k == "tournament":
                 assert ref in st.TOURNAMENTS and st.TOURNAMENTS[ref]["chapter"] == c["id"]
@@ -520,11 +572,15 @@ def test_reachability_and_no_dead_ends():
     reached = set(win) | set(lose)
     need = set()
     for c in chapters():
-        for k, ref in c["nodes"]:
-            if k in ("scene", "end"):
+        for n in c["nodes"]:
+            k, ref = n[0], n[1]
+            if k == "end" and ref == cm.AUTO_END:
+                need |= set(ending_scenes())
+            elif k in ("scene", "end"):
                 need.add(ref)
             elif k == "tournament":
                 need |= set(hook_scenes(st.TOURNAMENTS[ref]))
+    need |= set(side_scenes())
     assert need <= reached, need - reached
     # nenhuma cena orfa entre as nao-draft: toda cena usada por algum capitulo
     assert set(st.SCENES) <= need, "cenas orfas: %s" % (set(st.SCENES) - need)
@@ -585,6 +641,30 @@ def test_facade_extend():
     except ValueError:
         pass
     assert len(st.CHAPTERS) == n
+
+
+def test_sides_and_endings_data():
+    """story.SIDES (spec 6) e story.ENDINGS (spec 5): formato e referencias (vazios ate o C11/C13)."""
+    for sid, sp in st.SIDES.items():
+        assert ID_RE.match(sid) and len(sid) <= 24, sid
+        assert {"title", "local", "bg", "team", "delta", "unlock", "scenes", "reward"} <= set(sp), sid
+        assert len(sp["title"]) <= 24 and len(sp["local"]) <= 40 and sp["bg"] in st.BGS, sid
+        assert sp["team"] in st.TEAMS and isinstance(sp["delta"], int) and 0 <= sp["delta"] <= 30, sid
+        check_cond_format(sp["unlock"], sid)
+        assert set(sp["scenes"]) <= {"pre", "win", "lose"} and sp["scenes"].get("pre"), sid
+        assert all(x in st.SCENES for x in sp["scenes"].values() if x), sid
+        assert set(sp["reward"]) <= FX_KEYS and sp["reward"], sid
+        assert not sp.get("repeat"), "missoes repetiveis nao sao suportadas (%s)" % sid
+    seen = set()
+    for i, (cond, scenes) in enumerate(st.ENDINGS):
+        scenes = [scenes] if isinstance(scenes, str) else scenes
+        check_cond_format(cond, "ENDINGS[%d]" % i)
+        assert 1 <= len(scenes) <= 3 and all(x in st.SCENES for x in scenes), i
+        assert not (set(scenes) & seen), "cena repetida entre finais"
+        seen |= set(scenes)
+    if st.ENDINGS:
+        assert st.ENDINGS[-1][0] is None, "o ultimo final e o padrao (cond None)"
+        assert all(c is not None for c, _ in st.ENDINGS[:-1])
 
 
 def main():

@@ -944,6 +944,202 @@ def test_league_and_series_save_roundtrip_and_sanitize():
             assert r is not None and r.repaired and r.node == 0 and r.tour is None
 
 
+# --- C4: nos condicionais, variantes de adversario, finais e missoes secundarias ----------------
+class patched:
+    """Troca nos de capitulos (dict id -> nodes) e preenche SIDES/ENDINGS/TOURNAMENTS sinteticos."""
+
+    def __init__(self, nodes=None, sides=None, endings=None, tours=None):
+        self.nodes, self.sides = nodes or {}, sides or {}
+        self.endings, self.tours = endings, tours or {}
+
+    def __enter__(self):
+        import copy as _copy
+        self.orig = (story.CHAPTERS, dict(story.SIDES), list(story.ENDINGS))
+        chs = _copy.deepcopy(story.CHAPTERS)
+        for c in chs:
+            if c["id"] in self.nodes:
+                c["nodes"] = list(self.nodes[c["id"]])
+        story.CHAPTERS = chs
+        story.SIDES.update(self.sides)
+        if self.endings is not None:
+            story.ENDINGS[:] = self.endings
+        for k, v in self.tours.items():
+            story.TOURNAMENTS[k] = v
+        return self
+
+    def __exit__(self, *exc):
+        story.CHAPTERS = self.orig[0]
+        story.SIDES.clear()
+        story.SIDES.update(self.orig[1])
+        story.ENDINGS[:] = self.orig[2]
+        for k in self.tours:
+            story.TOURNAMENTS.pop(k, None)
+        return False
+
+
+def test_check_cond_count_all_any():
+    c = new(2)
+    c.done = ["side:a", "side:b", "c1_intro", "reward:rw_P"]
+    c.garage.flags["x"] = 1
+    assert c.check_cond(("count", "side:", 2)) and not c.check_cond(("count", "side:", 3))
+    assert c.check_cond(("all", [("flag", "x"), ("done", "c1_intro"), ("count", "side:", 1)]))
+    assert not c.check_cond(("all", [("flag", "x"), ("noflag", "x")]))
+    assert c.check_cond(("any", [("flag", "nada"), ("done", "reward:rw_P")]))
+    assert not c.check_cond(("any", [("flag", "nada")])) and not c.check_cond(("xyz", 1))
+    assert c.check_cond(None)
+
+
+def test_conditional_scene_and_tournament_nodes():
+    ta = dict(story.TOURNAMENTS["t_c1"])
+    nodes = {"1": [("scene", "c1_intro", ("flag", "rota_a")), ("scene", "c1_end", ("noflag", "rota_a")),
+                   ("tournament", "t_c1", ("flag", "rota_a")), ("tournament", "t_alt", ("noflag", "rota_a")),
+                   ("chapter_end", "1")]}
+    with patched(nodes=nodes, tours={"t_alt": ta}):
+        for flag, scene, tour in ((True, "c1_intro", "t_c1"), (False, "c1_end", "t_alt")):
+            c = at_cap1(11)
+            if flag:
+                c.garage.flags["rota_a"] = 1
+            a = c.next_action()
+            assert a["kind"] == "scene" and a["id"] == scene, (flag, a.get("id"))
+            c.finish_scene(scene)
+            a = c.next_action()
+            assert a["kind"] == "match" and a["tournament"] == tour, (flag, a.get("tournament"))
+            # torneio ja iniciado continua mesmo se a cond mudar no meio
+            c.garage.flags["rota_a"] = 0 if flag else 1
+            assert c.next_action()["tournament"] == tour
+            d = copy_json(c.to_dict())
+            c2 = cm.Campaign.from_dict(d)
+            assert c2 is not None and not c2.repaired and c2.tour == c.tour   # sanitize aceita no de 3
+
+
+def test_alt_variant_swaps_teams_not_stages():
+    tr = dict(story.TOURNAMENTS["t_c1"], alt=[(("flag", "rival"), {"final": "impec2", "sf": "academia"})])
+    with patched(nodes={"1": [("tournament", "t_v"), ("chapter_end", "1")]}, tours={"t_v": tr}):
+        base = at_cap1(12)
+        assert base.tournament("t_v")["final"] == tr["final"] and base.tournament("t_v")["boss"] == tr["boss"]
+        c = at_cap1(12)
+        c.garage.flags["rival"] = 1
+        eff = c.tournament("t_v")
+        assert eff["final"] == eff["boss"] == "impec2" and eff["sf"] == "academia"
+        assert cm.stages_of(eff) == cm.stages_of(tr)
+        for _ in range(3):
+            next_match(c)
+            c.record_match(3, 0)
+        a, _ = next_match(c)
+        assert a["stage"] == "SF" and a["opp"]["name"] == story.TEAMS["academia"]["name"]
+        c.record_match(2, 0)
+        a, _ = next_match(c)
+        assert a["stage"] == "F" and a["boss"] and a["opp"]["name"] == story.TEAMS["impec2"]["name"]
+        assert story.TOURNAMENTS["t_v"]["final"] == tr["final"]          # os dados nao sao alterados
+
+
+def test_auto_end_picks_first_valid_ending_and_records_gallery():
+    endings = [(("flag", "fim_b"), ["c1_intro", "c1_end"]), (None, ["c2_intro"])]
+    with patched(nodes={"6": [("end", cm.AUTO_END)]}, endings=endings):
+        for flag, scenes in ((True, ["c1_intro", "c1_end"]), (False, ["c2_intro"])):
+            c = new(13)
+            c.ch, c.node = "6", 0
+            if flag:
+                c.garage.flags["fim_b"] = 1
+            seen = []
+            for _ in range(10):
+                a = c.next_action()
+                if a["kind"] != "scene":
+                    break
+                seen.append(a["id"])
+                c.finish_scene(a["id"])
+                if len(seen) == 1:
+                    c.garage.flags["fim_b"] = 0 if flag else 1      # final ja comecado nao muda
+            assert seen == scenes and a == {"kind": "end", "draft": False, "ending": scenes[0]}
+            assert c.endings == [scenes[0]]
+            c.next_action()
+            assert c.endings == [scenes[0]]                         # sem duplicata
+            c2 = cm.Campaign.from_dict(copy_json(c.to_dict()))
+            assert c2.endings == c.endings and not c2.repaired
+    with patched(nodes={"6": [("end", cm.AUTO_END)]}, endings=[(("flag", "nunca"), ["c2_intro"])]):
+        c = new(13)
+        c.ch, c.node = "6", 0
+        try:
+            c.next_action()
+            raise AssertionError("sem final valido deveria levantar")
+        except ValueError:
+            pass
+
+
+SIDE = {"title": "Missao teste", "local": "Quadra", "bg": "quadra", "team": "coral", "delta": 14,
+        "unlock": ("done", "reward:rw_P"), "scenes": {"pre": "c2_intro", "win": "c2_end",
+                                                      "lose": "c1_final_lose"},
+        "reward": {"scrap": 50, "flag": "fita_1"}, "repeat": False}
+
+
+def test_side_full_flow_lose_retry_win_reward():
+    with patched(sides={"s_t": SIDE}):
+        c = new(14)
+        assert c.available_sides() == []
+        try:
+            c.start_side("s_t")
+            raise AssertionError("missao bloqueada nao deveria abrir")
+        except ValueError:
+            pass
+        c.done.append("reward:rw_P")
+        assert c.available_sides() == ["s_t"]
+        node_before = (c.ch, c.node)
+        c.start_side("s_t")
+        try:
+            c.start_side("s_t")
+            raise AssertionError("duas missoes ao mesmo tempo")
+        except ValueError:
+            pass
+        a = c.next_action()
+        assert a["kind"] == "scene" and a["id"] == "c2_intro"
+        c.finish_scene("c2_intro")
+        a = c.next_action()
+        assert a["kind"] == "match" and a["side"] == "s_t" and a["tournament"] is None
+        assert c.side_ovr() == max(cm.TRAIN_MIN_OVR, int(round(c.garage.rating())) - 14)
+        assert abs(a["O"] - c.side_ovr()) <= 3                       # jitter do time (perfect False)
+        assert a["opp"]["name"] == story.TEAMS["coral"]["name"]
+        out = c.record_match(1, 1)                                    # empate = nao venceu
+        assert out["outcome"] == "side_lose" and c.side["loses"] == 1
+        a = c.next_action()
+        assert a["kind"] == "scene" and a["id"] == "c1_final_lose" and a["key"] == "c1_final_lose#1"
+        c.finish_scene("c1_final_lose")
+        assert "c1_final_lose#1" in c.done
+        scrap0 = c.garage.scrap
+        out = c.record_match(3, 0)
+        assert out["outcome"] == "side_win" and out["side_reward"] == {"scrap": 50, "flag": "fita_1"}
+        assert c.side_done("s_t") and c.garage.flags.get("fita_1") == 1 and c.stats["sides"] == 1
+        assert c.garage.scrap >= scrap0 + 50
+        a = c.next_action()
+        assert a["kind"] == "scene" and a["id"] == "c2_end"
+        c.finish_scene("c2_end")
+        a = c.next_action()                                           # volta aos nos do capitulo
+        assert c.side is None and (c.ch, c.node) == node_before and a.get("side") is None
+        assert c.available_sides() == [] and c.check_cond(("count", "side:", 1))
+
+
+def test_side_cancel_keeps_tournament_and_save_roundtrip():
+    with patched(sides={"s_t": SIDE}):
+        c = new(15)
+        to_cap1_tour(c)
+        c.record_match(1, 0)                                          # treino do Prologo
+        play_scenes(c)
+        if "reward:rw_P" not in c.done:
+            c.done.append("reward:rw_P")
+        tour_before = copy_json(c.tour) if c.tour else None
+        c.start_side("s_t")
+        c.finish_scene("c2_intro")
+        c.record_match(0, 2)                                          # perde uma
+        d = copy_json(c.to_dict())
+        c2 = cm.Campaign.from_dict(d)
+        assert c2 is not None and not c2.repaired and c2.to_dict() == c.to_dict()
+        assert c2.side == {"id": "s_t", "seed": c.side["seed"], "loses": 1}
+        assert c2.next_action()["id"] == "c1_final_lose"
+        c2.cancel_side()
+        assert c2.side is None and c2.tour == tour_before and c2.available_sides() == ["s_t"]
+        a = c2.next_action()
+        assert a.get("side") is None and a["kind"] in ("scene", "match")
+
+
 def main():
     names = sys.argv[1:] or [n for n in globals() if n.startswith("test_")]
     for n in names:

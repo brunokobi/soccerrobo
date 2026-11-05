@@ -22,7 +22,8 @@ TEAMS[id] = {"name" (<=24), "color", "ovr", "names" (5 robos <=12, unicos), "cha
     Ordem dos 5 slots = garage.LINEUP_SLOTS (GK, DEF, MID, MID, ATT).
 SCENES[id] = {"bg", "cast": [ids], "lines": [...]}. Item de "lines":
     (who, mood, text)  |  (who, mood, text, cond)  |  {"q", "opts": [{"t", "fx", "reply": [linhas]}]}
-    who = id de personagem; cond = ("flag", nome) | ("noflag", nome) | ("done", scene_id).
+    who = id de personagem; cond = ("flag", nome) | ("noflag", nome) | ("done", scene_id)
+    | ("count", prefixo, n) (>= n chaves de `done` com o prefixo; C4) | ("all", [conds]) | ("any", [conds]).
     fx (so estas chaves): flag (str), scrap (int, <=100), xp_hero (int), xp_team (int),
     piece ({"model": parts.PARTS, "rar": 0..3}), skill ({"robot": "hero"|"team", "id": skills.SKILLS,
     "rank": 1..3}: aprende direto, nao equipa), pts (int 1..5: PH extras do heroi). Escolha: opcoes 2-3;
@@ -30,6 +31,8 @@ SCENES[id] = {"bg", "cast": [ids], "lines": [...]}. Item de "lines":
 TOURNAMENTS[id]: ver o bloco proprio (formato, hooks, boss_delta/regular_delta).
 CHAPTERS: lista ordenada; "act" = "1".."3" (aba do mapa); "nodes" em ordem: ("scene", id) | ("tournament", id) | ("chapter_end", cap_id)
     | ("end", scene_id)  [o ultimo capitulo da campanha termina com ("end", cena de epilogo)].
+    C4: ("scene", id, cond) e ("tournament", id, cond) sao pulados quando cond e falsa; ("end", "AUTO")
+    escolhe o final em ENDINGS.
     Ponte provisoria: enquanto o Ato 2 esta em producao, o ultimo capitulo pode ser so [("end", cena)]
     (sem chapter_end e com reward None): o cap. 6 comeca pelo epilogo do Ato 1.
     "draft": True = esqueleto (nodes vazio) que o teste de alcancabilidade ignora.
@@ -1162,6 +1165,11 @@ CHAPTERS = [
 #              "reward": {...},"repeat": False}; concluir grava "side:<id>" em `done`.
 SIDES = {}
 
+# --- finais (C4/C11; dados em story_a3.py) -----------------------------------------------------
+# ENDINGS = [(cond, [cena, ...]), ...] em ordem de prioridade; o no ("end", "AUTO") joga as cenas do
+# primeiro final cuja cond vale (cond None = padrao) e grava a primeira cena em c["endings"].
+ENDINGS = []
+
 
 # --- fachada: Atos 2 e 3 e missoes secundarias (Onda C) -------------------------------------
 def _extend(mod):
@@ -1178,6 +1186,7 @@ def _extend(mod):
     if dup:
         raise ValueError("%s.CHAPTERS repete ids: %s" % (mod.__name__, sorted(dup)))
     CHAPTERS.extend(mod.CHAPTERS)
+    ENDINGS.extend(getattr(mod, "ENDINGS", []))
 
 
 import story_a2  # noqa: E402

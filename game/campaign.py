@@ -127,6 +127,8 @@ UNLOCK_REWARD = "rw_5"       # fim do Ato 1: liga modulos/skills (mod_on) e o ni
 
 # --- funcoes puras ------------------------------------------------------------------
 END_ID = "END"      # valor devolvido por advance_chapter() ao entrar no epilogo (no "end")
+AUTO_END = "AUTO"   # ("end", "AUTO"): o final vem de story.ENDINGS (C4)
+SIDE_DELTA = 14     # missao secundaria: adversario = Forca atual - delta (spec 6)
 
 
 def shootout(rating_h, rating_a, rng):
@@ -354,16 +356,37 @@ class Campaign:
         return any(k.startswith(pre) for k in self.done)
 
     def check_cond(self, cond):
+        """cond: None (vale) | ("flag", f) | ("noflag", f) | ("done", id) | ("count", prefixo, n)
+        (>= n chaves de done com o prefixo) | ("all", [conds]) | ("any", [conds]). Desconhecida: False."""
         if cond is None:
             return True
-        kind, arg = cond
+        kind = cond[0]
         if kind == "flag":
-            return bool(self.garage.flags.get(arg))
+            return bool(self.garage.flags.get(cond[1]))
         if kind == "noflag":
-            return not self.garage.flags.get(arg)
+            return not self.garage.flags.get(cond[1])
         if kind == "done":
-            return self.is_done(arg)
+            return self.is_done(cond[1])
+        if kind == "count":
+            return sum(1 for k in self.done if k.startswith(cond[1])) >= cond[2]
+        if kind == "all":
+            return all(self.check_cond(c) for c in cond[1])
+        if kind == "any":
+            return any(self.check_cond(c) for c in cond[1])
         return False
+
+    def tournament(self, tid=None):
+        """Torneio efetivo (`tid` ou o atual): story.TOURNAMENTS com a primeira variante `alt` cuja cond
+        vale aplicada (troca times: sf/qf/final/series/group; "boss" segue "final"). C4."""
+        if tid is None:
+            tid = self.tour["id"]
+        tr = story.TOURNAMENTS[tid]
+        for cond, over in tr.get("alt", ()):
+            if self.check_cond(cond):
+                tr = dict(tr, **over)
+                tr["boss"] = tr["final"]
+                break
+        return tr
 
     def scene_lines(self, scene_id):
         """Itens da cena visiveis agora (falas cujo cond e falso saem; escolhas ficam)."""
@@ -375,9 +398,12 @@ class Campaign:
 
     # ------------------------------------------------------------------ cenas
     def _scene_key(self, scene_id):
+        sd = self.side
+        if sd is not None and scene_id == story.SIDES[sd["id"]]["scenes"].get("lose"):
+            return "%s#%d" % (scene_id, sd["loses"])
         tr = self.tour
         if tr is not None:
-            h = story.TOURNAMENTS[tr["id"]]["hooks"]
+            h = self.tournament()["hooks"]
             if scene_id == h.get("elim"):
                 return "%s#%d" % (scene_id, tr["attempt"] - 1)
             if scene_id == h.get("lose"):
@@ -470,10 +496,20 @@ class Campaign:
         home/away (cfgs para Game.start_robot_match), user_F, O (ovr efetivo c/ pity), F_rec, pity e bg
         (cenario do torneio; a UI converte em local da torcida com crowd.venue_for_bg)."""
         for _ in range(64):
+            if self.side is not None:
+                act = self._side_step()
+                if act is not None:
+                    return act
+                continue
             nodes = self.chapter()["nodes"]
             if self.node >= len(nodes):
                 return {"kind": "end", "draft": True}
-            kind, arg = nodes[self.node]
+            kind, arg = nodes[self.node][:2]
+            cond = nodes[self.node][2] if len(nodes[self.node]) > 2 else None
+            if kind in ("scene", "tournament") and not self.check_cond(cond) and not (
+                    kind == "tournament" and self.tour is not None and self.tour["id"] == arg):
+                self.node += 1                       # no condicional falso (torneio ja iniciado segue)
+                continue
             if kind == "scene":
                 if self.is_done(arg):
                     self.node += 1
@@ -491,6 +527,8 @@ class Campaign:
                 return {"kind": "chapter_end", "chapter": arg, "report": rep,
                         "warnings": list(rep.get("warnings", []))}
             if kind == "end":
+                if arg == AUTO_END:
+                    return self._auto_end()
                 if not self.is_done(arg):
                     return self._scene_action(arg)
                 return {"kind": "end", "draft": False}
@@ -499,6 +537,108 @@ class Campaign:
 
     def _scene_action(self, sid):
         return {"kind": "scene", "id": sid, "key": self._scene_key(sid), "scene": story.SCENES[sid]}
+
+    # ------------------------------------------------------------------ finais (C4)
+    def ending(self):
+        """Cenas do final desta campanha: o final ja comecado (alguma cena em done) ou o primeiro de
+        story.ENDINGS cuja cond vale. None se nenhum vale."""
+        opts = [(c, [x] if isinstance(x, str) else list(x)) for c, x in story.ENDINGS]
+        for _c, scenes in opts:
+            if any(self.is_done(x) for x in scenes):
+                return scenes
+        return next((scenes for c, scenes in opts if self.check_cond(c)), None)
+
+    def _auto_end(self):
+        scenes = self.ending()
+        if scenes is None:
+            raise ValueError("nenhum final de story.ENDINGS vale")
+        for sid in scenes:
+            if not self.is_done(sid):
+                return self._scene_action(sid)
+        if scenes[0] not in self.endings and len(self.endings) < MAX_ENDINGS:
+            self.endings.append(scenes[0])
+        return {"kind": "end", "draft": False, "ending": scenes[0]}
+
+    # ------------------------------------------------------------------ missoes secundarias (C4)
+    def side_done(self, sid):
+        return ("side:%s" % sid) in self.done
+
+    def available_sides(self):
+        """Ids de story.SIDES liberados (cond `unlock`) e ainda nao concluidos, na ordem do dict."""
+        return [sid for sid, sp in story.SIDES.items()
+                if not self.side_done(sid) and self.check_cond(sp.get("unlock"))]
+
+    def start_side(self, sid):
+        """Abre a missao `sid` (prioridade sobre os nos em next_action). ValueError se nao disponivel
+        ou se ja ha uma missao ativa. O torneio em andamento (se houver) fica guardado em `tour`."""
+        if self.side is not None:
+            raise ValueError("ja ha uma missao ativa")
+        if sid not in self.available_sides():
+            raise ValueError("missao indisponivel: %r" % (sid,))
+        self.side = {"id": sid, "seed": self._rng("side").getrandbits(31), "loses": 0}
+        return self.side
+
+    def cancel_side(self):
+        """Sai da missao ativa sem concluir (sem penalidade); pode ser reaberta depois."""
+        self.side = None
+
+    def side_ovr(self, sid=None):
+        """ovr do adversario da missao: Forca atual do time - delta (piso TRAIN_MIN_OVR)."""
+        sp = story.SIDES[sid or self.side["id"]]
+        return max(TRAIN_MIN_OVR, int(round(self.garage.rating())) - int(sp.get("delta", SIDE_DELTA)))
+
+    def _side_step(self):
+        """Proxima acao da missao ativa; None quando ela terminou (self.side volta a None)."""
+        sd = self.side
+        sp = story.SIDES[sd["id"]]
+        sc = sp["scenes"]
+        if self.side_done(sd["id"]):                 # venceu: cena de vitoria e fecha
+            if sc.get("win") and not self.is_done(sc["win"]):
+                return self._scene_action(sc["win"])
+            self.side = None
+            return None
+        if sc.get("pre") and not self.is_done(sc["pre"]):
+            return self._scene_action(sc["pre"])
+        lose = sc.get("lose")
+        if lose and sd["loses"] > 0 and ("%s#%d" % (lose, sd["loses"])) not in self.done:
+            return self._scene_action(lose)
+        spec = story.TEAMS[sp["team"]]
+        O = self.side_ovr()
+        opp = RL.opponent_team(spec["name"], spec["color"], O, sd["seed"] * 10 + sd["loses"],
+                               names=spec["names"], chassis=spec["chassis"], jitter=not spec["perfect"])
+        for e in opp["squad"]:
+            e["paint"] = tuple(spec["paint"])
+        return {"kind": "match", "side": sd["id"], "tournament": None, "stage": "F",
+                "stage_name": "Missão", "bg": sp.get("bg"), "boss": False, "knockout": False,
+                "training": False, "opp": opp, "home": self.garage.match_cfg(), "away": RL.match_cfg(opp),
+                "user_F": self.garage.match_F(), "O": opp["ovr"], "F_rec": float(O + int(sp.get(
+                    "delta", SIDE_DELTA))), "pity": 0, "attempt": sd["loses"]}
+
+    def _record_side(self, my, opp, events=None, simulated=False):
+        sd = self.side
+        sp = story.SIDES[sd["id"]]
+        g = self.garage
+        my, opp = G.clamp(int(my), 0, 99), G.clamp(int(opp), 0, 99)
+        pids = [e["pid"] for e in (events or ()) if e.get("team") == 0 and not e.get("own")
+                and e.get("pid") is not None]
+        tier = self.econ_tier()
+        rew = G.match_rewards(g, my, opp, pids, tier, self._rng("rw"))
+        g.refresh_shop(tier, self._rng("shop"))
+        g.consume_backpack()
+        self.stats["matches"] += 1
+        if simulated:
+            self.stats["sims"] += 1
+        out = {"result": rew["result"], "my": my, "opp": opp, "pen": None, "stage": "F", "rewards": rew,
+               "advanced": False, "outcome": "side_lose", "tournament": None, "side": sd["id"],
+               "boss": False}
+        if my > opp:
+            self.done.append("side:%s" % sd["id"])
+            self.stats["sides"] += 1
+            self.apply_fx(sp.get("reward") or {})
+            out.update(outcome="side_win", advanced=True, side_reward=dict(sp.get("reward") or {}))
+        else:
+            sd["loses"] = min(99, sd["loses"] + 1)
+        return out
 
     def advance_chapter(self):
         """Do no chapter_end para o proximo capitulo. Devolve o id novo; END_ID ("END") se era o
@@ -523,11 +663,11 @@ class Campaign:
     def start_tournament(self, tid=None, attempt=0):
         if tid is None:
             nodes = self.chapter()["nodes"]
-            kind, tid = nodes[self.node]
+            kind, tid = nodes[self.node][:2]
             if kind != "tournament":
                 raise ValueError("no atual nao e torneio")
         seed = self._rng("tour").getrandbits(31)
-        self.tour = {"id": tid, "attempt": attempt, "seed": seed, "stage": stages_of(story.TOURNAMENTS[tid])[0],
+        self.tour = {"id": tid, "attempt": attempt, "seed": seed, "stage": stages_of(self.tournament(tid))[0],
                      "results": [], "loses": 0}
         return self.tour
 
@@ -559,7 +699,7 @@ class Campaign:
     def _tournament_step(self):
         """Proxima acao do torneio atual; None se concluiu (no avancado)."""
         tour = self.tour
-        tr = story.TOURNAMENTS[tour["id"]]
+        tr = self.tournament()
         hooks = tr["hooks"]
         stages = stages_of(tr)
         idx = len(stages) if tour["stage"] == DONE else stages.index(tour["stage"])
@@ -608,7 +748,7 @@ class Campaign:
         ou da liga atual: resultados do usuario (do tour) + outros jogos da rodada simulados
         (round_pairs; re-derivados da semente, um RNG por rodada). Vazio fora de grupo/liga."""
         tour = self.tour
-        tr = story.TOURNAMENTS[tour["id"]]
+        tr = self.tournament()
         gid = tr["group"] if tr["format"] in ADVANCE_POS else []
         specs = [story.TEAMS[t] for t in gid]
         teams = [{"name": self.garage.team["name"], "color": list(self.garage.team["color"])}]
@@ -638,10 +778,12 @@ class Campaign:
         shootout(). Devolve {"result","my","opp","pen","stage","outcome","advanced","rewards",...};
         outcome: "next" | "elim" | "retry" | "done" | "champion"."""
         tour = self.tour
+        if self.side is not None:
+            return self._record_side(my, opp, events, simulated)
         if tour is None or tour["stage"] == DONE:
             raise RuntimeError("sem partida pendente")
         g = self.garage
-        tr = story.TOURNAMENTS[tour["id"]]
+        tr = self.tournament()
         stages = stages_of(tr)
         stage = tour["stage"]
         si = stages.index(stage)
@@ -727,9 +869,9 @@ class Campaign:
 
     def chapter_bg(self):
         """Cenario (bg) do torneio do capitulo atual (o local onde o treino acontece); None se nao ha."""
-        for kind, nid in self.chapter()["nodes"]:
-            if kind == "tournament" and nid in story.TOURNAMENTS:
-                return story.TOURNAMENTS[nid].get("bg")
+        for n in self.chapter()["nodes"]:
+            if n[0] == "tournament" and n[1] in story.TOURNAMENTS and (len(n) < 3 or self.check_cond(n[2])):
+                return story.TOURNAMENTS[n[1]].get("bg")
         return None
 
     def training_cfg(self):

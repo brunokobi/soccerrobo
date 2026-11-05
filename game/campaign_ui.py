@@ -770,7 +770,7 @@ class CampaignUI(RobotsUI):
     def build_tview(self, act):
         cp = self.campaign
         tour = cp.tour
-        tr = story.TOURNAMENTS[act["tournament"]]
+        tr = cp.tournament(act["tournament"])
         single = tr["format"] == "single"
         v = {"single": single, "title": cp.chapter()["subtitle"], "local": tr["local"],
              "label": stage_label(act["stage"], single), "rows": [], "ko": [],
