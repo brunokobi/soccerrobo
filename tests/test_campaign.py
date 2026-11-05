@@ -634,6 +634,8 @@ def check_final_state(c):
     assert {"Gambiarra", "Pixelado", "Majestade"} <= names and len(g.robots) == gm.MAX_SQUAD
     assert sum(len(story.REWARDS[x].get("recruits", ())) for x in story.REWARDS) == 3
     for ch in story.CHAPTERS:                               # todas as recompensas aplicadas, uma vez
+        if ch["reward"] is None:                            # ponte provisoria do cap. 6
+            continue
         assert ("reward:%s" % ch["reward"]) in c.done and c.done.count("reward:%s" % ch["reward"]) == 1
     # rewards idempotentes: reaplicar nao muda nada
     before = c.to_dict()
@@ -655,7 +657,7 @@ def test_full_campaign_autoplay_all_policies():
         for seed in seeds:
             c, n, _ = full_run(seed, policy)
             check_final_state(c)
-            assert c.ch == "5" and c.chapter()["nodes"][c.node] == ("end", "e1_epilogo")
+            assert c.ch == "6" and c.chapter()["nodes"][c.node] == ("end", "e1_epilogo")
             tot.setdefault(policy, []).append(n)
     for p, v in tot.items():
         print("     autoplay %s: partidas media %.1f max %d" % (p, sum(v) / len(v), max(v)))
@@ -674,22 +676,31 @@ def test_advance_chapter_last_chapter_enters_end_node():
     c, _, _ = full_run(1, "win")
     # fim: node no ("end"), cena ja jogada -> {"kind":"end","draft":False}; advance_chapter nao esta no chapter_end
     assert c.advance_chapter() is None
-    # reconstroi o estado "chapter_end" do ultimo capitulo e confere o valor documentado
+    # cap. 5 no chapter_end -> cap. 6, cujo no 0 e o epilogo (C2)
     c2 = new(7)
     c2.ch = "5"
-    c2.node = [k for k, _ in story.CHAPTERS[-1]["nodes"]].index("chapter_end")
-    assert c2.advance_chapter() == cm.END_ID == "END"
-    assert story.CHAPTERS[-1]["nodes"][c2.node] == ("end", "e1_epilogo")
+    c2.node = [k for k, _ in story.CHAPTERS[5]["nodes"]].index("chapter_end")
+    assert c2.advance_chapter() == "6" and c2.node == 0 and c2.tour is None
+    assert c2.chapter()["nodes"][0] == ("end", "e1_epilogo")
     a = c2.next_action()
     assert a["kind"] == "scene" and a["id"] == "e1_epilogo"
     c2.finish_scene("e1_epilogo")
     assert c2.next_action() == {"kind": "end", "draft": False}
     assert c2.advance_chapter() is None                      # ja no "end": nao avanca mais
-    # ultimo capitulo SEM no "end" (sintetico): nao avanca, devolve None como antes
+    # ultimo capitulo com chapter_end seguido de "end" (sintetico, formato do cap. 13): END_ID
     import copy
     orig = story.CHAPTERS
-    chs = copy.deepcopy(orig)
-    chs[-1]["nodes"] = chs[-1]["nodes"][:-1]
+    chs = copy.deepcopy(orig)[:6]
+    chs[-1]["nodes"].append(("end", "e1_epilogo"))
+    story.CHAPTERS = chs
+    try:
+        c4 = new(9)
+        c4.ch, c4.node = "5", 3
+        assert c4.advance_chapter() == cm.END_ID == "END" and c4.chapter()["nodes"][c4.node][0] == "end"
+    finally:
+        story.CHAPTERS = orig
+    # ultimo capitulo SEM no "end" (sintetico): nao avanca, devolve None como antes
+    chs = copy.deepcopy(orig)[:6]
     story.CHAPTERS = chs
     try:
         c3 = new(8)

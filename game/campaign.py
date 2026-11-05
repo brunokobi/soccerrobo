@@ -71,7 +71,7 @@ PEN_SLOPE, PEN_BASE, PEN_CAP = 0.008, 0.72, 60
 # --- persistencia (padrao de garage.py; chave PROPRIA, nunca a do modo livre) ---------------
 SAVE_KEY = "soccerpy_campaign_v1"
 SAVE_PATH = os.path.join(os.path.expanduser("~"), ".soccerpy_campaign.json")
-VERSION = 1
+VERSION = 2
 MAX_SAVE_CHARS = 2_000_000
 SAVE_NONE, SAVE_OK, SAVE_BAD = "none", "ok", "bad"
 # Migracoes: chave ("v", n) = formato n -> n+1; ("sv", n) = roteiro n -> n+1. Cada uma recebe e devolve
@@ -80,16 +80,41 @@ SAVE_NONE, SAVE_OK, SAVE_BAD = "none", "ok", "bad"
 MIGRATIONS = {}
 
 
-def _migrate_sv1(data):
-    """Roteiro 1 -> 2 (C1: story.py virou fachada dos Atos 2/3; nenhum id mudou). Identidade por
-    enquanto; o C2 move quem ja passou do epilogo do cap. 5 para o cap. 6."""
+
+
+def _migrate_v1(data):
+    """Formato 1 -> 2 (Onda C): campos novos em `c` com os padroes (side, ng, endings, tower).
+    `c` ausente/invalido segue adiante e o sanitize decide (bad)."""
+    c = data.get("c")
+    if isinstance(c, dict):
+        c.setdefault("side", None)
+        c.setdefault("ng", 0)
+        c.setdefault("endings", [])
+        c.setdefault("tower", None)
+    data["v"] = 2
     return data
 
 
+def _migrate_sv1(data):
+    """Roteiro 1 -> 2 (C2): o epilogo saiu do cap. 5 (era o no 4, ("end", "e1_epilogo")) e virou o
+    no 0 do cap. 6. Quem estava no epilogo ou depois (ch "5", node >= 4) vai para ch "6", node 0, sem
+    torneio nem pity; com o epilogo ja em `done`, next_action o pula. Quem estava nos nos 0-3 do
+    cap. 5 (ou antes) nao muda: nenhum rewind do Ato 1."""
+    c = data.get("c")
+    if isinstance(c, dict) and c.get("ch") == "5":
+        node = c.get("node")
+        if isinstance(node, int) and not isinstance(node, bool) and node >= 4:
+            c.update(ch="6", node=0, tour=None, pity=0)
+    data["sv"] = 2
+    return data
+
+
+MIGRATIONS[("v", 1)] = _migrate_v1
 MIGRATIONS[("sv", 1)] = _migrate_sv1
-MAX_DONE, MAX_DONE_RAW, MAX_RESULTS = 300, 1000, 12
+MAX_DONE, MAX_DONE_RAW, MAX_RESULTS = 600, 1500, 12
 SEED_MAX, STAT_MAX = 2 ** 53, 10 ** 9
-STAT_KEYS = ("ev", "matches", "sims", "trained")
+STAT_KEYS = ("ev", "matches", "sims", "trained", "sides")
+NG_MAX, TOWER_FLOORS, MAX_ENDINGS = 3, 40, 3      # NG+ e Torre do Po: Onda D
 UNLOCK_REWARD = "rw_5"       # fim do Ato 1: liga modulos/skills (mod_on) e o nivel maximo 15
 
 
@@ -158,18 +183,24 @@ class Campaign:
         self.tour = None
         self.pity = 0
         self.hero = hero_id
-        self.stats = {"ev": 0, "matches": 0, "sims": 0, "trained": 0}
+        self.stats = {k: 0 for k in STAT_KEYS}
         self.seed = int(seed)
+        self.side = None                    # missao secundaria ativa: {"id","seed","loses"} (C4)
+        self.ng = 0                         # volta do NG+ (Onda D)
+        self.endings = []                   # finais ja vistos (ids de cena), na ordem (C4)
+        self.tower = None                   # Torre do Po: {"floor","best"} (Onda D)
         self._reports = {}                  # relatorios de recompensa (so memoria)
         self.warnings = []                  # avisos de reparo ao carregar (so memoria, para a UI)
         self.repaired = False
 
     # ------------------------------------------------------------------ serializacao
     def to_dict(self):
-        return {"v": 1, "sv": story.STORY_VERSION, "garage": self.garage.to_dict(),
+        return {"v": VERSION, "sv": story.STORY_VERSION, "garage": self.garage.to_dict(),
                 "c": {"ch": self.ch, "node": self.node, "done": list(self.done),
                       "tour": copy.deepcopy(self.tour), "pity": self.pity, "hero": self.hero,
-                      "stats": dict(self.stats), "seed": self.seed}}
+                      "stats": dict(self.stats), "seed": self.seed,
+                      "side": copy.deepcopy(self.side), "ng": self.ng,
+                      "endings": list(self.endings), "tower": copy.deepcopy(self.tower)}}
 
     def to_json(self):
         return json.dumps(self.to_dict(), ensure_ascii=True, separators=(",", ":"))
@@ -204,6 +235,10 @@ class Campaign:
             o.done = list(c["done"])
             o.tour = copy.deepcopy(c["tour"])
             o.stats = dict(c["stats"])
+            o.side = copy.deepcopy(c["side"])
+            o.ng = c["ng"]
+            o.endings = list(c["endings"])
+            o.tower = copy.deepcopy(c["tower"])
             o.warnings = list(warns)
             o.repaired = bool(warns)
             return o
@@ -863,7 +898,8 @@ def _repair_chapter(done):
 
 def _done_keys(raw):
     """Lista de chaves validas (ordem preservada, sem duplicatas) ou None se `raw` nao e lista/enorme.
-    Aceitas: id de cena, "<cena>#<n>" (n 0..99) e "reward:<id>" (id em story.REWARDS)."""
+    Aceitas: id de cena, "<cena>#<n>" (n 0..99), "reward:<id>" (id em story.REWARDS) e "side:<id>"
+    (id em story.SIDES)."""
     if not isinstance(raw, list) or len(raw) > MAX_DONE_RAW:
         return None
     out, seen = [], set()
@@ -875,6 +911,8 @@ def _done_keys(raw):
             ok = True
         elif k.startswith("reward:"):
             ok = k[7:] in story.REWARDS
+        elif k.startswith("side:"):
+            ok = k[5:] in story.SIDES
         elif "#" in k:
             pre, _, n = k.partition("#")
             ok = (pre in story.SCENES and n.isascii() and n.isdigit() and len(n) <= 2
@@ -919,6 +957,39 @@ def _tour(t, ch_id, node_entry):
         results.append([r[0]] + vals)
     return {"id": tid, "attempt": attempt, "seed": seed, "stage": stage, "results": results,
             "loses": loses}
+
+
+def _side(t):
+    """side limpo ou None se invalido."""
+    if not isinstance(t, dict):
+        return None
+    sid = t.get("id")
+    seed, loses = _sint(t.get("seed"), 0, 2 ** 31 - 1), _sint(t.get("loses"), 0, 99)
+    if not isinstance(sid, str) or sid not in story.SIDES or None in (seed, loses):
+        return None
+    return {"id": sid, "seed": seed, "loses": loses}
+
+
+def _endings(raw):
+    """Lista de finais vistos (ids de cena, sem duplicatas, no maximo MAX_ENDINGS) ou None."""
+    if not isinstance(raw, list) or len(raw) > MAX_ENDINGS:
+        return None
+    out = []
+    for k in raw:
+        if not isinstance(k, str) or k not in story.SCENES or k in out:
+            return None
+        out.append(k)
+    return out
+
+
+def _tower(t):
+    """tower limpo ou None se invalido."""
+    if not isinstance(t, dict):
+        return None
+    floor, best = _sint(t.get("floor"), 0, TOWER_FLOORS), _sint(t.get("best"), 0, TOWER_FLOORS)
+    if None in (floor, best) or floor > best:
+        return None
+    return {"floor": floor, "best": best}
 
 
 def _sanitize(data):
@@ -981,7 +1052,26 @@ def _sanitize(data):
                 warns.append("Contador %s invalido: zerado." % k)
             v = 0
         stats[k] = v
+    side = None
+    if c.get("side") is not None:
+        side = _side(c.get("side"))
+        if side is None:
+            warns.append("Missao secundaria invalida: cancelada.")
+    ng = _sint(c.get("ng"), 0, NG_MAX)
+    if ng is None:
+        ng = 0
+        warns.append("Volta do NG+ invalida: zerada.")
+    endings = _endings(c.get("endings"))
+    if endings is None:
+        endings = []
+        warns.append("Galeria de finais invalida: zerada.")
+    tower = None
+    if c.get("tower") is not None:
+        tower = _tower(c.get("tower"))
+        if tower is None:
+            warns.append("Torre do Po invalida: zerada.")
     clean = {"v": VERSION, "sv": story.STORY_VERSION, "garage": gobj.to_dict(),
              "c": {"ch": ch, "node": node, "done": done, "tour": tour, "pity": pity, "hero": hero,
-                   "stats": stats, "seed": seed}}
+                   "stats": stats, "seed": seed, "side": side, "ng": ng, "endings": endings,
+                   "tower": tower}}
     return clean, warns

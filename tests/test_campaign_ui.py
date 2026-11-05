@@ -366,7 +366,7 @@ def test_map_start_mid_and_draft():
     assert ui.chapter_state(story.CHAPTERS[0]) == "done"
     assert ui.chapter_state(story.CHAPTERS[1]) == "current"
     shot("map_cap1")
-    with drafted("2", "3", "4", "5"):                    # cap. draft sintetico (conteudo real ja existe)
+    with drafted("2", "3", "4", "5", "6"):                    # cap. draft sintetico (conteudo real ja existe)
         force_to(ui.campaign, "2")
         ui.go("map")
         frame()
@@ -495,7 +495,7 @@ def test_stub_screens_and_back():
     frame()
     ui.back_to_map()
     camp.advance_chapter()
-    with drafted("2", "3", "4", "5"):                  # tela "ending" (draft) com capitulo sintetico
+    with drafted("2", "3", "4", "5", "6"):                  # tela "ending" (draft) com capitulo sintetico
         ui.go("map")
         ui.do_story()
         assert ui.screen_id == "ending"
@@ -840,7 +840,7 @@ def release_draft():
 def hold_draft():
     """Mantem capitulos draft sinteticos ativos durante um estado (ate o proximo reset/setup)."""
     release_draft()
-    d = drafted("2", "3", "4", "5")
+    d = drafted("2", "3", "4", "5", "6")
     d.__enter__()
     _HELD.append(d)
 
@@ -1097,7 +1097,7 @@ def test_flow_prologue_cap1_all_simulated_by_clicks():
     assert "Tanque" in cp.garage.unlocked and cp.garage.stats["played"] == 6
     ui.map_act = cp.next_action()
     assert ui.map_act["kind"] == "scene" and ui.map_act["id"] == "c2_intro", ui.map_act["kind"]
-    with drafted("2", "3", "4", "5"):
+    with drafted("2", "3", "4", "5", "6"):
         assert cp.next_action() == {"kind": "end", "draft": True}
     saved = cm.Campaign.load()
     assert saved.ch in ("1", "2") and "c1_end" in saved.done
@@ -1139,7 +1139,7 @@ def test_flow_full_campaign_by_clicks_reaches_ending():
     assert len(allsc) >= 40, len(allsc)
     assert not FORBIDDEN
     saved = cm.Campaign.load()
-    assert saved is not None and saved.ch == "5" and "e1_epilogo" in saved.done
+    assert saved is not None and saved.ch == "6" and "e1_epilogo" in saved.done
     ui.to_menu()
 
 
@@ -1432,7 +1432,7 @@ def test_chapter_end_report_and_full_squad_warning():
 
 def test_ending_draft_and_completed():
     fresh_campaign()
-    with drafted("2", "3", "4", "5"):
+    with drafted("2", "3", "4", "5", "6"):
         _ending_draft_body()
     ui.to_menu()
 

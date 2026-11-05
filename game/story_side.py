@@ -11,4 +11,5 @@ TEAMS = {}
 TOURNAMENTS = {}
 SCENES = {}
 REWARDS = {}
+SIDES = {}
 CHAPTERS = []

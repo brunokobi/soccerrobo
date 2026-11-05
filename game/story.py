@@ -30,6 +30,8 @@ SCENES[id] = {"bg", "cast": [ids], "lines": [...]}. Item de "lines":
 TOURNAMENTS[id]: ver o bloco proprio (formato, hooks, boss_delta/regular_delta).
 CHAPTERS: lista ordenada; "act" = "1".."3" (aba do mapa); "nodes" em ordem: ("scene", id) | ("tournament", id) | ("chapter_end", cap_id)
     | ("end", scene_id)  [o ultimo capitulo da campanha termina com ("end", cena de epilogo)].
+    Ponte provisoria: enquanto o Ato 2 esta em producao, o ultimo capitulo pode ser so [("end", cena)]
+    (sem chapter_end e com reward None): o cap. 6 comeca pelo epilogo do Ato 1.
     "draft": True = esqueleto (nodes vazio) que o teste de alcancabilidade ignora.
 REWARDS[id]: aplicado UMA vez ao fechar o capitulo (chave "reward:<id>" em `done`): scrap, piece,
     recruits [{"name","role","chassis","base_ovr","level","paint","piece"?}], unlock [chassis],
@@ -1146,15 +1148,21 @@ CHAPTERS = [
     {"id": "5", "act": "1", "title": "Capítulo 5", "subtitle": "Mundial de Aspiradores", "local": "Arena Global de Neo-Tóquio",
      "F_start": 63.6, "F_end": 65.8, "econ_tier": 3, "tier_done_on_close": 3, "reward": "rw_5",
      "nodes": [("scene", "c5_intro"), ("tournament", "t_c5"), ("scene", "c5_antidoping"),
-               ("chapter_end", "5"), ("end", "e1_epilogo")]},
+               ("chapter_end", "5")]},
 ]
+# C2: o epilogo ("end", "e1_epilogo") saiu do cap. 5 e e o primeiro no do cap. 6 (story_a2.py).
+
+# --- missoes secundarias (C4/C13; dados em story_side.py) --------------------------------------
+# SIDES[id] = {"title","local","bg","team","delta","unlock": cond,"scenes":{"pre","win","lose"?},
+#              "reward": {...},"repeat": False}; concluir grava "side:<id>" em `done`.
+SIDES = {}
 
 
 # --- fachada: Atos 2 e 3 e missoes secundarias (Onda C) -------------------------------------
 def _extend(mod):
     """Junta os dados de um submodulo nos dicts/listas deste modulo. Ids sao estaveis (vao para o
     save): repetir um id ja existente e erro de dados, nunca sobrescrita silenciosa."""
-    for name in ("CHARACTERS", "TEAMS", "TOURNAMENTS", "SCENES", "REWARDS"):
+    for name in ("CHARACTERS", "TEAMS", "TOURNAMENTS", "SCENES", "REWARDS", "SIDES"):
         dst, src = globals()[name], getattr(mod, name)
         dup = set(dst) & set(src)
         if dup:

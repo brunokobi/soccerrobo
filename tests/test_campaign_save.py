@@ -333,7 +333,7 @@ def test_repair_cases_rewind():
         d = copy.deepcopy(ch1.to_dict())
         fn(d)
         if name == "ch_draft":                          # capitulo draft sintetico (nao depende do conteudo real)
-            with drafted("2", "3", "4", "5"):
+            with drafted("2", "3", "4", "5", "6"):
                 c = cm.Campaign.from_dict(d)
         else:
             c = cm.Campaign.from_dict(d)
@@ -359,7 +359,7 @@ def test_ch_invalid_goes_to_first_unrewarded_chapter():
     c = chapter_end_cap1()
     d = c.to_dict()
     d["c"]["ch"] = "2"
-    with drafted("2", "3", "4", "5"):
+    with drafted("2", "3", "4", "5", "6"):
         r = cm.Campaign.from_dict(d)
         assert r.ch == "1" and r.repaired  # todos os jogaveis fechados -> ultimo jogavel
         assert cm.Campaign.sanitize(d) is not None
@@ -384,7 +384,7 @@ def test_other_fields_repairs():
     d["c"]["seed"] = "abc"
     d["c"]["stats"] = {"ev": -5, "matches": 10 ** 15, "sims": "x"}
     r = cm.Campaign.from_dict(d)
-    assert r.seed == 1 and r.stats == {"ev": 0, "matches": 0, "sims": 0, "trained": 0} and r.repaired
+    assert r.seed == 1 and r.stats == {k: 0 for k in cm.STAT_KEYS} and r.repaired
     assert r.tour == c.tour
     d = c.to_dict()
     d["c"]["done"] = ["p1_garagem", "p1_garagem", "x", "nada#1", "p1_garagem#100", "p1_garagem#01",
@@ -398,7 +398,9 @@ def test_other_fields_repairs():
 def test_done_cap_keeps_rewards():
     keys = ["reward:rw_P", "reward:rw_1", "p1_garagem"]
     keys += ["c1_final_lose#%d" % i for i in range(100)] + ["c1_repescagem#%d" % i for i in range(100)]
-    keys += ["c1_final_pre#%d" % i for i in range(100)] + ["c1_intro#%d" % i for i in range(100)]
+    for sid in ("c1_final_pre", "c1_intro", "c2_intro", "c2_end", "c3_intro"):
+        keys += ["%s#%d" % (sid, i) for i in range(100)]
+    assert cm.MAX_DONE < len(keys) <= cm.MAX_DONE_RAW
     d = new().to_dict()
     d["c"]["done"] = keys
     r = cm.Campaign.from_dict(d)

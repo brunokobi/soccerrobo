@@ -47,6 +47,12 @@ STUB_SCREENS = ("tourney", "training", "round", "chapter_end", "ending")   # Esc
 SCREENS = ("menu", "map", "garage", "shop", "skills", "bench", "dialog") + STUB_SCREENS
 FRAME_EXTRA = ("tourney", "training")          # telas com cabecalho + abas (HISTORIA fica ativa)
 NODE_X0, NODE_DX = 110, 176
+NODE_X_MAX = 990                  # ultimo no do mapa (o painel vai ate x = 1080)
+
+
+def node_dx(n):
+    """Espacamento entre os nos do mapa: 176 px ate 6 capitulos; com mais, encolhe para caber."""
+    return NODE_DX if n <= 1 else min(NODE_DX, (NODE_X_MAX - NODE_X0) // (n - 1))
 NODE_Y = (200, 262)
 NODE_R = 26
 PULSE_PERIOD = 1.6
@@ -389,7 +395,8 @@ class CampaignUI(RobotsUI):
         scr = self.g.screen
         chs = story.CHAPTERS
         self.panel((20, 134, 1060, 270))
-        pts = [(NODE_X0 + i * NODE_DX, NODE_Y[i % 2]) for i in range(len(chs))]
+        dx = node_dx(len(chs))
+        pts = [(NODE_X0 + i * dx, NODE_Y[i % 2]) for i in range(len(chs))]
         states = [self.chapter_state(c) for c in chs]
         pygame.draw.lines(scr, LINE, False, pts, 5)
         for i in range(len(pts) - 1):                               # trecho concluido em verde
@@ -411,11 +418,11 @@ class CampaignUI(RobotsUI):
                 pygame.draw.circle(scr, GOLD, (x, y), NODE_R + 6 + int(5 * pulse), 3)
             col = TEXT if not draft else DIM
             yy = y + 44
-            for line in self.wrap(ch["subtitle"], 22, NODE_DX - 8)[:2]:
+            for line in self.wrap(ch["subtitle"], 22, dx - 8)[:2]:
                 self.text(line, 22, col, center=(x, yy))
                 yy += 20
             yy += 4
-            for line in self.wrap(ch["local"], 18, NODE_DX - 8)[:2]:
+            for line in self.wrap(ch["local"], 18, dx - 8)[:2]:
                 self.text(line, 18, DIM, center=(x, yy))
                 yy += 17
             if draft:

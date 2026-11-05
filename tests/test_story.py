@@ -466,7 +466,7 @@ def test_rewards():
 def test_chapters_structure():
     ids = [c["id"] for c in st.CHAPTERS]
     assert len(set(ids)) == len(ids) and ids[0] == "P"
-    assert [c["id"] for c in st.CHAPTERS][1:] == ["1", "2", "3", "4", "5"]
+    assert [c["id"] for c in st.CHAPTERS][1:7] == ["1", "2", "3", "4", "5", "6"]
     prev_f = 0
     for c in st.CHAPTERS:
         assert c["act"] in ("1", "2", "3"), c["id"]
@@ -478,8 +478,12 @@ def test_chapters_structure():
         if c.get("draft"):
             assert c["nodes"] == []
             continue
-        assert c["reward"] in st.REWARDS
         kinds = [k for k, _ in c["nodes"]]
+        if kinds == ["end"]:                    # ponte provisoria (cap. 6 enquanto o Ato 2 e produzido)
+            assert c is st.CHAPTERS[-1] and c["reward"] is None, c["id"]
+            assert c["nodes"][0][1] in st.SCENES
+            continue
+        assert c["reward"] in st.REWARDS
         for k, ref in c["nodes"]:
             assert k in ("scene", "tournament", "chapter_end", "end")
             if k in ("scene", "end"):
@@ -538,19 +542,24 @@ def test_facade_extend():
     import story_a3
     import story_side
     for m in (story_a2, story_a3, story_side):
-        for name in ("CHARACTERS", "TEAMS", "TOURNAMENTS", "SCENES", "REWARDS"):
+        for name in ("CHARACTERS", "TEAMS", "TOURNAMENTS", "SCENES", "REWARDS", "SIDES"):
             assert set(getattr(m, name)) <= set(getattr(st, name)), (m.__name__, name)
         assert all(c in st.CHAPTERS for c in m.CHAPTERS), m.__name__
     acts = [c["act"] for c in st.CHAPTERS]
     assert acts == sorted(acts), "capitulos fora da ordem dos Atos"
     assert [c["act"] for c in st.CHAPTERS if c["id"] in ("P", "1", "2", "3", "4", "5")] == ["1"] * 6
-    for name in ("CHARACTERS", "TEAMS", "TOURNAMENTS", "SCENES", "REWARDS"):
+    # C2: o epilogo do Ato 1 e o no 0 do cap. 6 (saves migrados ficam em ch "6", node 0)
+    cap5 = next(c for c in st.CHAPTERS if c["id"] == "5")
+    cap6 = next(c for c in st.CHAPTERS if c["id"] == "6")
+    assert cap5["nodes"][-1] == ("chapter_end", "5") and len(cap5["nodes"]) == 4
+    assert cap6["act"] == "2" and cap6["nodes"][0][1] == "e1_epilogo"
+    for name in ("CHARACTERS", "TEAMS", "TOURNAMENTS", "SCENES", "REWARDS"):   # SIDES: vazio por ora
         fake = types.SimpleNamespace(__name__="fake", CHAPTERS=[],
                                      **{k: {} for k in ("CHARACTERS", "TEAMS", "TOURNAMENTS",
-                                                        "SCENES", "REWARDS")})
+                                                        "SCENES", "REWARDS", "SIDES")})
         getattr(fake, name)[next(iter(getattr(st, name)))] = {}
         before = {k: dict(getattr(st, k)) for k in ("CHARACTERS", "TEAMS", "TOURNAMENTS", "SCENES",
-                                                     "REWARDS")}
+                                                     "REWARDS", "SIDES")}
         try:
             st._extend(fake)
             raise AssertionError("id repetido em %s nao levantou" % name)
@@ -559,7 +568,7 @@ def test_facade_extend():
         assert all(getattr(st, k) == v for k, v in before.items()), "dados alterados apos erro"
     fake = types.SimpleNamespace(__name__="fake", CHAPTERS=[{"id": "P"}],
                                  **{k: {} for k in ("CHARACTERS", "TEAMS", "TOURNAMENTS", "SCENES",
-                                                    "REWARDS")})
+                                                    "REWARDS", "SIDES")})
     n = len(st.CHAPTERS)
     try:
         st._extend(fake)

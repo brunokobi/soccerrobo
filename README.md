@@ -138,7 +138,10 @@ No menu (teclas 1-6): `1 - AMISTOSO`, `2 - AMISTOSO`, `3 - NOVA CARREIRA`, `4 - 
      (`soccerpy_campaign_v1`) no navegador; `~/.soccerpy_campaign.json` no desktop. Um
      save inválido só é sobrescrito pelo NOVO JOGO após confirmação; a cópia fica em
      `.bad`. Um save com pequenos defeitos é reparado automaticamente, voltando ao início
-     do capítulo.
+     do capítulo. Desde a Onda C o save da campanha é **v2**: saves v1 são migrados ao
+     carregar (quem já estava no epílogo ou tinha terminado vai para o Capítulo 6, sem
+     refazer nada do Ato 1). Um build antigo (em cache no navegador) que abra um save v2
+     o trata como inválido e o preserva em `.bad`, sem apagar.
 
 ### Controles (modos 1 e 2)
 | Ação | Modo 1 jogador | J1 | J2 |
@@ -199,6 +202,7 @@ export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy
 .venv/bin/python tests/test_story.py                   # dados da campanha (cenas, textos, torneios, capítulos, recompensas)
 .venv/bin/python tests/test_campaign.py                # lógica da campanha (torneios, pity, treino, recompensas)
 .venv/bin/python tests/test_campaign_save.py           # save da campanha (validação, reparo, save inválido)
+.venv/bin/python tests/test_campaign_migration.py      # migração v1 -> v2 com 4 saves reais do cap. 5 e build antigo lendo v2
 .venv/bin/python tests/test_campaign_ui.py             # telas da campanha (menu, mapa, diálogo, torneio, fim)
 .venv/bin/python tests/test_portraits.py               # retratos e cenários desenhados por código
 .venv/bin/python tests/test_prefs.py                   # preferências do jogador (store, valor inválido -> padrão)
