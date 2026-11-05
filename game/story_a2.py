@@ -5,9 +5,10 @@ story.py junta estes dicts/listas nos seus (story._extend) e e o unico ponto de 
 do jogo. Mesmas regras e formatos de story.py (ver o docstring de la); ids nao podem repetir os de
 outros modulos. Capitulos aqui levam "act" e entram depois dos do Ato 1, na ordem da lista.
 
-C6: cap. 6 (Taca de Acesso). C7: cap. 7 (liga, escolha B2) e cap. 8 (copa com quartas). Os ovr/F
-seguem os valores iniciais da spec (secao 7) e o econ_tier fica em 3 ate o C9 estender a economia
-(TIER_MUL com 7 entradas) e calibrar o Ato 2. Cap. 9 e rascunho ("em breve") ate o C8.
+C6: cap. 6 (Taca de Acesso). C7: cap. 7 (liga, escolha B2) e cap. 8 (copa com quartas). C8: cap. 9
+(serie contra o Ze Perfeito, escolha B3) e o fim do Ato 2 (a2_fim). Os ovr/F seguem os valores
+iniciais da spec (secao 7) e o econ_tier fica em 3 ate o C9 estender a economia (TIER_MUL com 7
+entradas) e calibrar o Ato 2.
 """
 
 # --- elenco novo (spec secao 2) -----------------------------------------------------------------
@@ -23,6 +24,9 @@ CHARACTERS = {
               "hair": ("coque", (170, 170, 170)), "acc": ["avental"], "outfit": ("avental", (240, 240, 230))},
     "ogawa": {"name": "MESTRE OGAWA", "color": (120, 200, 160), "skin": (225, 190, 150),
               "hair": ("raspado", (60, 60, 60)), "acc": ["bigode"], "outfit": ("kimono", (60, 70, 90))},
+    # clone do Ze: robo branco, sem chinelo e sem fita (variante de portraits.draw_robot)
+    "zeperfeito": {"name": "ZÉ PERFEITO", "color": (200, 245, 255), "skin": (220, 230, 240),
+                   "hair": ("none", (0, 0, 0)), "acc": [], "outfit": ("robo", (235, 245, 252))},
 }
 
 # --- times (ordem dos slots = garage.LINEUP_SLOTS: GK, DEF, MID, MID, ATT) ------------------------
@@ -89,6 +93,21 @@ TEAMS = {
     "guarda_zero": {"name": "Guarda Zero", "color": (230, 40, 60), "ovr": 64,
                     "names": ["GZ-01", "GZ-02", "GZ-03", "GZ-04", "GZ-05"],
                     "chassis": list(_CH5), "paint": (40, 40, 48), "perfect": True},
+    # ---- Cap. 9 (O Clone): serie de 3 duelos no laboratorio
+    "droides": {"name": "Droides de Plantão", "color": (150, 160, 180), "ovr": 56,
+                "names": ["Ronda", "Crachá", "Catraca", "Alarme", "Plantão"],
+                "chassis": list(_CH5), "paint": (155, 165, 185), "perfect": False},
+    "reserva_valq": {"name": "Reserva da Valquíria", "color": (140, 140, 150), "ovr": 60,
+                     "names": ["R-01", "R-02", "R-03", "R-04", "R-05"],
+                     "chassis": list(_CH5), "paint": (145, 145, 155), "perfect": False},
+    # variante do S2 se o Gabi virou rival (gabi_rival): ele assinou com a Limpex
+    "trovoes_lx": {"name": "Trovões Limpex", "color": (60, 140, 255), "ovr": 60,
+                   "names": ["Raio X", "Faísca LX", "Estrondo", "Ventania", "Relâmpago"],
+                   "chassis": list(_CH5), "paint": (230, 240, 255), "perfect": False},
+    # chefe do cap. 9 (e do Ato 2): o Ze Perfeito com a Guarda Zero
+    "zeperfeito_gz": {"name": "Zé Perfeito e a Guarda", "color": (200, 245, 255), "ovr": 66,
+                      "names": ["ZP-01", "GZ-11", "GZ-12", "GZ-13", "GZ-14"],
+                      "chassis": list(_CH5), "paint": (235, 245, 252), "perfect": True},
 }
 
 # --- torneios -----------------------------------------------------------------------------------
@@ -122,6 +141,16 @@ TOURNAMENTS = {
         "hooks": {"before": {"G2": "c8_helena", "QF": "c8_qf_pre", "SF": "c8_sf_kenji", "F": "c8_final_pre"},
                   "after": {},
                   "win": "c8_final_win", "lose": "c8_final_lose", "elim": "c8_repescagem"},
+    },
+    # Cap. 9: serie de 3 duelos no laboratorio. Estagios (F_rec / O): S1 72,4 / 56; S2 73,1 / 60;
+    # S3 73,8 / 66 (chefe, boss_delta 7,8). S2: Reserva da Valquiria; com gabi_rival, os Trovoes Limpex.
+    "t_c9": {
+        "chapter": "9", "local": "Laboratório da Limpex", "bg": "laboratorio", "format": "series",
+        "series": ["droides", "reserva_valq", "zeperfeito_gz"], "group": [], "qf": None, "sf": None,
+        "final": "zeperfeito_gz", "boss": "zeperfeito_gz", "boss_delta": 7.8, "regular_delta": (13, 17),
+        "alt": [(("flag", "gabi_rival"), {"series": ["droides", "trovoes_lx", "zeperfeito_gz"]})],
+        "hooks": {"before": {"S2": "c9_s2_pre", "S3": "c9_s3_pre"}, "after": {},
+                  "win": "c9_final_win", "lose": "c9_final_lose", "elim": None},
     },
 }
 
@@ -528,6 +557,131 @@ SCENES = {
         ("nestor", "pensando", "Eu não lembro. Mas eu sei quem lembra. (olha para o Zé) Ele tem a data gravada no chip. Desde sempre."),
         ("ze", "robo", "Bip. Bip. Bip. (o Zé pisca o LED três vezes, devagar, como quem guarda um segredo há trinta anos.)"),
     ]},
+
+    # ------------------------------------------------------------------ Capitulo 9 (O Clone)
+    "c9_intro": {"bg": "garagem", "cast": ["nestor", "teo", "ambrosio", "vivi", "bia", "dudu", "ze"], "lines": [
+        ("narrador", "neutro", "Garagem do Vô Nestor. O Dudu ligou o celular na TV velha. Na tela, um vídeo vazado do laboratório da Limpex: um robô-aspirador branco, girando devagar num pedestal."),
+        ("dudu", "suor", "Chat, isso vazou há uma hora. Já tem um milhão de visualizações. O título é \"Zé Perfeito: o futuro da limpeza\"."),
+        ("bia", "susto", "Ele é igual ao Zé! A mesma tampa, a mesma antena, a mesma grade do lado. Só que limpo. Limpo demais."),
+        ("nestor", "bravo", "Essa é a minha planta. Linha por linha. Eu não autorizei esse clone. E muito menos esse bigode."),
+        ("narrador", "neutro", "O robô branco tem, colado na frente da tampa, um bigode de adesivo. Alinhado com perfeição. Simétrico até o último fio."),
+        ("ambrosio", "pensando", "Bigode de adesivo. Isso é coisa da Valquíria. Ela acha que bigode passa credibilidade. Ela colou um no próprio crachá."),
+        ("teo", "pensando", "Ele não tem chinelo. Nem fita. Nem rodinha solta. Ele é o Zé... sem nada que faz o Zé ser o Zé."),
+        ("vivi", "determinado", "A Superliga anunciou: o campeão enfrenta o \"protótipo do futuro\" numa série de três duelos, no laboratório. Ao vivo. É uma armadilha com patrocínio."),
+        ("nestor", "determinado", "Então a gente vai. Mas antes eu quero olhar esse laboratório de perto. Dudu, você ainda tem aquele fone de espião?"),
+        ("dudu", "euforico", "O headset? Tenho! Ele tem microfone, câmera e uma luzinha que eu não sei desligar. Perfeito para espionagem discreta."),
+        ("ze", "robo", "Bip. (o Zé olha para a TV. O LED dele fica de um azul escuro que ninguém tinha visto ainda.)"),
+    ]},
+
+    "c9_lab": {"bg": "laboratorio", "cast": ["dudu", "teo", "bia", "nestor", "vivi", "ze"], "lines": [
+        ("narrador", "neutro", "Noite. Subsolo do prédio da Limpex, nível menos três. Corredores brancos, luz fria e um cheiro forte de lavanda corporativa."),
+        ("dudu", "suor", "Chat, estou dentro. Repito: estou dentro... do armário de limpeza. Errei a porta. Mas o armário é muito bem organizado."),
+        ("vivi", "pensando", "Dudu, a planta do prédio diz: terceira porta à esquerda. Você entrou na segunda. Está escrito \"armário\" na porta."),
+        ("dudu", "suor", "Eu estava olhando o chat. O chat disse esquerda. O chat não sabe ler planta."),
+        ("nestor", "neutro", "O código do laboratório é o meu aniversário. O Zé tem gravado. Téo, encosta o Zé no teclado."),
+        ("narrador", "neutro", "O Zé encosta a antena no teclado. O LED pisca três vezes. O teclado apita e a porta abre com um suspiro de ar condicionado."),
+        ("bia", "maravilhado", "O Zé sabia o código! Ele sabe o aniversário do Vô! Eu não sei nem o meu, sempre confundo com o da minha tia."),
+        ("teo", "susto", "Gente... olhem. São dezenas. Fileiras de Zés brancos, desligados, nas prateleiras. Todos com bigode de adesivo."),
+        ("nestor", "triste", "Ela não fez um clone. Ela fez uma fábrica. Trinta anos atrás eu desenhei um amigo. Ela desenhou um produto."),
+        ("narrador", "neutro", "No fundo da sala, um único robô branco está ligado. O LED dele é ciano, igualzinho ao do Zé. Ele vira devagar na direção da porta."),
+        ("ze", "robo", "Bzzzt. (a rodinha esquerda do Zé treme. Ele não sabe se quer ir até lá. Vai assim mesmo.)"),
+    ]},
+
+    "c9_ze_perfeito": {"bg": "laboratorio", "cast": ["ze", "zeperfeito", "teo", "nestor", "valquiria", "bia"], "lines": [
+        ("narrador", "neutro", "O robô branco rola até o Zé Poeira. Sem barulho, sem tremer, sem nenhuma peça solta. Para a exatos dez centímetros dele."),
+        ("zeperfeito", "calmo", "Bip. Unidade ZP-01. Zé Perfeito. Eficiência de noventa e nove vírgula nove por cento. Você é o modelo original."),
+        ("ze", "robo", "Bzzzt. (a rodinha esquerda do Zé Poeira cai e rola até o Zé Perfeito.)"),
+        ("zeperfeito", "pensando", "Pergunta: por que você cai? O desenho original não prevê queda. Eu não caio. Eu nunca caí."),
+        ("nestor", "feliz", "Porque eu desenhei ele para cair, filho. Quem nunca cai nunca aprende a levantar. E nunca ganha a rodinha de volta de um amigo."),
+        ("zeperfeito", "calmo", "Levantar consome energia. Cair é ineficiente. Eu não entendo."),
+        ("bia", "determinado", "Não precisa entender. Precisa jogar. E dessa vez a gente trouxe fita extra."),
+        ("narrador", "neutro", "As luzes do laboratório acendem de uma vez. Num balcão alto, sorrindo, está a Dra. Valquíria. Ela estava ali o tempo todo."),
+        ("valquiria", "feliz", "Bem-vindos! Eu sabia que vocês viriam. Deixei o código ser o aniversário do Nestor justamente para isso. Eu sou sentimental do jeito certo."),
+        ("valquiria", "piscando", "Série de três duelos, aqui mesmo, ao vivo. Se o Zé Perfeito vencer, o mundo inteiro troca o Zé de vocês por um sem defeito."),
+        ("teo", "determinado", "E se o Zé Poeira vencer?"),
+        ("valquiria", "feliz", "Aí eu aprendo alguma coisa. Eu adoro aprender. Principalmente com o erro dos outros."),
+    ]},
+
+    "c9_s2_pre": {"bg": "laboratorio", "cast": ["teo", "gabi", "vivi", "valquiria"], "lines": [
+        ("narrador", "neutro", "Segundo duelo. A porta do laboratório abre e entra o adversário que a Valquíria escolheu a dedo."),
+        ("gabi", "convencido", "Surpresa, chinelo. A Limpex me ofereceu um contrato. Robôs novos, setenta e cinco sensores. Eu disse sim antes dela terminar a frase.", ("flag", "gabi_rival")),
+        ("teo", "triste", "Gabi, eles estão usando você. Igual usaram a Vivi nos Impecáveis.", ("flag", "gabi_rival")),
+        ("gabi", "bravo", "Ninguém me usa. Eu que uso eles. Eu tenho cláusula de saída. Na página quarenta. Eu acho.", ("flag", "gabi_rival")),
+        ("vivi", "pensando", "Página quarenta não existe. O contrato padrão da Limpex tem trinta e nove. Eu li o meu três vezes.", ("flag", "gabi_rival")),
+        ("narrador", "neutro", "Entra o Reserva da Valquíria: cinco robôs cinza, sem nome, com número de série no lugar do rosto.", ("flag", "gabi_amigo")),
+        ("gabi", "feliz", "(no fone do Téo) Téo, é o Gabi. Estou na arquibancada do laboratório, disfarçado de estagiário. Esse time é lento na saída pela direita.", ("flag", "gabi_amigo")),
+        ("teo", "feliz", "Valeu, Gabi! Estagiário? Como você entrou?", ("flag", "gabi_amigo")),
+        ("gabi", "piscando", "Crachá de papelão e muita confiança. Funciona em noventa por cento dos prédios.", ("flag", "gabi_amigo")),
+        ("valquiria", "feliz", "Que emocionante! Eu adoro quando as pessoas escolhem lados. Facilita a planilha."),
+    ]},
+
+    "c9_s3_pre": {"bg": "laboratorio", "cast": ["teo", "zeperfeito", "nestor", "ambrosio", "vivi", "ze"], "lines": [
+        ("narrador", "neutro", "Duelo final. O Zé Perfeito entra no campo com a Guarda Zero atrás dele. Os LEDs vermelhos da Guarda contrastam com o ciano dele."),
+        ("zeperfeito", "calmo", "Probabilidade de vitória do modelo original: onze por cento. Eu calculei quatro mil vezes."),
+        ("vivi", "determinado", "Eu também calculei. Deu onze por cento. Mas a minha planilha tem uma coluna que a dele não tem: \"teimosia\"."),
+        ("ambrosio", "feliz", "Na planilha da vida, Valentina, teimosia vale ponto extra. Regulamento universal, artigo zero."),
+        ("nestor", "neutro", "Zé, escuta o velho. Ele é perfeito. Você é melhor. Perfeito é quando acaba. Melhor é quando continua."),
+        ("teo", "determinado", "É o último duelo, Zé. Por todo mundo que já caiu e levantou."),
+        ("zeperfeito", "pensando", "Pergunta: o que significa \"continua\"? O meu manual não tem essa palavra."),
+        ("ze", "robo", "Bzzzt. (o Zé Poeira aperta o chinelo com a fita, encosta a rodinha e gira uma vez, devagar. Está pronto.)"),
+    ]},
+
+    # B3: poupar o clone (poupou_ze, recruta) ou desligar (desligou_ze, modulo); ver spec secao 4
+    "c9_final_win": {"bg": "laboratorio", "cast": ["teo", "zeperfeito", "nestor", "valquiria", "bia", "ze"], "lines": [
+        ("narrador", "neutro", "Apito final. O Zé Poeira vence a série. No meio do campo, o Zé Perfeito fica parado. O LED dele pisca, confuso, pela primeira vez."),
+        ("zeperfeito", "pensando", "Erro. Erro. O modelo original venceu com onze por cento. Eu preciso recalcular o mundo."),
+        ("valquiria", "convencida", "Que interessante. Que perda interessante. Vou desligar o protótipo e começar o modelo dois. Sem curiosidade, desta vez."),
+        ("bia", "bravo", "Desligar?! Ele acabou de aprender a palavra \"continua\"!"),
+        ("nestor", "pensando", "Téo, o controle do laboratório está na sua mão. A Valquíria deixou ali para ver o que você faz. Ela sempre deixa."),
+        ("teo", "pensando", "O Zé Perfeito é um clone. Mas ele perguntou por que a gente cai. Robô que pergunta isso..."),
+        ("zeperfeito", "calmo", "Unidade ZP-01 aguarda instrução. Observação: eu não quero ser desligado. Observação dois: eu não sabia que eu queria coisas."),
+        ("ze", "robo", "Bip. (o Zé Poeira empurra devagar a rodinha que tinha caído, de volta para perto do Zé Perfeito.)"),
+        {"q": "O controle está na mão do Téo. O Zé Perfeito espera. A Valquíria sorri. O que o Téo faz?",
+         "opts": [
+             {"t": "Poupar o Zé Perfeito", "fx": {"flag": "poupou_ze", "xp_team": 30},
+              "reply": [("teo", "determinado", "Ninguém vai desligar ninguém. Zé Perfeito, quer conhecer uma garagem?"),
+                        ("zeperfeito", "feliz", "Afirmativo. Pergunta: na garagem tem queda? Eu gostaria de experimentar uma queda.")]},
+             {"t": "Desligar o Zé Perfeito", "fx": {"flag": "desligou_ze", "scrap": 100},
+              "reply": [("teo", "triste", "Desculpa, Zé Perfeito. Ela ia fazer mil cópias de você. Assim, pelo menos, para aqui."),
+                        ("nestor", "triste", "Guarda o chip dele, Téo. Chip que aprendeu a perguntar não vai para o lixo. Vai para a gaveta boa.")]},
+         ]},
+    ]},
+
+    "c9_final_lose": {"bg": "laboratorio", "cast": ["teo", "zeperfeito", "valquiria", "vivi", "nestor", "ze"], "lines": [
+        ("narrador", "neutro", "Apito final. O Zé Perfeito vence o duelo sem pressa, sem erro, sem comemorar. Ele só registra o resultado."),
+        ("zeperfeito", "calmo", "Resultado previsto. Eficiência mantida. Pergunta repetida: por que vocês continuam?"),
+        ("valquiria", "feliz", "Viram? Perfeição. Sem chinelo, sem fita, sem drama. Mas eu deixo vocês tentarem de novo. Dados de derrota são os meus favoritos."),
+        ("teo", "triste", "Ele não erra nada. Ele é o Zé sem os defeitos."),
+        ("nestor", "determinado", "Ele é o Zé sem a história, Téo. Defeito é história. E história a gente usa a favor."),
+        ("vivi", "pensando", "Ele calcula tudo pela probabilidade. Se o Zé fizer a jogada menos provável, ele demora para reagir. A gente precisa ser improvável."),
+        ("ze", "robo", "Bip. (a rodinha cai. O Zé Perfeito para, olha para ela por dois segundos e anota alguma coisa. Ele está curioso.)"),
+        ("zeperfeito", "pensando", "Registro: a rodinha caiu de novo. Hipótese: isso não é defeito. Hipótese em análise."),
+    ]},
+
+    "c9_end": {"bg": "laboratorio", "cast": ["valquiria", "teo", "nestor", "ambrosio", "vivi", "ze"], "lines": [
+        ("narrador", "neutro", "Saída do laboratório. Ninguém tenta impedir o time. A Dra. Valquíria acompanha todo mundo até o elevador, sorrindo, com uma prancheta nova."),
+        ("valquiria", "feliz", "Muito obrigada! Foi uma aula gratuita. Eu aprendi tanto sobre imperfeição. Vou aplicar tudo na próxima linha."),
+        ("vivi", "bravo", "Ela não perdeu. Ela pesquisou. A gente acabou de dar consultoria de graça para a Limpex."),
+        ("valquiria", "piscando", "Consultoria não, Valentina. Inspiração. A próxima temporada é internacional: Copa dos Campeões. Vocês vão adorar o meu novo projeto."),
+        ("ambrosio", "pensando", "Novo projeto. O Augusto falou de um chip antigo nos arquivos. O que mais ela pode ter achado além da planta?"),
+        ("narrador", "neutro", "O Zé Perfeito entra no elevador com o time. Ele pergunta se pode apertar o botão. Aperta todos.", ("flag", "poupou_ze")),
+        ("nestor", "feliz", "Na garagem a gente arruma um chinelo para ele. Não precisa. Mas é bom ter.", ("flag", "poupou_ze")),
+        ("nestor", "triste", "O chip do Zé Perfeito está no meu bolso. Quentinho. Um dia a gente descobre o que fazer com ele.", ("flag", "desligou_ze")),
+        ("teo", "determinado", "Copa dos Campeões. Seja o que for, a gente vai junto. O Zé, a fita e o chinelo."),
+        ("ze", "robo", "Bip. (o elevador fecha. No reflexo da porta, por um segundo, o LED do Zé fica vermelho. Depois volta ao ciano. Ninguém viu.)"),
+    ]},
+
+    "a2_fim": {"bg": "garagem", "cast": ["nestor", "teo", "ambrosio", "bia", "vivi", "dudu", "ze"], "lines": [
+        ("narrador", "neutro", "Fim do Ato 2. Garagem do Vô Nestor. Na prateleira, três troféus novos, uma panela de bingo e uma caixa de sapato cheia de apitos com chip."),
+        ("dudu", "feliz", "Chat, resumo da temporada: Taça de Acesso, Superliga, Playoffs e um clone. Minha mãe fez um álbum. Tem a foto do mascote em cima do diretor."),
+        ("bia", "feliz", "Eu gastei quarenta rolos de fita. Quarenta. A loja me mandou um cartão de Natal."),
+        ("vivi", "corada", "Refiz a planilha da temporada. Na coluna \"teimosia\" a gente está em primeiro. Disparado."),
+        ("ambrosio", "pensando", "A Copa dos Campeões junta os melhores de cada país. A Valquíria vai estar lá. E o projeto novo dela também."),
+        ("teo", "pensando", "Vô, o senhor acha que a gente está pronto?"),
+        ("nestor", "feliz", "Na minha época, ninguém estava pronto para nada. A gente ia assim mesmo, de chinelo. Agora vem o mundo, Téo."),
+        ("nestor", "piscando", "Arruma a mala. E põe fita. Muita fita."),
+        ("ze", "robo", "Bzzzt. (a rodinha cai e rola até a mala aberta. Entra sozinha. Fim do Ato 2.)"),
+    ]},
 }
 
 # --- recompensas --------------------------------------------------------------------------------
@@ -549,6 +703,15 @@ REWARDS = {
     "rw_8": {"scrap": 1100, "piece": {"model": "Pão de Queijo Térmico", "rar": 3}, "recruits": [],
              "unlock": [], "xp_hero": 0, "xp_team": 30, "equip_hero_piece": None,
              "skill": {"robot": "hero", "id": "curva", "rank": 1}},
+    # Cap. 9 (fim do Ato 2): poupou o clone -> ele entra no time; desligou -> Modulo Overclock (o "Chip
+    # Zero" da spec) e +400 de sucata
+    "rw_9": {"scrap": 1300, "piece": None, "recruits": [], "unlock": [], "xp_hero": 0, "xp_team": 0,
+             "equip_hero_piece": None,
+             "alt": [(("flag", "poupou_ze"),
+                      {"recruits": [{"name": "Zé Perfeito", "role": "MID", "chassis": "Orbital",
+                                     "base_ovr": 70, "level": 9, "paint": (235, 245, 252),
+                                     "piece": {"model": "Chip Neural", "rar": 2}}]}),
+                     (None, {"scrap": 1700, "piece": {"model": "Módulo Overclock", "rar": 1}})]},
 }
 SIDES = {}
 
@@ -573,5 +736,7 @@ CHAPTERS = [
                ("scene", "c8_end"), ("chapter_end", "8")]},
     {"id": "9", "act": "2", "title": "Capítulo 9", "subtitle": "O Clone",
      "local": "Laboratório da Limpex", "F_start": 72.4, "F_end": 73.8, "econ_tier": 3,
-     "tier_done_on_close": 3, "reward": None, "nodes": [], "draft": True},
+     "tier_done_on_close": 3, "reward": "rw_9",
+     "nodes": [("scene", "c9_intro"), ("scene", "c9_lab"), ("scene", "c9_ze_perfeito"),
+               ("tournament", "t_c9"), ("scene", "c9_end"), ("scene", "a2_fim"), ("chapter_end", "9")]},
 ]

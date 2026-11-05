@@ -214,7 +214,8 @@ def test_encoding_and_chars():
 def test_characters_and_vocab():
     need = {"teo", "ambrosio", "vivi", "bia", "dudu", "augusto", "gervasio", "rodolfo", "helena",
             "kenji", "narrador", "ze",
-            "nestor", "valquiria", "gabi", "odete", "ogawa"}    # Ato 2 (C6-C7); spec secao 2
+            "nestor", "valquiria", "gabi", "odete", "ogawa",    # Ato 2 (C6-C8); spec secao 2
+            "zeperfeito"}
     assert set(st.CHARACTERS) == need
     names = set()
     for cid, c in st.CHARACTERS.items():

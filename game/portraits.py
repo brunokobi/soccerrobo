@@ -2396,13 +2396,15 @@ _LED = {"robo": (0, 230, 255), "neutro": (0, 230, 255), "feliz": (110, 240, 130)
 
 def draw_robot(scr, cx, base_y, R, mood="robo", k=1.0, ch=None, bob=0, blink=False, mouth=0, t=0.0):
     """Robo-aspirador (disco com LED, chinelo preso por fita). base_y = chao. blink = LED vira um
-    traco; mouth = quadro de fala (LED claro + ondas de som)."""
+    traco; mouth = quadro de fala (LED claro + ondas de som). Variante (C8, Ze Perfeito): personagem
+    robo SEM "chinelo" em acc sai sem chinelo e sem fita, com a tampa na cor da roupa."""
     led_raw = _LED.get(mood, (0, 230, 255))
     led = shade(led_raw, k)
     y = base_y + bob
     w = int(2.7 * R)
     pygame.draw.ellipse(scr, shade((10, 14, 26), k), (int(cx - w * 0.6), int(y - 0.18 * R), int(w * 1.2), int(0.3 * R)))   # sombra
-    body = shade((150, 160, 175), k)
+    slipper = ch is None or "chinelo" in ch.get("acc", ())
+    body = shade((150, 160, 175) if slipper else tuple(ch["outfit"][1]), k)
     pygame.draw.ellipse(scr, shade((90, 100, 116), k), (int(cx - w / 2), int(y - 0.95 * R), w, int(0.9 * R)))            # base
     for i in range(5):                                                                                                    # grade lateral
         x = cx - 0.8 * R + i * 0.4 * R
@@ -2424,12 +2426,12 @@ def draw_robot(scr, cx, base_y, R, mood="robo", k=1.0, ch=None, bob=0, blink=Fal
     for sx in (-1, 1):                                                                                                    # rodinhas
         pygame.draw.circle(scr, shade((30, 34, 46), k), (int(cx + sx * 0.95 * R), int(y - 0.12 * R)), max(2, int(0.2 * R)))
         pygame.draw.circle(scr, shade((90, 96, 110), k), (int(cx + sx * 0.95 * R), int(y - 0.12 * R)), max(1, int(0.07 * R)))
-    # chinelo preso por fita
-    cxl, cyl = cx + int(0.55 * R), y - 1.4 * R
-    pygame.draw.ellipse(scr, shade((230, 190, 90), k), (int(cxl - 0.5 * R), int(cyl - 0.32 * R), int(1.0 * R), int(0.5 * R)))
-    pygame.draw.ellipse(scr, shade((190, 70, 60), k), (int(cxl - 0.25 * R), int(cyl - 0.3 * R), int(0.5 * R), int(0.3 * R)), 2)
-    _line(scr, shade((190, 190, 195), k), (cxl - 0.6 * R, cyl - 0.35 * R), (cxl + 0.55 * R, cyl + 0.2 * R), max(2, int(R * 0.1)))
-    _line(scr, shade((190, 190, 195), k), (cx - 0.9 * R, y - 0.9 * R), (cx - 0.3 * R, y - 1.35 * R), max(2, int(R * 0.1)))
+    if slipper:                                                                                                         # chinelo preso por fita
+        cxl, cyl = cx + int(0.55 * R), y - 1.4 * R
+        pygame.draw.ellipse(scr, shade((230, 190, 90), k), (int(cxl - 0.5 * R), int(cyl - 0.32 * R), int(1.0 * R), int(0.5 * R)))
+        pygame.draw.ellipse(scr, shade((190, 70, 60), k), (int(cxl - 0.25 * R), int(cyl - 0.3 * R), int(0.5 * R), int(0.3 * R)), 2)
+        _line(scr, shade((190, 190, 195), k), (cxl - 0.6 * R, cyl - 0.35 * R), (cxl + 0.55 * R, cyl + 0.2 * R), max(2, int(R * 0.1)))
+        _line(scr, shade((190, 190, 195), k), (cx - 0.9 * R, y - 0.9 * R), (cx - 0.3 * R, y - 1.35 * R), max(2, int(R * 0.1)))
     pygame.draw.line(scr, shade((90, 100, 116), k), (int(cx - 0.4 * R), int(y - 1.35 * R)), (int(cx - 0.8 * R), int(y - 1.7 * R)), 2)
     pygame.draw.circle(scr, led, (int(cx - 0.8 * R), int(y - 1.72 * R)), max(2, int(0.1 * R)))
     if mood == "chorando":

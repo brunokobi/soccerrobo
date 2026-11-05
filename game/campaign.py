@@ -974,15 +974,16 @@ class Campaign:
         return rw
 
     def _recruit(self, spec):
-        """Cria o recruta (nivel/chassis/peca ja prontos). Elenco cheio: sai o reserva de MENOR nivel
-        (nunca o heroi nem titular); devolve o aviso (str) ou None."""
+        """Cria o recruta (nivel/chassis/peca ja prontos). Elenco cheio: sai o reserva MAIS FRACO (media
+        dos atributos efetivos; empate: menor nivel) - nunca o heroi nem titular; devolve o aviso (str)
+        ou None. (C8: antes saia o de menor nivel, o que tirava recrutas fortes de nivel baixo.)"""
         g = self.garage
         warn = None
         if len(g.robots) >= G.MAX_SQUAD:
             pb = g.pieces_by_id()
             reserves = [r for r in g.robots if r["id"] not in g.lineup and r["id"] != self.hero]
             if reserves:
-                out = min(reserves, key=lambda r: (r["level"], robots.mean_attr(G.effective_attrs(r, pb)),
+                out = min(reserves, key=lambda r: (robots.mean_attr(G.effective_attrs(r, pb)), r["level"],
                                                    r["id"]))
                 g.robots.remove(out)
                 warn = "Elenco cheio: %s (nv %d) saiu para %s entrar." % (out["name"], out["level"], spec["name"])

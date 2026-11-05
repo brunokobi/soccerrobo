@@ -631,11 +631,12 @@ def check_final_state(c):
     assert all(not ch.get("draft") for ch in story.CHAPTERS if ch["reward"])
     assert g.stats["titles"] == 1, g.stats
     names = {r["name"] for r in g.robots}
-    # recrutas: Gambiarra, Pixelado, Majestade e (com gabi_amigo) Relampago. Com o elenco cheio, o reserva
-    # de menor nivel sai para o recruta entrar (Campaign._recruit), entao no maximo um some.
-    recs = {"Gambiarra", "Pixelado", "Majestade", "Relâmpago"}
-    assert "Majestade" in names and len(names & recs) >= 3 and len(g.robots) == gm.MAX_SQUAD, names
+    # recrutas: Gambiarra, Pixelado, Majestade e, no Ato 2, Relampago (gabi_amigo) e Ze Perfeito
+    # (poupou_ze). Com o elenco cheio sai o reserva mais fraco (Campaign._recruit), entao os recrutas
+    # fortes (Majestade 64, Relampago 68, Ze Perfeito 70) ficam.
+    assert "Majestade" in names and len(g.robots) == gm.MAX_SQUAD, names
     assert ("Relâmpago" in names) == bool(g.flags.get("gabi_amigo")), names
+    assert ("Zé Perfeito" in names) == bool(g.flags.get("poupou_ze")), names
     assert sum(len(story.REWARDS[x].get("recruits", ())) for x in story.REWARDS) == 3
     for ch in story.CHAPTERS:                               # todas as recompensas aplicadas, uma vez
         if ch["reward"] is None:                            # ponte provisoria do cap. 6
@@ -1167,6 +1168,29 @@ def test_conditional_reward_rw7_by_gabi_choice():
             assert rep["recruits"] == [] and rep["piece"] and len(c.garage.inventory) == n_inv + 1
             assert all(x["name"] != "Relâmpago" for x in c.garage.robots)
         assert c.apply_chapter_rewards("7")["applied"] is False        # uma vez so
+
+
+def test_cap9_series_variant_and_rw9_by_choice():
+    """t_c9 (C8): o 2o duelo e o Reserva da Valquiria, ou os Trovoes Limpex com gabi_rival. rw_9: poupou_ze
+    traz o Ze Perfeito; desligou_ze da o Modulo Overclock e 1.700 de sucata."""
+    c = new(52)
+    assert c.tournament("t_c9")["series"][1] == "reserva_valq"
+    c.garage.flags["gabi_rival"] = 1
+    eff = c.tournament("t_c9")
+    assert eff["series"] == ["droides", "trovoes_lx", "zeperfeito_gz"] and eff["boss"] == "zeperfeito_gz"
+    assert cm.boss_stages(eff) == ["S3"]
+    for poupou in (True, False):
+        c = new(53)
+        c.garage.flags["poupou_ze" if poupou else "desligou_ze"] = 1
+        rep = c.apply_chapter_rewards("9")
+        names = {r["name"] for r in c.garage.robots}
+        if poupou:
+            assert rep["recruits"] == ["Zé Perfeito"] and rep["scrap"] == 1300 and "Zé Perfeito" in names
+            r = next(x for x in c.garage.robots if x["name"] == "Zé Perfeito")
+            assert r["chassis"] == "Orbital" and r["level"] == 9
+        else:
+            assert rep["recruits"] == [] and rep["scrap"] == 1700 and rep["piece"]
+            assert "Zé Perfeito" not in names
 
 
 def main():
