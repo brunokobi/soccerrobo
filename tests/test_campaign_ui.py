@@ -31,6 +31,22 @@ CAREER = {}       # career: {"save": str}
 FORBIDDEN = []
 
 
+def is_campaign_end(c, a):
+    """Fim do conteudo: "em breve" no 1o rascunho (se ainda houver) ou um dos finais de story.ENDINGS."""
+    if any(x.get("draft") for x in story.CHAPTERS):
+        return a == {"kind": "end", "draft": True} and bool(c.chapter().get("draft"))
+    firsts = [e[1] if isinstance(e[1], str) else e[1][0] for e in story.ENDINGS]
+    return a["kind"] == "end" and a.get("draft") is False and a.get("ending") in firsts
+
+
+def last_chapter():
+    return next((x["id"] for x in story.CHAPTERS if x.get("draft")), story.CHAPTERS[-1]["id"])
+
+
+def n_titles():
+    return sum(1 for r in story.REWARDS.values() if r.get("title"))
+
+
 def _forbid(name):
     def f(*a, **k):
         FORBIDDEN.append(name)
@@ -1192,7 +1208,7 @@ def _buttons_with(label_pred):
 
 
 def test_map_act_tabs_14_nodes_and_no_surface():
-    """Dados reais: Ato 1 (P-5), Ato 2 (6 jogavel + 7-9 rascunho), Ato 3 (10-13 rascunho) = 14 nos."""
+    """Dados reais: Ato 1 (P-5), Ato 2 (6-9), Ato 3 (10-13) = 14 nos."""
     fresh_campaign(31)
     assert ui.shown_act() == "1"
     total = 0
@@ -1214,7 +1230,7 @@ def test_map_act_tabs_14_nodes_and_no_surface():
     assert [en for _r, en in tabs] == [True, True, True], tabs
     click(tabs[2][0].center)
     frame()
-    assert ui.map_tab == "3" and text_cache_has("Intercâmbio") and text_cache_has("em breve")
+    assert ui.map_tab == "3" and text_cache_has("Intercâmbio") and text_cache_has("Chip Zero")
     with story_patch():                                  # Ato sem capitulos: aba desligada
         story.CHAPTERS = [c for c in story.CHAPTERS if c.get("act") != "3"]
         ui.set_map_tab(None)
@@ -1389,8 +1405,11 @@ def test_flow_full_campaign_by_clicks_reaches_ending():
     else:
         raise AssertionError("autoplay nao chegou ao ending")
     cp = ui.campaign
-    assert ui.end_view["draft"] is True and cp.next_action() == {"kind": "end", "draft": True}
-    assert cp.garage.stats["titles"] == 1 and "e1_epilogo" in cp.done and "c5_antidoping" in cp.done
+    act = cp.next_action()
+    assert is_campaign_end(cp, act) and ui.end_view["draft"] is bool(act.get("draft")), act
+    assert cp.garage.stats["titles"] == n_titles() and "e1_epilogo" in cp.done and "c5_antidoping" in cp.done
+    if not act.get("draft"):                                   # campanha completa: final na galeria e na tela
+        assert cp.endings == [act["ending"]] and ui.end_view["ending"]
     names = {r["name"] for r in cp.garage.robots}                 # elenco cheio: um reserva pode sair
     assert len(names) == gm.MAX_SQUAD, names                     # elenco cheio: sai o reserva mais fraco
     assert ("Samurai" if cp.garage.flags.get("gabi_amigo") else "Ronin") in names, names
@@ -1399,7 +1418,7 @@ def test_flow_full_campaign_by_clicks_reaches_ending():
     assert not FORBIDDEN
     saved = cm.Campaign.load()
     assert saved is not None, saved
-    assert saved.ch == next(x["id"] for x in story.CHAPTERS if x.get("draft")), (saved.ch, saved.node, saved.warnings)
+    assert saved.ch == last_chapter(), (saved.ch, saved.node, saved.warnings)
     assert "e1_epilogo" in saved.done and "c6_end" in saved.done and "c8_end" in saved.done
     assert "reward:rw_6" in saved.done
     ui.to_menu()

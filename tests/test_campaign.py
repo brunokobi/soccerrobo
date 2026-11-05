@@ -18,6 +18,22 @@ import store  # noqa: E402
 import story  # noqa: E402
 
 PASS, FAIL = [], []
+
+
+def is_campaign_end(c, a):
+    """Fim do conteudo: "em breve" no 1o rascunho (se ainda houver) ou um dos finais de story.ENDINGS."""
+    if any(x.get("draft") for x in story.CHAPTERS):
+        return a == {"kind": "end", "draft": True} and bool(c.chapter().get("draft"))
+    firsts = [e[1] if isinstance(e[1], str) else e[1][0] for e in story.ENDINGS]
+    return a["kind"] == "end" and a.get("draft") is False and a.get("ending") in firsts
+
+
+def last_chapter():
+    return next((x["id"] for x in story.CHAPTERS if x.get("draft")), story.CHAPTERS[-1]["id"])
+
+
+def n_titles():
+    return sum(1 for r in story.REWARDS.values() if r.get("title"))
 CALLS = []
 
 
@@ -600,7 +616,7 @@ def full_run(seed, policy, save_each_chapter=False):
                 assert c.chapter()["nodes"][c.node][0] == "end"
         elif k == "end":
             ends += 1
-            assert a == {"kind": "end", "draft": True} and c.chapter().get("draft")      # o proximo capitulo ainda e rascunho
+            assert is_campaign_end(c, a), a
             break
         else:
             raise AssertionError(k)
@@ -627,9 +643,9 @@ def copy_json(d):
 
 def check_final_state(c):
     g = c.garage
-    assert c.next_action() == {"kind": "end", "draft": True} and c.chapter().get("draft")
+    assert is_campaign_end(c, c.next_action())
     assert all(not ch.get("draft") for ch in story.CHAPTERS if ch["reward"])
-    assert g.stats["titles"] == 1, g.stats
+    assert g.stats["titles"] == n_titles(), g.stats
     names = {r["name"] for r in g.robots}
     # recrutas: Gambiarra, Pixelado, Majestade; Ato 2: Relampago (gabi_amigo), Ze Perfeito (poupou_ze);
     # Ato 3: Samurai (gabi_amigo) ou Ronin. Com o elenco cheio (MAX_SQUAD) sai o reserva mais fraco
@@ -645,7 +661,7 @@ def check_final_state(c):
     before = c.to_dict()
     for ch in story.CHAPTERS:
         assert c.apply_chapter_rewards(ch["id"])["applied"] is False
-    assert c.to_dict() == before and g.stats["titles"] == 1
+    assert c.to_dict() == before and g.stats["titles"] == n_titles()
     assert {"Tanque", "Velocista", "Goleiro", "Titã"} <= set(g.unlocked)
     hero = g.robot(c.hero)                                   # "Chip do Vovo" (Lendaria) equipado no heroi
     pb = g.pieces_by_id()
@@ -661,7 +677,7 @@ def test_full_campaign_autoplay_all_policies():
         for seed in seeds:
             c, n, _ = full_run(seed, policy)
             check_final_state(c)
-            assert c.ch == next(x["id"] for x in story.CHAPTERS if x.get("draft")) and "c6_end" in c.done
+            assert c.ch == last_chapter() and "c6_end" in c.done
             tot.setdefault(policy, []).append(n)
     for p, v in tot.items():
         print("     autoplay %s: partidas media %.1f max %d" % (p, sum(v) / len(v), max(v)))
@@ -1252,6 +1268,29 @@ def test_cap11_version_by_b2_and_rw11():
         assert cm.Campaign.from_dict(d).tour == c.tour                # save no meio da versao escolhida
         spec = c.reward_spec("rw_11")
         assert spec["piece"]["model"] == ("Railgun de Bolso" if renova else "Sonar Quântico")
+
+
+def test_three_endings_by_flags():
+    """C11: o final segue as escolhas. Secreto (C) = independente + poupou_ze + chinelo_fica + 4 fitas do Vo;
+    B = renova_limpex; A = padrao."""
+    cases = [({"renova_limpex": 1, "poupou_ze": 1, "chinelo_fica": 1}, 4, "end_b1"),
+             ({"independente": 1, "poupou_ze": 1, "chinelo_fica": 1}, 4, "end_c1"),
+             ({"independente": 1, "poupou_ze": 1, "chinelo_fica": 1}, 3, "end_a1"),
+             ({"independente": 1, "desligou_ze": 1, "chinelo_fica": 1}, 4, "end_a1"),
+             ({}, 0, "end_a1")]
+    last = story.CHAPTERS[-1]
+    for flags, fitas, first in cases:
+        c = new(81)
+        c.ch, c.node = last["id"], [n[0] for n in last["nodes"]].index("end")
+        c.garage.flags.update(flags)
+        c.done += ["side:s_fita%d" % i for i in range(1, fitas + 1)]
+        a = c.next_action()
+        assert a["kind"] == "scene" and a["id"] == first, (flags, fitas, a.get("id"))
+        scenes = next(e[1] for e in story.ENDINGS if e[1][0] == first)
+        for sid in scenes:
+            assert c.next_action()["id"] == sid
+            c.finish_scene(sid)
+        assert c.next_action() == {"kind": "end", "draft": False, "ending": first} and c.endings == [first]
 
 
 def main():

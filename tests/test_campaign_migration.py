@@ -31,6 +31,22 @@ import garage as gm  # noqa: E402
 import story  # noqa: E402
 
 PASS, FAIL = [], []
+
+
+def is_campaign_end(c, a):
+    """Fim do conteudo: "em breve" no 1o rascunho (se ainda houver) ou um dos finais de story.ENDINGS."""
+    if any(x.get("draft") for x in story.CHAPTERS):
+        return a == {"kind": "end", "draft": True} and bool(c.chapter().get("draft"))
+    firsts = [e[1] if isinstance(e[1], str) else e[1][0] for e in story.ENDINGS]
+    return a["kind"] == "end" and a.get("draft") is False and a.get("ending") in firsts
+
+
+def last_chapter():
+    return next((x["id"] for x in story.CHAPTERS if x.get("draft")), story.CHAPTERS[-1]["id"])
+
+
+def n_titles():
+    return sum(1 for r in story.REWARDS.values() if r.get("title"))
 FIX = os.path.join(ROOT, "tests", "fixtures")
 V1_COMMIT = "076d6ab"                    # ultimo commit com campanha v1 / roteiro 1
 NAMES = ("mid_cap5", "chapter_end_cap5", "epilogue_cap5", "finished")
@@ -80,7 +96,7 @@ def play_to_end(c, max_steps=400):
         elif k == "chapter_end":
             assert c.advance_chapter() is not None
         elif k == "end":
-            assert a == {"kind": "end", "draft": True} and c.chapter().get("draft")      # ate o 1o rascunho
+            assert is_campaign_end(c, a), a
             return scenes
     raise AssertionError("nao chegou ao fim")
 
@@ -137,8 +153,8 @@ def test_mid_cap5_keeps_tournament():
     assert a["kind"] == "match" and a["stage"] == "SF"
     scenes = play_to_end(c)
     assert scenes.count("e1_epilogo") == 1 and "c6_nestor" in scenes
-    assert c.ch == next(x["id"] for x in story.CHAPTERS if x.get("draft"))                    # o primeiro capitulo em rascunho
-    assert c.garage.stats["titles"] == old["garage"]["stats"]["titles"] + 1
+    assert c.ch == last_chapter()
+    assert c.garage.stats["titles"] == old["garage"]["stats"]["titles"] + n_titles()   # Mundial + Copa
     assert "reward:rw_5" in c.done and c.garage.mod_on() and c.garage.cap == gm.CAMPAIGN_CAP
 
 

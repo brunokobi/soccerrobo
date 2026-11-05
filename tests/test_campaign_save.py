@@ -707,6 +707,24 @@ def test_sanitize_never_raises_on_garbage():
         assert cm.Campaign.from_dict(x) is None
 
 
+def test_repeat_keys_capped_at_99_roundtrip():
+    """C11: mais de 99 derrotas seguidas no chefe (ou tentativas) nao geram chaves "#100" que o save
+    descartaria: o contador para em 99 e o save volta igual."""
+    c = mid_tour()
+    tr = story.TOURNAMENTS[c.tour["id"]]
+    c.tour["loses"], c.tour["attempt"] = 140, 150
+    lose = tr["hooks"]["lose"]
+    assert c._scene_key(lose) == "%s#99" % lose
+    if tr["hooks"].get("elim"):
+        assert c._scene_key(tr["hooks"]["elim"]) == "%s#99" % tr["hooks"]["elim"]
+    c.tour["loses"] = 99
+    c.done.append(c._scene_key(lose))
+    d = c.to_dict()
+    d["c"]["tour"]["loses"] = 99
+    r = cm.Campaign.from_dict(copy.deepcopy(d))
+    assert r is not None and r.done == c.done
+
+
 def main():
     names = sys.argv[1:] or [n for n in globals() if n.startswith("test_")]
     for n in names:

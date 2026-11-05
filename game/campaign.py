@@ -130,6 +130,7 @@ END_ID = "END"      # valor devolvido por advance_chapter() ao entrar no epilogo
 AUTO_END = "AUTO"   # ("end", "AUTO"): o final vem de story.ENDINGS (C4)
 SIDE_DELTA = 14     # missao secundaria: adversario = Forca atual - delta (spec 6)
 B2_SCRAP_MUL, B2_XP_MUL = 1.20, 1.15   # escolha B2 do cap. 7: renova_limpex / independente (C9)
+REPEAT_MAX = 99     # teto do contador das cenas repetiveis "<cena>#n" (o save aceita n de 0 a 99)
 
 
 def shootout(rating_h, rating_a, rng):
@@ -409,14 +410,14 @@ class Campaign:
     def _scene_key(self, scene_id):
         sd = self.side
         if sd is not None and scene_id == story.SIDES[sd["id"]]["scenes"].get("lose"):
-            return "%s#%d" % (scene_id, sd["loses"])
+            return "%s#%d" % (scene_id, min(REPEAT_MAX, sd["loses"]))
         tr = self.tour
         if tr is not None:
             h = self.tournament()["hooks"]
             if scene_id == h.get("elim"):
-                return "%s#%d" % (scene_id, tr["attempt"] - 1)
+                return "%s#%d" % (scene_id, min(REPEAT_MAX, tr["attempt"] - 1))
             if scene_id == h.get("lose"):
-                return "%s#%d" % (scene_id, tr["loses"])
+                return "%s#%d" % (scene_id, min(REPEAT_MAX, tr["loses"]))
         return scene_id
 
     def finish_scene(self, scene_id, choice_index=None):
@@ -715,7 +716,7 @@ class Campaign:
         idx = len(stages) if tour["stage"] == DONE else stages.index(tour["stage"])
         if tour["attempt"] > 0 and idx == 0 and not tour["results"]:
             sid = hooks.get("elim")
-            if sid and ("%s#%d" % (sid, tour["attempt"] - 1)) not in self.done:
+            if sid and ("%s#%d" % (sid, min(REPEAT_MAX, tour["attempt"] - 1))) not in self.done:
                 return self._scene_action(sid)
         for i in range(min(idx, len(stages))):
             sid = hooks["after"].get(stages[i])
@@ -853,7 +854,7 @@ class Campaign:
             else:
                 tour["stage"] = stages[si + 1]
         else:
-            tour["loses"] += 1
+            tour["loses"] = min(REPEAT_MAX, tour["loses"] + 1)
             out["outcome"] = "retry"
             if self._is_boss(tr, stage):
                 self.pity = min(PITY_MAX, self.pity + 1)

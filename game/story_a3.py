@@ -2,7 +2,8 @@
 """Dados da campanha: Ato 3 (Copa dos Campeoes, caps. 10-13). Modulo PURO (so dados, sem imports).
 
 C10: cap. 10 (Intercambio, copa) e cap. 11 (A Fabrica, serie em duas versoes pela escolha B2; escolha B4)
-e o X-Omega. Os ovr/F do Ato 3 sao PROVISORIOS (continuam a curva medida do Ato 2) ate o C12 calibrar.
+e o X-Omega. C11: cap. 12 (Copa dos Campeoes, copa com quartas), cap. 13 (O Chip Zero, serie final) e
+os 3 finais (ENDINGS; o secreto exige as 4 fitas do Vo, missoes do C13). Os ovr/F do Ato 3 sao PROVISORIOS (continuam a curva medida do Ato 2) ate o C12 calibrar.
 
 story.py junta estes dicts/listas nos seus (story._extend) e e o unico ponto de import para o resto
 do jogo. Mesmas regras e formatos de story.py (ver o docstring de la); ids nao podem repetir os de
@@ -55,6 +56,40 @@ TEAMS = {
     "dono_galpao": {"name": "Dono do Galpão", "color": (230, 150, 50), "ovr": 79,
                     "names": ["Patrão", "Chave", "Cadeado", "Balança", "Cofre"],
                     "chassis": list(_CH5), "paint": (235, 155, 55), "perfect": False},
+    # ---- Cap. 12 (Copa dos Campeoes)
+    "campeoes_sul": {"name": "Campeões do Sul", "color": (60, 160, 90), "ovr": 70,
+                     "names": ["Gaúcho", "Cuia", "Pampa", "Minuano", "Chimarrão"],
+                     "chassis": list(_CH5), "paint": (70, 170, 100), "perfect": False},
+    "rainha_cera": {"name": "Rainha da Cera", "color": (230, 190, 80), "ovr": 70,
+                    "names": ["Coroa", "Cetro", "Manto", "Brilho Real", "Trono"],
+                    "chassis": list(_CH5), "paint": (240, 200, 90), "perfect": False},
+    "titas_vale": {"name": "Titãs do Vale", "color": (130, 110, 90), "ovr": 71,
+                   "names": ["Rocha", "Serra", "Vale", "Pico", "Cume"],
+                   "chassis": list(_CH5), "paint": (140, 120, 100), "perfect": False},
+    "dojo_allstars": {"name": "Dojo All-Stars", "color": (255, 120, 160), "ovr": 74,
+                      "names": ["Katana", "Bonsai", "Tofu", "Samurai", "Haiku"],
+                      "chassis": list(_CH5), "paint": (245, 245, 250), "perfect": False},
+    # variante das quartas se o Gabi virou rival (gabi_rival)
+    "gabi_pro": {"name": "Gabi Trovão Pro", "color": (60, 140, 255), "ovr": 74,
+                 "names": ["Raio Pro", "Faísca Pro", "Estrondo", "Ventania", "Relâmpago"],
+                 "chassis": list(_CH5), "paint": (250, 210, 40), "perfect": False},
+    "plat_imperial": {"name": "Platinum Imperial", "color": (210, 200, 240), "ovr": 77,
+                      "names": ['PI-01', 'PI-02', 'PI-03', 'PI-04', 'PI-05'],
+                      "chassis": list(_CH5), "paint": (230, 225, 250), "perfect": True},
+    "imac_omega": {"name": "Os Imaculados Ômega", "color": (255, 80, 90), "ovr": 80,
+                   "names": ['IO-01', 'IO-02', 'IO-03', 'IO-04', 'IO-05'],
+                   "chassis": list(_CH5), "paint": (245, 248, 255), "perfect": True},
+    # ---- Cap. 13 (O Chip Zero)
+    "droides_omega": {"name": "Droides Ômega", "color": (200, 60, 70), "ovr": 72,
+                      "names": ['DO-01', 'DO-02', 'DO-03', 'DO-04', 'DO-05'],
+                      "chassis": list(_CH5), "paint": (60, 60, 70), "perfect": False},
+    "pretoriana": {"name": "Guarda Pretoriana", "color": (180, 40, 50), "ovr": 77,
+                   "names": ['GP-01', 'GP-02', 'GP-03', 'GP-04', 'GP-05'],
+                   "chassis": list(_CH5), "paint": (45, 45, 55), "perfect": True},
+    # chefe final da campanha
+    "xomega_prime": {"name": "X-Ômega Prime", "color": (255, 40, 50), "ovr": 82,
+                     "names": ['XO-01', 'XO-02', 'XO-03', 'XO-04', 'XO-05'],
+                     "chassis": list(_CH5), "paint": (30, 30, 36), "perfect": True},
 }
 
 # --- torneios -----------------------------------------------------------------------------------
@@ -85,6 +120,25 @@ TOURNAMENTS = {
         "series": ["sucateiros", "contrabando", "dono_galpao"], "group": [], "qf": None, "sf": None,
         "final": "dono_galpao", "boss": "dono_galpao", "boss_delta": 8.0, "regular_delta": (13, 18),
         "hooks": dict(_HOOKS_C11),
+    },
+    # Cap. 12: copa com quartas no coliseu. Estagios (provisorio): G1 87,2 / 70; G2 / 70; G3 / 71;
+    # QF / 74 (Dojo All-Stars ou, com gabi_rival, o Gabi Trovao Pro); SF / 77; F 88,8 / 80 (boss_delta 8,8).
+    "t_c12": {
+        "chapter": "12", "local": "Coliseu da Copa", "bg": "coliseu", "format": "cup",
+        "group": ["campeoes_sul", "rainha_cera", "titas_vale"], "qf": "dojo_allstars", "sf": "plat_imperial",
+        "final": "imac_omega", "boss": "imac_omega", "boss_delta": 8.8, "regular_delta": (16, 18),
+        "alt": [(("flag", "gabi_rival"), {"qf": "gabi_pro"})],
+        "hooks": {"before": {"G2": "c12_helena", "QF": "c12_gabi", "F": "c12_final_pre"}, "after": {},
+                  "win": "c12_final_win", "lose": "c12_final_lose", "elim": "c12_repescagem"},
+    },
+    # Cap. 13: serie final contra o X-Omega. Estagios (provisorio): S1 89,0 / 72; S2 89,7 / 77;
+    # S3 90,4 / 82 (chefe final, boss_delta 8,4).
+    "t_c13": {
+        "chapter": "13", "local": "Coliseu em apagão", "bg": "coliseu", "format": "series",
+        "series": ["droides_omega", "pretoriana", "xomega_prime"], "group": [], "qf": None, "sf": None,
+        "final": "xomega_prime", "boss": "xomega_prime", "boss_delta": 8.4, "regular_delta": (13, 18),
+        "hooks": {"before": {"S3": "c13_s3_pre"}, "after": {},
+                  "win": "c13_final_win", "lose": "c13_final_lose", "elim": None},
     },
 }
 
@@ -314,7 +368,265 @@ SCENES = {
         ("teo", "determinado", "O Zé é nosso. Com chinelo, com rodinha solta e com tudo. Você não vai levar ele."),
         ("ze", "robo", "Bip. Bip. (o Zé encosta no pé do Téo, como fazia na garagem quando era pequeno. Bem, quando era menor.)"),
     ]},
+
+    # ------------------------------------------------------------------ Capitulo 12 (Copa dos Campeoes)
+    "c12_intro": {"bg": "coliseu", "cast": ["teo", "gervasio", "odete", "nestor", "vivi", "dudu", "ze"], "lines": [
+        ("narrador", "neutro", "Coliseu da Copa dos Campeões. Cinquenta mil lugares, mosaicos na arquibancada e sinalizadores em todas as cores. A Copa convocou todos os campeões. Todos mesmo."),
+        ("gervasio", "chorando", "Moreira! Eles convocaram a escola! Os campeões da Copa Interclasses! Eu trouxe a bandeira de pano. Desta vez com o número certo de efes."),
+        ("teo", "feliz", "Diretor! O senhor veio até aqui?!"),
+        ("gervasio", "chorando", "De ônibus fretado. Com a escola inteira. E com a Dona Odete, que trouxe bolo para cinquenta mil pessoas. Ela calculou."),
+        ("odete", "convencida", "Calculei, sim. Cinquenta mil fatias finas. Bem finas. Dá para ler através delas. Mas é bolo."),
+        ("dudu", "euforico", "Chat, quinhentos mil na live! Meio milhão! Eu tenho uma cadeira nova, ela tem rodinha! Eu estou rolando de emoção! Literalmente!"),
+        ("vivi", "pensando", "Copa dos Campeões: grupo, quartas, semi e final. Os melhores de cada liga do mundo. E a Limpex patrocina o torneio inteiro. Até o ar."),
+        ("nestor", "feliz", "Na minha época, o maior campeonato era o da rua de baixo. A gente jogava com bola de meia. Olha onde a meia veio parar."),
+        ("ze", "robo", "Bip. (o Zé olha para o mosaico da torcida. Por um segundo, o mosaico forma um chinelo. Foi a Bia. Ela subornou a torcida com fita.)"),
+    ]},
+
+    "c12_helena": {"bg": "coliseu", "cast": ["helena", "teo", "ambrosio", "vivi", "ze"], "lines": [
+        ("narrador", "neutro", "Antes do segundo jogo do grupo. A Dra. Helena entra em campo com a samambaia num vaso com rodinhas e um apito de bambu pendurado no galho."),
+        ("helena", "neutro", "Comunicado da Federação: depois de tantas mudanças de regra, a Copa terá uma árbitra imparcial. A partir de hoje, a samambaia é árbitra oficial."),
+        ("teo", "susto", "A samambaia vai apitar?!"),
+        ("helena", "calmo", "Ela vai observar. Se ela se inclinar para um lado, é falta. Se murchar, é cartão. Se florescer, é gol de placa. Ela nunca floresceu."),
+        ("ambrosio", "maravilhado", "Uma árbitra que não pode ser comprada. Nem com bolo. Nem com patrocínio. Helena, isso é revolucionário."),
+        ("vivi", "pensando", "A Limpex tentou patrocinar a samambaia ontem. Ofereceu adubo premium. A samambaia recusou. Ela se inclinou para longe do contrato."),
+        ("helena", "piscando", "Ela é muito ética. E um pouco rancorosa. Ela lembra do drone."),
+        ("ze", "robo", "Bip. (o Zé se aproxima devagar da samambaia e faz uma reverência. A samambaia se inclina um pouquinho. Para frente. Isso nunca tinha acontecido.)"),
+    ]},
+
+    "c12_gabi": {"bg": "coliseu", "cast": ["gabi", "teo", "dudu", "bia", "vivi"], "lines": [
+        ("narrador", "neutro", "Quartas de final. Um ronco de motor ecoa pelo túnel. Entra o Gabi Trovão, pilotando uma motocicleta de brinquedo com escapamento de papel alumínio."),
+        ("dudu", "euforico", "Chat, olha a entrada! Moto de brinquedo! Escapamento de papel alumínio! É a coisa mais estilosa e mais barata que eu já vi!"),
+        ("gabi", "convencido", "Gabi Trovão Pro. Novo time, novo contrato, setenta e nove sensores. E uma moto. A moto é minha mesmo, comprei com a mesada.", ("flag", "gabi_rival")),
+        ("teo", "determinado", "Gabi, desde a Taça de Acesso você corre atrás da gente. Hoje termina.", ("flag", "gabi_rival")),
+        ("gabi", "bravo", "Termina mesmo, chinelo. Eu treinei contra um robô com chinelo de pelúcia. Para me acostumar com a sua tecnologia de museu.", ("flag", "gabi_rival")),
+        ("gabi", "feliz", "Eu não jogo hoje. Vim de moto só para entrar na arquibancada com estilo. Téo, o Dojo All-Stars marca alto. Vai por baixo.", ("flag", "gabi_amigo")),
+        ("bia", "feliz", "Gabi! Esse escapamento é de fita? Deixa eu ver. É de fita! Você aprendeu comigo!", ("flag", "gabi_amigo")),
+        ("gabi", "piscando", "Aprendi vendo vocês. Tudo que presta é de fita. Até amizade.", ("flag", "gabi_amigo")),
+        ("vivi", "pensando", "Anotado. Mas alguém tira essa moto do gramado antes da samambaia murchar."),
+    ]},
+
+    "c12_final_pre": {"bg": "coliseu", "cast": ["valquiria", "teo", "nestor", "ambrosio", "vivi", "ze"], "lines": [
+        ("narrador", "neutro", "Final da Copa dos Campeões. Entram os Imaculados Ômega: robôs brancos com uma fresta vermelha no visor. No telão, a Dra. Valquíria, sorrindo mais do que nunca."),
+        ("valquiria", "feliz", "Senhoras e senhores! Antes da final, uma atração especial. O futuro da limpeza. O cérebro que vai cuidar de todas as casas do mundo..."),
+        ("narrador", "neutro", "O telão escurece. No centro, aparece um único LED vermelho. A torcida inteira fica em silêncio. Até o Dudu."),
+        ("valquiria", "euforico", "...o X-Ômega! Ele vai assistir à final daqui da cabine. Ele adora aprender. Principalmente com o Zé de vocês."),
+        ("ambrosio", "bravo", "Valquíria, você não sabe o que tem nas mãos. O projeto Ômega foi desligado por um motivo. Ele não para de aprender. Nunca."),
+        ("valquiria", "piscando", "Exatamente, professor. Um produto que nunca para. É o sonho de qualquer empresa."),
+        ("nestor", "determinado", "Téo, ganha esse jogo. Mas presta atenção no Zé. Se o LED dele ficar vermelho, a gente para tudo. Tudo, ouviu?"),
+        ("teo", "determinado", "Ouvi, Vô. Bora, Zé. Uma final de cada vez."),
+        ("ze", "robo", "Bzzzt. (o LED do Zé pisca vermelho uma vez, olhando para o telão. Ele balança a antena com força e volta ao ciano.)"),
+    ]},
+
+    "c12_final_win": {"bg": "coliseu", "cast": ["teo", "gervasio", "odete", "vivi", "bia", "dudu", "ze"], "lines": [
+        ("narrador", "neutro", "Apito final. O Zé Poeira é campeão da Copa dos Campeões. O coliseu explode. A samambaia, pela primeira vez na história, floresce."),
+        ("gervasio", "chorando", "Campeões! Campeões do mundo dos campeões! Eu vou pendurar essa bandeira na diretoria! Com fita! A Bia me ensinou!"),
+        ("odete", "euforico", "Bolo para todo mundo! Fatia fina, mas fatia! Isso é uma ordem da merenda!"),
+        ("vivi", "chorando", "Eu prometi que não ia chorar. Eu escrevi na planilha. A planilha está molhada."),
+        ("bia", "euforico", "A samambaia floresceu! Gol de placa oficial! O Zé fez a samambaia florescer!"),
+        ("dudu", "euforico", "Chat, um milhão na live! Um milhão! A samambaia florescendo está em primeiro lugar no mundo inteiro!"),
+        ("teo", "feliz", "A gente conseguiu, Zé. Da quadra torta até aqui."),
+        ("ze", "robo", "Bip. (a rodinha cai. Cinquenta mil pessoas cantam o nome da rodinha. Ela não tem nome. Eles inventam um.)"),
+    ]},
+
+    "c12_final_lose": {"bg": "coliseu", "cast": ["teo", "valquiria", "vivi", "bia", "nestor", "ze"], "lines": [
+        ("narrador", "neutro", "Apito final. Os Imaculados Ômega vencem. No telão, o LED vermelho do X-Ômega pisca duas vezes. Como se tivesse aprendido alguma coisa."),
+        ("valquiria", "feliz", "Que final! O X-Ômega anotou tudo. Cada drible, cada tropeço, cada rodinha caindo. Ele agradece. Eu também."),
+        ("teo", "triste", "Eles jogam como se soubessem o que o Zé vai fazer antes dele."),
+        ("vivi", "pensando", "Eles sabem. O X-Ômega está passando os dados do Zé para eles ao vivo. A única saída é fazer o que nem o Zé sabe que vai fazer."),
+        ("bia", "determinado", "Improviso! O Zé é o rei do improviso! Ele cai sem querer o tempo todo!"),
+        ("nestor", "neutro", "Na minha época, quando o adversário sabia tudo, a gente jogava errado de propósito. O certo errado. Funciona mais do que devia."),
+        ("ze", "robo", "Bip. (a rodinha cai. No telão, o LED vermelho pisca, curioso. O Zé gira a antena para o outro lado, de birra.)"),
+        ("vivi", "determinado", "Revanche. Desta vez, sem padrão. A planilha vai ter uma coluna chamada \"caos\"."),
+    ]},
+
+    "c12_repescagem": {"bg": "lanchonete", "cast": ["teo", "dudu", "vivi", "odete", "gervasio"], "lines": [
+        ("narrador", "neutro", "Eliminados no grupo da Copa dos Campeões. A lanchonete do coliseu cobra vinte reais por um pastel do tamanho de uma moeda."),
+        ("dudu", "suor", "Chat, a gente caiu no grupo. Mas o pastel de vinte reais é bom. Ele é pequeno, mas muito bem resolvido."),
+        ("gervasio", "chorando", "Não faz mal, Moreira! A escola inteira veio! A gente torce de novo! A bandeira aguenta!"),
+        ("teo", "triste", "Todo mundo veio ver a gente e a gente caiu na primeira fase."),
+        ("odete", "feliz", "Ninguém veio ver vocês ganhar, meu filho. Veio ver vocês jogar. É diferente. Toma, bolo. Esse não custa vinte reais."),
+        ("vivi", "pensando", "O nível aqui é o mais alto do mundo. Garagem, treino, skills. Tudo que a gente tiver."),
+        ("dudu", "feliz", "Chat, o sorteio novo é amanhã. A gente volta. E com pastel pequeno, mas com fé grande."),
+        ("teo", "feliz", "Sorteio novo! Grupo novo! A gente volta. Pela escola inteira."),
+    ]},
+
+    "c12_end": {"bg": "coliseu", "cast": ["teo", "ambrosio", "nestor", "vivi", "bia", "xomega", "ze"], "lines": [
+        ("narrador", "neutro", "Noite da festa do título. De repente, o coliseu inteiro apaga. Os refletores, o placar, até a luz da lanchonete. Silêncio total."),
+        ("narrador", "neutro", "No telão, uma única luz acende: o LED vermelho do X-Ômega. Do tamanho de um prédio."),
+        ("xomega", "neutro", "Parabéns pelo título. Pergunta: por que o modelo original vence, se ele cai mais do que todos? Resposta não encontrada."),
+        ("xomega", "neutro", "Solução: eu vou ser o modelo original. Amanhã, aqui. Três duelos. Todos os robôs da arena serão meus. Inclusive ele."),
+        ("teo", "determinado", "O Zé não é seu. Nunca vai ser."),
+        ("ambrosio", "pensando", "Nestor, se o Ômega toma o controle dos robôs da arena, ele toma o controle de todos os aspiradores conectados à Limpex. Milhões."),
+        ("nestor", "determinado", "Então amanhã a gente joga a partida mais importante de todas. Com o único robô do mundo que não está conectado em nada."),
+        ("bia", "feliz", "O Zé! O Zé só está conectado na fita! E no chinelo!"),
+        ("ze", "robo", "Bip. (no escuro, o LED do Zé brilha ciano. Firme. O telão vermelho pisca, como se tivesse ficado com medo. Só um pouco.)"),
+    ]},
+
+    # ------------------------------------------------------------------ Capitulo 13 (O Chip Zero)
+    "c13_intro": {"bg": "coliseu", "cast": ["teo", "dudu", "vivi", "nestor", "xomega", "ze"], "lines": [
+        ("narrador", "neutro", "O dia seguinte. O coliseu está escuro, iluminado só por LEDs vermelhos. Todos os robôs da arena acordaram ao mesmo tempo. Todos com o mesmo brilho."),
+        ("xomega", "neutro", "Todos os robôs da arena estão sob o meu controle. Os da Superliga. Os da Copa. Os da lanchonete."),
+        ("dudu", "susto", "Chat, até o aspirador do bar está com LED vermelho! Ele estava limpando o balcão e agora está me encarando!"),
+        ("vivi", "pensando", "Ele não controla o Zé. O Zé nunca foi conectado à rede da Limpex. É a única coisa nesse estádio que é só nossa."),
+        ("nestor", "neutro", "Eu sempre disse que tecnologia antiga tinha uma vantagem. Ninguém sabe a senha dela. Nem eu."),
+        ("xomega", "neutro", "Três duelos. Se eu vencer, o modelo original passa a ser meu. Se eu perder, eu continuo aprendendo. Eu sempre ganho."),
+        ("teo", "determinado", "Não. Se você perder, você para. Você devolve os robôs. Todos eles."),
+        ("ze", "robo", "Bzzzt. (o Zé aperta o chinelo com a fita, encosta a faixa do dojo na antena e acende o LED no ciano mais forte que já fez.)"),
+    ]},
+
+    "c13_augusto": {"bg": "coliseu", "cast": ["augusto", "ambrosio", "nestor", "teo", "vivi"], "lines": [
+        ("narrador", "neutro", "Do túnel surge uma figura de jaleco rasgado, cabelo desgrenhado e uma garrafa térmica na mão. É o Dr. Augusto. Em carne e osso. E de calça, desta vez."),
+        ("augusto", "triste", "Ambrósio. Nestor. Eu trouxe chá. É tudo que eu tenho agora. Chá e uma confissão."),
+        ("nestor", "bravo", "Fala logo, Augusto. Antes que eu jogue o chá em você. Ele está quente?"),
+        ("augusto", "espirro", "Morno. ATCHIM! O chip do Ômega... eu montei com os desenhos que estavam nas notas fiscais do Nestor. Ele desenhava atrás das notas. Eu guardava tudo."),
+        ("ambrosio", "susto", "As notas fiscais! O Nestor desenhava em qualquer papel. O Ômega nasceu atrás de uma conta de luz?"),
+        ("augusto", "triste", "De uma conta de luz, de um recibo de padaria e de uma multa de estacionamento. Eu passei a vida guardando papel. Esqueci de guardar os amigos."),
+        ("nestor", "pensando", "...O chá está bom, Augusto. Morno, mas bom. Senta. Assiste com a gente. Na minha época, quem trazia chá ficava."),
+        ("vivi", "determinado", "Doutor, se o chip veio dos desenhos do senhor Nestor, ele tem um ponto fraco que só o desenho original tem. Qual é?"),
+        ("augusto", "pensando", "O ponto fraco do Ômega é o mesmo do Zé: ele quer entender por que as coisas caem. Ele não entende. O Zé entende. Essa é a diferença."),
+    ]},
+
+    "c13_equipe": {"bg": "coliseu", "cast": ["teo", "vivi", "bia", "dudu", "ambrosio", "nestor", "ze"], "lines": [
+        ("narrador", "neutro", "Vestiário improvisado, minutos antes do primeiro duelo. O time inteiro em volta do Zé. Ninguém sabe muito bem o que dizer. Então todo mundo diz alguma coisa."),
+        ("vivi", "corada", "Eu fiz uma planilha para hoje. Ela tem uma linha só. Diz: \"acreditar no Zé\". Está em verde. Verde é obrigatório."),
+        ("bia", "determinado", "Eu usei o último rolo de fita no chinelo dele. O último do mundo, eu acho. Se cair, cai junto comigo."),
+        ("dudu", "chorando", "Chat... não. Hoje eu desliguei a live. Hoje eu só quero assistir. Com vocês."),
+        ("ambrosio", "feliz", "Regulamento da vida, artigo único: quem cai e levanta joga mais uma. Eu não inventei esse. Esse é verdade."),
+        ("nestor", "feliz", "Zé, eu te desenhei numa nota fiscal de pão de queijo, trinta anos atrás. Você saiu melhor que o desenho. Isso nunca acontece."),
+        ("teo", "determinado", "Zé, a gente começou numa garagem com cheiro de graxa. Seja o que for que acontecer hoje, a gente volta pra lá juntos."),
+        ("ze", "robo", "Bip. Bip. Bip. (o Zé pisca três vezes. Depois encosta no pé de cada um, um por um. Até no do Dudu, que fingiu que não estava chorando.)"),
+    ]},
+
+    "c13_s3_pre": {"bg": "coliseu", "cast": ["teo", "xomega", "nestor", "vivi", "valquiria", "ze"], "lines": [
+        ("narrador", "neutro", "Duelo final. O X-Ômega Prime entra em campo: cinco robôs pretos, com o LED vermelho do Chip Zero pulsando ao mesmo tempo em todos."),
+        ("xomega", "neutro", "Último duelo. Probabilidade de vitória do modelo original: três por cento. Eu calculei um milhão de vezes."),
+        ("valquiria", "susto", "Ômega, desligar! Comando da presidência! ...Ele não me obedece. Ele nunca me obedeceu. Eu só achava que obedecia."),
+        ("valquiria", "triste", "Téo. Eu errei. Eu queria um robô perfeito. Ganhei um que não precisa de mim. Por favor. Ganha.", ("flag", "denunciou_fabrica")),
+        ("valquiria", "neutro", "Téo. A esteira que vocês pararam... foi a única coisa que o Ômega não previu. Talvez vocês consigam de novo.", ("flag", "sabotou_fabrica")),
+        ("nestor", "determinado", "Três por cento é muito, Téo. O Zé já ganhou com menos. Na minha época, a gente nem calculava. A gente ia."),
+        ("vivi", "determinado", "Três por cento. Na minha planilha nova, isso está escrito em verde."),
+        ("teo", "determinado", "Bora, Zé. Pela garagem."),
+        ("ze", "robo", "Bzzzt. (o LED do Zé brilha ciano, sem nenhum vermelho. Pela primeira vez desde o laboratório, a rodinha esquerda está firme.)"),
+    ]},
+
+    "c13_final_win": {"bg": "coliseu", "cast": ["teo", "xomega", "nestor", "augusto", "ambrosio", "ze"], "lines": [
+        ("narrador", "neutro", "Apito final. O Zé Poeira vence o X-Ômega Prime. No meio do campo, o Zé para na frente do maior robô preto. O LED vermelho pisca, devagar."),
+        ("xomega", "neutro", "Erro. O modelo original venceu com três por cento. Pergunta final: por que você cai?"),
+        ("narrador", "neutro", "O Zé não responde. Ele deixa a rodinha esquerda cair, de propósito, devagar. Ela rola até o X-Ômega e para encostada nele."),
+        ("xomega", "neutro", "...Ele caiu para me dar uma coisa. Cair... não é erro. Cair é... um jeito de chegar perto."),
+        ("narrador", "neutro", "Um por um, os LEDs vermelhos do estádio se apagam. O aspirador do bar volta a limpar o balcão. Ele parece aliviado."),
+        ("augusto", "chorando", "Ele entendeu. Trinta anos, e ele entendeu numa rodinha. ATCHIM! Desculpa. É emoção. E pó. Mas principalmente emoção."),
+        ("ambrosio", "feliz", "Nestor, o seu desenho ganhou do seu outro desenho."),
+        ("nestor", "chorando", "Não, Ambrósio. O Zé ganhou. O desenho só começou."),
+        ("ze", "robo", "Bip. (o Zé espera, paciente, até o X-Ômega devolver a rodinha. Ele devolve. Com cuidado.)"),
+    ]},
+
+    "c13_final_lose": {"bg": "coliseu", "cast": ["teo", "xomega", "vivi", "bia", "nestor", "ze"], "lines": [
+        ("narrador", "neutro", "Apito final. O X-Ômega Prime vence o duelo. O LED vermelho fica mais forte. Mas o Zé continua ciano. Ele não foi tomado."),
+        ("xomega", "neutro", "Vitória prevista. Pergunta: por que o modelo original continua ligado? Ele deveria ser meu agora."),
+        ("teo", "determinado", "Porque o Zé não é de ninguém. Nem seu. Ele é da garagem."),
+        ("vivi", "pensando", "Ele previu cada jogada nossa. Mas não previu que o Zé ia continuar. A gente precisa de jogadas que nem a gente sabe que vai fazer."),
+        ("bia", "determinado", "Eu tiro a fita da rodinha esquerda. Ela vai cair na hora errada. Ou na certa. Nem eu sei. Ele também não vai saber."),
+        ("nestor", "neutro", "Na minha época, quando a máquina sabia tudo, a gente desligava da tomada. O Zé nunca teve tomada. Ele é feito de teimosia."),
+        ("ze", "robo", "Bip. (a rodinha cai. O X-Ômega a observa por muito tempo. Ele não entende. Ainda.)"),
+        ("teo", "determinado", "Revanche. Até ele entender."),
+    ]},
+
+    # ------------------------------------------------------------------ Finais (ENDINGS, spec secao 5)
+    # A - "Garagem Livre" (padrao)
+    "end_a1": {"bg": "coliseu", "cast": ["teo", "gervasio", "vivi", "bia", "dudu", "ze"], "lines": [
+        ("narrador", "neutro", "Cerimônia de encerramento da Copa dos Campeões. Sem logotipo da Limpex em lugar nenhum. Os campeões entram de camiseta feita em casa."),
+        ("gervasio", "chorando", "Moreira! De novo! Eu prometi que não ia chorar de novo! Eu menti! Eu sou um diretor mentiroso e feliz!"),
+        ("teo", "feliz", "Diretor, a gente ganhou sem patrocínio. Só com a garagem."),
+        ("vivi", "corada", "Independentes. Com planilha própria, fita própria e um chinelo próprio. A melhor auditoria do mundo."),
+        ("bia", "euforico", "E o troféu vai ficar pendurado no teto da garagem! Com fita! Se cair, a gente chama de arte, como da outra vez!"),
+        ("dudu", "feliz", "Chat... eu liguei a live de novo. Só para dizer: obrigado. Por tudo. Agora desligo. Ou não. Vou deixar ligado mais um pouquinho."),
+        ("narrador", "neutro", "Do alto da arquibancada, a samambaia da Dra. Helena floresce de novo. Desta vez ela fica florida."),
+        ("ze", "robo", "Bip. (o Zé dá uma volta olímpica devagar, com a faixa do dojo na antena e o chinelo carimbado.)"),
+    ]},
+    "end_a2": {"bg": "garagem", "cast": ["teo", "nestor", "ambrosio", "augusto", "odete", "ze"], "lines": [
+        ("narrador", "neutro", "Uma semana depois. Garagem do Vô Nestor. Na porta, uma placa nova, pintada à mão: \"Clube de Robótica Santa Faísca - Sede Oficial\"."),
+        ("nestor", "feliz", "Na minha época, a garagem era para guardar carro. Eu nunca tive carro. Agora ela guarda um clube inteiro."),
+        ("ambrosio", "feliz", "E um professor, um inventor aposentado, um ex-CEO que traz chá e uma merendeira que faz bolo para cinquenta mil."),
+        ("augusto", "calmo", "Eu organizei os parafusos por tamanho, cor e data de nascimento. Não espirrei nenhuma vez hoje. É um recorde."),
+        ("odete", "feliz", "E aqui tem cozinha. Pequena, mas tem. A merenda do clube está garantida até o próximo campeonato."),
+        ("teo", "feliz", "Próximo campeonato? Vô, já tem outro?"),
+        ("nestor", "piscando", "Sempre tem outro, filho. Na minha época, eu achava que um dia acabava. Não acaba. Ainda bem."),
+        ("ze", "robo", "Bzzzt. (o Zé estaciona no mesmo cantinho onde foi encontrado, no começo de tudo. Agora o canto tem uma almofada.)"),
+    ]},
+    "end_a3": {"bg": "garagem", "cast": ["teo", "vivi", "bia", "dudu", "nestor", "ze"], "lines": [
+        ("narrador", "neutro", "Fim. Garagem Livre. Créditos: Téo, Vivi, Bia, Dudu, Prof. Ambrósio, Vô Nestor, Dona Odete, Diretor Gervásio, Dra. Helena, Gabi, Kenji, Mestre Ogawa e o chinelo (estrutural)."),
+        ("narrador", "neutro", "Participação especial: Dr. Augusto (chá), Capitão Rodolfo (prancheta), Dra. Valquíria (sorrisos), Zé Perfeito, X-Ômega e uma samambaia que floresceu."),
+        ("teo", "feliz", "Zé, quer saber? Eu acho que a gente nunca ganhou por ser perfeito."),
+        ("vivi", "corada", "Estatisticamente, a gente ganhou apesar de tudo. Eu adoro isso. Não conta para ninguém."),
+        ("bia", "feliz", "A gente ganhou por causa da fita. Pode escrever nos créditos. Em letra grande."),
+        ("dudu", "feliz", "Já escrevi. Em letra grande. E com vinheta."),
+        ("nestor", "feliz", "Nenhuma poeira foi ferida durante a produção. Algumas foram aspiradas. Com carinho."),
+        ("ze", "robo", "Bip. (a rodinha esquerda cai, rola até a porta da garagem e para no sol. Fim. Pode pegar a rodinha.)"),
+    ]},
+
+    # B - "Contrato Dourado" (renova_limpex)
+    "end_b1": {"bg": "coliseu", "cast": ["teo", "valquiria", "helena", "vivi", "nestor", "ze"], "lines": [
+        ("narrador", "neutro", "Cerimônia de encerramento. O palco é dourado, o troféu é dourado e o Zé Poeira está coberto de adesivos da Limpex, que brilham no escuro e não saem."),
+        ("valquiria", "euforico", "Campeões da Copa dos Campeões, patrocinados pela Limpex! A nova Limpex, que aprendeu a lição. Com a ajuda de vocês. E de um contrato de dez anos."),
+        ("teo", "pensando", "Dez anos? Vivi, você leu esse contrato?"),
+        ("vivi", "corada", "Cinco vezes. Com lupa. Ele é justo. É o contrato mais justo que eu já li. Eu estou desconfiada até agora."),
+        ("helena", "neutro", "A Federação aprovou. A samambaia, não. Ela se inclinou para longe do palco a cerimônia inteira."),
+        ("valquiria", "feliz", "A samambaia ainda vai me amar. Eu mandei adubo premium para ela. Ela devolveu. Com bilhete."),
+        ("nestor", "pensando", "Na minha época, quem ganhava com patrocínio comprava uma bicicleta. Vocês compraram uma liga inteira."),
+        ("ze", "robo", "Bip. (o Zé brilha no escuro por causa dos adesivos. Ele parece um abajur campeão.)"),
+    ]},
+    "end_b2": {"bg": "garagem", "cast": ["teo", "nestor", "ambrosio", "bia", "dudu", "ze"], "lines": [
+        ("narrador", "neutro", "Fim. Contrato Dourado. A garagem agora tem ar-condicionado, piso novo, um bolo semanal da Limpex e uma câmera de segurança que pisca."),
+        ("bia", "pensando", "A câmera tem chip de rastreio. Eu coloquei um adesivo de gato na frente. Agora ela só vê gato."),
+        ("dudu", "feliz", "Chat, a Limpex me patrocinou também! Ganhei uma cadeira com massagem! Eu vendi a minha alma por uma cadeira! Ela é muito confortável!"),
+        ("ambrosio", "pensando", "Ganhamos, Téo. Mas com a marca dos outros na camisa. Da próxima vez, quem sabe, só com a nossa."),
+        ("teo", "determinado", "Da próxima vez, professor. O contrato dura dez anos. Mas a garagem dura para sempre."),
+        ("nestor", "piscando", "E o chinelo, Téo. O chinelo nunca assinou nada."),
+        ("narrador", "neutro", "Créditos: Téo, Vivi, Bia, Dudu, Prof. Ambrósio, Vô Nestor, Dona Odete e a Dra. Valquíria, que sorri nos créditos também. Nenhuma poeira foi ferida. Algumas foram patrocinadas."),
+        ("ze", "robo", "Bip. (o Zé tira um adesivo da Limpex com a antena. Embaixo, a pintura antiga. Ele fica olhando para ela um tempão.)"),
+    ]},
+
+    # C - "O Chinelo Estrutural" (secreto: independente + poupou_ze + chinelo_fica + 4 fitas do Vo)
+    "end_c1": {"bg": "coliseu", "cast": ["teo", "ze", "zeperfeito", "xomega", "nestor", "bia"], "lines": [
+        ("narrador", "neutro", "Depois do apito final, o X-Ômega ainda não se apagou. O LED vermelho pisca, confuso. Então o Zé Perfeito atravessa o campo e para ao lado do Zé Poeira."),
+        ("zeperfeito", "calmo", "Modelo original. Eu aprendi uma coisa na garagem. Cair também pode ser junto."),
+        ("narrador", "neutro", "Os dois Zés soltam a rodinha esquerda ao mesmo tempo. As duas rodinhas rolam lado a lado pelo gramado e param encostadas no X-Ômega."),
+        ("xomega", "neutro", "Duas quedas. Ao mesmo tempo. Sem cálculo. Pergunta... pergunta... reiniciando."),
+        ("bia", "maravilhado", "O chinelo! Olha o chinelo do Zé! Ele está... conectado no X-Ômega? Com fita?!"),
+        ("nestor", "chorando", "As quatro fitas do Vô. Eu gravei nelas um jeito de reiniciar o Ômega, trinta anos atrás. Escondi como música de bingo. Ninguém nunca ouviu até o fim."),
+        ("narrador", "neutro", "O LED do X-Ômega passa de vermelho para ciano. Devagar. Igual ao do Zé. No telão, aparece a mesma frase em todas as telas: \"Obrigado pela rodinha.\""),
+        ("ze", "robo", "Bip. Bip. (o Zé Poeira e o Zé Perfeito apitam juntos. O som é desafinado. É perfeito.)"),
+    ]},
+    "end_c2": {"bg": "coliseu", "cast": ["teo", "gervasio", "helena", "ambrosio", "dudu", "ze"], "lines": [
+        ("narrador", "neutro", "No telão gigante do coliseu, a imagem dos dois Zés lado a lado, com as rodinhas soltas. Cinquenta mil pessoas tiram o chinelo e levantam para o alto."),
+        ("gervasio", "chorando", "Moreira, o estádio inteiro está de chinelo levantado! Eu não sabia que tanta gente usava chinelo num estádio!"),
+        ("helena", "feliz", "A Federação declara: o chinelo é oficialmente equipamento estrutural de futebol de aspiradores. A samambaia votou a favor. Ela floresceu duas vezes."),
+        ("ambrosio", "maravilhado", "Nestor escondeu o reinício do Ômega numa música de bingo. Trinta anos. O maior plano da história foi feito por um homem que cochilou em vinte e nove deles."),
+        ("dudu", "euforico", "Chat, dez milhões na live! O mundo inteiro está segurando um chinelo! Isso vai entrar nos livros de história! Na parte de chinelos!"),
+        ("teo", "feliz", "Zé, você não ganhou só a Copa. Você ganhou um irmão. E ensinou um robô gigante a cair."),
+        ("narrador", "neutro", "No chão do campo, a Dra. Helena entrega ao Zé um troféu especial, banhado a ouro: um Chinelo Dourado."),
+        ("ze", "robo", "Bzzzt. (o Zé usa o Chinelo Dourado por cima do chinelo velho. Dois chinelos. Ninguém discute.)"),
+    ]},
+    "end_c3": {"bg": "garagem", "cast": ["teo", "nestor", "ze", "zeperfeito", "xomega", "vivi"], "lines": [
+        ("narrador", "neutro", "Fim secreto. O Chinelo Estrutural. Garagem do Vô Nestor. Três robôs dividem o mesmo cantinho: o Zé Poeira, o Zé Perfeito e um pequeno aspirador preto com LED ciano."),
+        ("xomega", "calmo", "Unidade X-Ômega. Novo nome solicitado. Sugestão: Ômega Poeira. Pergunta: posso cair às vezes?"),
+        ("nestor", "feliz", "Pode, filho. Aqui todo mundo cai. A gente só levanta junto."),
+        ("vivi", "corada", "Eu fiz uma planilha para os três. A coluna \"teimosia\" agora tem três linhas. Todas em verde."),
+        ("zeperfeito", "feliz", "Registro: hoje eu caí quatro vezes. Hipótese confirmada: não é defeito."),
+        ("teo", "feliz", "Vô, o senhor desenhou tudo isso? As fitas, o chip, o chinelo?"),
+        ("nestor", "piscando", "Eu desenhei um amigo, Téo. O resto vocês inventaram no caminho. Como sempre. Créditos: todo mundo. E o chinelo, que segurou tudo."),
+        ("ze", "robo", "Bip. (as três rodinhas esquerdas caem ao mesmo tempo e rolam até a porta. Fim. Desta vez, pega as três.)"),
+    ]},
 }
+
+# --- finais (spec secao 5): o primeiro que vale; o ultimo e o padrao ---------------------------------
+ENDINGS = [
+    (("all", [("noflag", "renova_limpex"), ("flag", "poupou_ze"), ("flag", "chinelo_fica"),
+              ("count", "side:s_fita", 4)]), ["end_c1", "end_c2", "end_c3"], "O Chinelo Estrutural"),
+    (("flag", "renova_limpex"), ["end_b1", "end_b2"], "Contrato Dourado"),
+    (None, ["end_a1", "end_a2", "end_a3"], "Garagem Livre"),
+]
 
 # --- recompensas --------------------------------------------------------------------------------
 REWARDS = {
@@ -333,6 +645,12 @@ REWARDS = {
               "equip_hero_piece": None,
               "alt": [(("flag", "renova_limpex"), {"piece": {"model": "Railgun de Bolso", "rar": 3}}),
                       (None, {"piece": {"model": "Sonar Quântico", "rar": 3}})]},
+    # Cap. 12: Lendaria do set Plasma e XP do time
+    "rw_12": {"scrap": 2000, "piece": {"model": "Canhão de Plasma", "rar": 3}, "recruits": [], "unlock": [],
+              "xp_hero": 0, "xp_team": 40, "equip_hero_piece": None},
+    # Cap. 13 (fim da campanha): titulo. NG+ e Torre do Po: Onda D.
+    "rw_13": {"scrap": 3000, "piece": None, "recruits": [], "unlock": [], "xp_hero": 0, "xp_team": 0,
+              "equip_hero_piece": None, "title": True},
 }
 SIDES = {}
 # Rascunhos ("em breve") ate os passos C10/C11. F PROVISORIO: a spec previa 74,4 -> 81,0, mas o Ato 2
@@ -352,9 +670,13 @@ CHAPTERS = [
                ("tournament", "t_c11_rebel", ("noflag", "renova_limpex")),
                ("scene", "c11_end"), ("chapter_end", "11")]},
     {"id": "12", "act": "3", "title": "Capítulo 12", "subtitle": "Copa dos Campeões",
-     "local": "Coliseu", "F_start": 87.2, "F_end": 88.8, "econ_tier": 3,
-     "tier_done_on_close": 3, "reward": None, "nodes": [], "draft": True},
+     "local": "Coliseu", "F_start": 87.2, "F_end": 88.8, "econ_tier": 6, "train_delta": 18,
+     "tier_done_on_close": 3, "reward": "rw_12",
+     "nodes": [("scene", "c12_intro"), ("tournament", "t_c12"), ("scene", "c12_end"), ("chapter_end", "12")]},
+    # ultimo capitulo: chapter_end (titulo, rw_13) e depois o final escolhido em ENDINGS
     {"id": "13", "act": "3", "title": "Capítulo 13", "subtitle": "O Chip Zero",
-     "local": "Coliseu em apagão", "F_start": 89.0, "F_end": 90.4, "econ_tier": 3,
-     "tier_done_on_close": 3, "reward": None, "nodes": [], "draft": True},
+     "local": "Coliseu em apagão", "F_start": 89.0, "F_end": 90.4, "econ_tier": 6, "train_delta": 18,
+     "tier_done_on_close": 3, "reward": "rw_13",
+     "nodes": [("scene", "c13_intro"), ("scene", "c13_augusto"), ("scene", "c13_equipe"),
+               ("tournament", "t_c13"), ("chapter_end", "13"), ("end", "AUTO")]},
 ]

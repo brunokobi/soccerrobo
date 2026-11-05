@@ -28,8 +28,10 @@ Planejamento e especificações do jogo. O código e os comandos do dia a dia es
   74 → 83,5, ~8 pontos acima da spec, por causa das skills. **Ponto de atenção:** quem nunca evolui o
   time (não gasta sucata nem PH) trava no Ato 2; ideias em aberto: equipar sozinhas as skills de
   história ou pity maior no Ato 2. C10 pronto: caps. 10 (Intercâmbio) e 11 (A Fábrica, em duas
-  versões pela escolha B2, com a escolha B4) jogáveis e o X-Ômega, com ovr/Força provisórios até o
-  C12. Próximo: C11 (caps. 12 e 13, os 3 finais e os créditos). Deploy pendente: falta saber onde o
-  site é hospedado.
+  versões pela escolha B2, com a escolha B4) jogáveis e o X-Ômega. C11 pronto: caps. 12 (Copa dos
+  Campeões) e 13 (O Chip Zero) e os **3 finais** (Garagem Livre, Contrato Dourado e o secreto O
+  Chinelo Estrutural, que depende das 4 Fitas do Vô do C13). **A campanha tem começo, meio e fim**
+  (P-13, 132 cenas). O Ato 3 usa ovr/Força provisórios até a calibração (C12). Próximo: C12.
+  Deploy pendente: falta saber onde o site é hospedado.
   Onda D (pós-campanha) planejada. Passos em [specs/plano-de-implementacao.md](specs/plano-de-implementacao.md)
 - Fase 5 (Editor de firmware): planejada
