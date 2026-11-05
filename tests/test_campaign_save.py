@@ -476,8 +476,9 @@ def raw_of_real(c):
 # --- save invalido nao sobrescreve ------------------------------------------------------------
 def test_bad_save_never_overwritten_and_raw_in_bad():
     good = raw_of(mid_tour())
+    assert ('"sv":%d' % story.STORY_VERSION) in good
     for text in ("{not json", "[]", json.dumps({"v": 1}), "", "null", "9" * 20,
-                 good.replace('"sv":1', '"sv":99'), "[" * 5000 + "]" * 5000,
+                 good.replace('"sv":%d' % story.STORY_VERSION, '"sv":99'), "[" * 5000 + "]" * 5000,
                  good + " " * (cm.MAX_SAVE_CHARS + 1)):
         use_mem()
         MEM["main"] = text

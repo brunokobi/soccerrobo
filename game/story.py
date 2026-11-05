@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
-"""Dados da campanha "A Garagem do Vo" (modo robos). Modulo PURO: so dados, sem pygame e sem imports.
+"""Dados da campanha "A Garagem do Vo" (modo robos). Modulo PURO: so dados, sem pygame.
+
+Fachada (Onda C): este modulo guarda o Ato 1 e, no fim, junta os dados de story_a2 (Ato 2), story_a3
+(Ato 3) e story_side (missoes secundarias) nos mesmos dicts/listas (_extend). Quem usa importa so
+`story`. Os submodulos tambem sao puros (sem imports); id repetido entre modulos levanta ValueError.
 
 Regras de escrita (verificadas por tests/test_story.py): tudo em Latin-1; so aspas retas (") e tres
 pontos ASCII ("..."); fala <= 260 chars e cabe em <= 4 linhas de 780 px (pygame Font(None, 28));
@@ -24,7 +28,7 @@ SCENES[id] = {"bg", "cast": [ids], "lines": [...]}. Item de "lines":
     "rank": 1..3}: aprende direto, nao equipa), pts (int 1..5: PH extras do heroi). Escolha: opcoes 2-3;
     "fx" e "reply" opcionais.
 TOURNAMENTS[id]: ver o bloco proprio (formato, hooks, boss_delta/regular_delta).
-CHAPTERS: lista ordenada; "nodes" em ordem: ("scene", id) | ("tournament", id) | ("chapter_end", cap_id)
+CHAPTERS: lista ordenada; "act" = "1".."3" (aba do mapa); "nodes" em ordem: ("scene", id) | ("tournament", id) | ("chapter_end", cap_id)
     | ("end", scene_id)  [o ultimo capitulo da campanha termina com ("end", cena de epilogo)].
     "draft": True = esqueleto (nodes vazio) que o teste de alcancabilidade ignora.
 REWARDS[id]: aplicado UMA vez ao fechar o capitulo (chave "reward:<id>" em `done`): scrap, piece,
@@ -33,7 +37,7 @@ REWARDS[id]: aplicado UMA vez ao fechar o capitulo (chave "reward:<id>" em `done
     lista) e pts (int 1..10 para o heroi, ou {"robot": "hero"|"team", "n": 1..10}).
 """
 
-STORY_VERSION = 1
+STORY_VERSION = 2
 
 # --- pity (derrotas seguidas no chefe) ---------------------------------------------------------
 PITY_STEP = 1      # -1 de Forca do chefe por derrota seguida
@@ -1119,28 +1123,54 @@ REWARDS = {
 # garage.match_rewards/refresh_shop durante o capitulo (= tier_done + 1 do Garage). tier_done_on_close
 # = clamp(cap-1, -1, 3) gravado em garage.tier_done ao fechar.
 CHAPTERS = [
-    {"id": "P", "title": "Prólogo", "subtitle": "A Garagem do Vô", "local": "Garagem e Colégio Santa Faísca",
+    {"id": "P", "act": "1", "title": "Prólogo", "subtitle": "A Garagem do Vô", "local": "Garagem e Colégio Santa Faísca",
      "F_start": 44.3, "F_end": 44.3, "econ_tier": 0, "tier_done_on_close": -1, "reward": "rw_P",
      "nodes": [("scene", "p1_garagem"), ("scene", "p2_oficina"), ("scene", "p3_peneira_pre"),
                ("tournament", "t_p_treino"), ("scene", "p4_peneira_pos"), ("chapter_end", "P")]},
-    {"id": "1", "title": "Capítulo 1", "subtitle": "Copa Interclasses", "local": "Colégio Santa Faísca",
+    {"id": "1", "act": "1", "title": "Capítulo 1", "subtitle": "Copa Interclasses", "local": "Colégio Santa Faísca",
      "F_start": 44.9, "F_end": 47.8, "econ_tier": 0, "tier_done_on_close": 0, "reward": "rw_1",
      "nodes": [("scene", "c1_intro"), ("tournament", "t_c1"), ("scene", "c1_end"),
                ("chapter_end", "1")]},
-    {"id": "2", "title": "Capítulo 2", "subtitle": "Taça Vale do Pó", "local": "Ginásio Municipal",
+    {"id": "2", "act": "1", "title": "Capítulo 2", "subtitle": "Taça Vale do Pó", "local": "Ginásio Municipal",
      "F_start": 50.9, "F_end": 53.0, "econ_tier": 1, "tier_done_on_close": 1, "reward": "rw_2",
      "nodes": [("scene", "c2_intro"), ("tournament", "t_c2"), ("scene", "c2_end"),
                ("chapter_end", "2")]},
-    {"id": "3", "title": "Capítulo 3", "subtitle": "Estadual Limpex Cup", "local": "Arena Estadual",
+    {"id": "3", "act": "1", "title": "Capítulo 3", "subtitle": "Estadual Limpex Cup", "local": "Arena Estadual",
      "F_start": 55.4, "F_end": 57.6, "econ_tier": 2, "tier_done_on_close": 2, "reward": "rw_3",
      "nodes": [("scene", "c3_intro"), ("tournament", "t_c3"), ("scene", "c3_end"),
                ("chapter_end", "3")]},
-    {"id": "4", "title": "Capítulo 4", "subtitle": "Copa Brasil", "local": "Estádio Nacional",
+    {"id": "4", "act": "1", "title": "Capítulo 4", "subtitle": "Copa Brasil", "local": "Estádio Nacional",
      "F_start": 58.8, "F_end": 60.7, "econ_tier": 3, "tier_done_on_close": 3, "reward": "rw_4",
      "nodes": [("scene", "c4_intro"), ("tournament", "t_c4"), ("scene", "c4_end"),
                ("chapter_end", "4")]},
-    {"id": "5", "title": "Capítulo 5", "subtitle": "Mundial de Aspiradores", "local": "Arena Global de Neo-Tóquio",
+    {"id": "5", "act": "1", "title": "Capítulo 5", "subtitle": "Mundial de Aspiradores", "local": "Arena Global de Neo-Tóquio",
      "F_start": 63.6, "F_end": 65.8, "econ_tier": 3, "tier_done_on_close": 3, "reward": "rw_5",
      "nodes": [("scene", "c5_intro"), ("tournament", "t_c5"), ("scene", "c5_antidoping"),
                ("chapter_end", "5"), ("end", "e1_epilogo")]},
 ]
+
+
+# --- fachada: Atos 2 e 3 e missoes secundarias (Onda C) -------------------------------------
+def _extend(mod):
+    """Junta os dados de um submodulo nos dicts/listas deste modulo. Ids sao estaveis (vao para o
+    save): repetir um id ja existente e erro de dados, nunca sobrescrita silenciosa."""
+    for name in ("CHARACTERS", "TEAMS", "TOURNAMENTS", "SCENES", "REWARDS"):
+        dst, src = globals()[name], getattr(mod, name)
+        dup = set(dst) & set(src)
+        if dup:
+            raise ValueError("%s.%s repete ids: %s" % (mod.__name__, name, sorted(dup)))
+        dst.update(src)
+    have = {c["id"] for c in CHAPTERS}
+    dup = have & {c["id"] for c in mod.CHAPTERS}
+    if dup:
+        raise ValueError("%s.CHAPTERS repete ids: %s" % (mod.__name__, sorted(dup)))
+    CHAPTERS.extend(mod.CHAPTERS)
+
+
+import story_a2  # noqa: E402
+import story_a3  # noqa: E402
+import story_side  # noqa: E402
+
+for _m in (story_a2, story_a3, story_side):
+    _extend(_m)
+del _m

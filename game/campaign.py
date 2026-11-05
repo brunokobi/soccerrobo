@@ -78,6 +78,15 @@ SAVE_NONE, SAVE_OK, SAVE_BAD = "none", "ok", "bad"
 # o dict inteiro do save. Sem migracao para um `sv` antigo => reparo por rewind (aviso). `v` antigo
 # sem migracao => bad.
 MIGRATIONS = {}
+
+
+def _migrate_sv1(data):
+    """Roteiro 1 -> 2 (C1: story.py virou fachada dos Atos 2/3; nenhum id mudou). Identidade por
+    enquanto; o C2 move quem ja passou do epilogo do cap. 5 para o cap. 6."""
+    return data
+
+
+MIGRATIONS[("sv", 1)] = _migrate_sv1
 MAX_DONE, MAX_DONE_RAW, MAX_RESULTS = 300, 1000, 12
 SEED_MAX, STAT_MAX = 2 ** 53, 10 ** 9
 STAT_KEYS = ("ev", "matches", "sims", "trained")

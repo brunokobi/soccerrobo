@@ -469,6 +469,7 @@ def test_chapters_structure():
     assert [c["id"] for c in st.CHAPTERS][1:] == ["1", "2", "3", "4", "5"]
     prev_f = 0
     for c in st.CHAPTERS:
+        assert c["act"] in ("1", "2", "3"), c["id"]
         assert 0 <= c["econ_tier"] <= 3 and -1 <= c["tier_done_on_close"] <= 3
         assert c["F_start"] <= c["F_end"] and c["F_start"] >= prev_f - 3
         prev_f = c["F_end"]
@@ -525,9 +526,47 @@ def test_budget_sanity():
     chars = sum(len(ln[2]) for s in st.SCENES.values() for ln in all_lines(s))
     assert 12 <= n <= 80, n
     assert 100 <= lines <= 800, lines
-    assert st.STORY_VERSION == 1
+    assert st.STORY_VERSION == 2
     print("  (cenas=%d falas-principais=%d falas-total=%d caracteres=%d)" % (
         n, lines, sum(len(all_lines(s)) for s in st.SCENES.values()), chars))
+
+
+def test_facade_extend():
+    """story.py junta os submodulos dos Atos 2/3/side; id repetido e erro, nunca sobrescrita."""
+    import types
+    import story_a2
+    import story_a3
+    import story_side
+    for m in (story_a2, story_a3, story_side):
+        for name in ("CHARACTERS", "TEAMS", "TOURNAMENTS", "SCENES", "REWARDS"):
+            assert set(getattr(m, name)) <= set(getattr(st, name)), (m.__name__, name)
+        assert all(c in st.CHAPTERS for c in m.CHAPTERS), m.__name__
+    acts = [c["act"] for c in st.CHAPTERS]
+    assert acts == sorted(acts), "capitulos fora da ordem dos Atos"
+    assert [c["act"] for c in st.CHAPTERS if c["id"] in ("P", "1", "2", "3", "4", "5")] == ["1"] * 6
+    for name in ("CHARACTERS", "TEAMS", "TOURNAMENTS", "SCENES", "REWARDS"):
+        fake = types.SimpleNamespace(__name__="fake", CHAPTERS=[],
+                                     **{k: {} for k in ("CHARACTERS", "TEAMS", "TOURNAMENTS",
+                                                        "SCENES", "REWARDS")})
+        getattr(fake, name)[next(iter(getattr(st, name)))] = {}
+        before = {k: dict(getattr(st, k)) for k in ("CHARACTERS", "TEAMS", "TOURNAMENTS", "SCENES",
+                                                     "REWARDS")}
+        try:
+            st._extend(fake)
+            raise AssertionError("id repetido em %s nao levantou" % name)
+        except ValueError:
+            pass
+        assert all(getattr(st, k) == v for k, v in before.items()), "dados alterados apos erro"
+    fake = types.SimpleNamespace(__name__="fake", CHAPTERS=[{"id": "P"}],
+                                 **{k: {} for k in ("CHARACTERS", "TEAMS", "TOURNAMENTS", "SCENES",
+                                                    "REWARDS")})
+    n = len(st.CHAPTERS)
+    try:
+        st._extend(fake)
+        raise AssertionError("capitulo repetido nao levantou")
+    except ValueError:
+        pass
+    assert len(st.CHAPTERS) == n
 
 
 def main():

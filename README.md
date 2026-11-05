@@ -238,7 +238,7 @@ Utilitários do harness (`tests/sim_harness.py`): `golden`/`golden-new` com
 - `game/crowd.py`: torcida (locais, espectadores pré-renderizados, reações, confete/LED/telão, LOD) e a geometria das câmeras PERTO/ESTÁDIO
 - `game/robots_ui.py`: telas do Modo Robôs (hub, garagem, banco, loja, habilidades, mochila, visual, liga)
 - `game/career.py` / `game/career_ui.py`: carreira de clubes (liga, mercado, finanças, save) e suas telas
-- `game/story.py`: dados da campanha (personagens, times, cenas/diálogos, torneios, capítulos, recompensas); módulo puro, sem pygame
+- `game/story.py`: dados da campanha (personagens, times, cenas/diálogos, torneios, capítulos, recompensas); módulo puro, sem pygame. É a fachada da campanha: guarda o Ato 1 e junta `story_a2.py` (Ato 2), `story_a3.py` (Ato 3) e `story_side.py` (missões secundárias), que por enquanto estão vazios
 - `game/campaign.py`: lógica da campanha (progresso, torneios, chefes/pity, treino, recompensas, save)
 - `game/campaign_ui.py`: telas da campanha (menu, mapa, diálogo, torneio, resultado, fim de capítulo), reaproveitando garagem/bancada/loja do Modo Robôs
 - `game/portraits.py`: retratos e cenários da campanha, desenhados por código
