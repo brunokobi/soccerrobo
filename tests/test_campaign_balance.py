@@ -4,7 +4,7 @@
 Rodar da raiz: .venv/bin/python tests/test_campaign_balance.py [teste ...]   (N=300 por politica)
 Usa Campaign.simulate_current (Poisson com o vies dependente do ovr, campaign.sim_bias(O), calibrado contra
 o motor real por tests/calib_campaign.py), seeds fixas e a API pura do garage. Cobre todo capitulo NAO
-draft de story.CHAPTERS dos Atos calibrados (CALIBRATED_ACTS; hoje os Atos 1 e 2: P e 1-9). "Aproveitamento" = (V + E/2) / jogos pelo placar dos 90 min (penaltis
+draft de story.CHAPTERS dos Atos calibrados (CALIBRATED_ACTS; hoje a campanha inteira: P e 1-13). "Aproveitamento" = (V + E/2) / jogos pelo placar dos 90 min (penaltis
 nao contam). "regular" = jogos do grupo + quartas; "SF" = semifinal; "chefe" = final (inclui as
 retentativas com pity, por isso fica ~2-4 pontos acima da primeira tentativa).
 
@@ -55,12 +55,15 @@ for _m, _n in ((gm, "_store_set"), (gm, "_store_set_bad"), (cm, "_store_set"), (
         setattr(_m, _n, _boom)
 
 
-CALIBRATED_ACTS = ("1", "2")    # Atos ja calibrados contra o motor (Ato 2: C9); o Ato 3 entra no C12
+CALIBRATED_ACTS = ("1", "2", "3")    # Atos calibrados contra o motor (Ato 2: C9; Ato 3: C12)
+# A PASSIVA (nunca evolui o time) so roda os Atos 1 e 2: no Ato 3 ela nao termina dentro de MAX_MATCHES
+# (C12: quem nunca gasta sucata nem PH fica ~30 pontos de Forca abaixo da tabela). Decisao de design em
+# aberto, registrada em docs/INDEX.md (equipar sozinhas as skills de historia / pity maior).
+PASSIVE_ACTS = ("1", "2")
 
 
-def playable():
-    return [c for c in story.CHAPTERS if not c.get("draft") and c["nodes"]
-            and c.get("act", "1") in CALIBRATED_ACTS]
+def playable(acts=CALIBRATED_ACTS):
+    return [c for c in story.CHAPTERS if not c.get("draft") and c["nodes"] and c.get("act", "1") in acts]
 
 
 # ---------------------------------------------------------------- politica de gasto (API pura do garage)
@@ -173,7 +176,7 @@ def run_campaign(policy, seed):
     """Joga a campanha (capitulos jogaveis) ate o ultimo capitulo nao-draft. Devolve o registro."""
     c = cm.new_campaign(random.Random(seed))
     prng = random.Random(seed * 7919 + 13)
-    chapters = playable()
+    chapters = playable(PASSIVE_ACTS if policy == "passive" else CALIBRATED_ACTS)
     last = chapters[-1]["id"]
     rec = {"ch": {}, "matches": 0, "boss_tries": {}, "done": False, "c": c}
 
@@ -267,7 +270,7 @@ def table(policy):
     print("\n== politica %s (%d campanhas) ==" % (policy.upper(), len(recs)))
     print("  %-4s %-9s %-9s %-9s %-10s %-9s %-9s %-9s" % ("cap", "regular%", "SF%", "chefe%", "P(1a vez)%", "F inicio", "F tabela", "F cru"))
     rows = {}
-    for ch in playable():
+    for ch in playable(PASSIVE_ACTS if policy == "passive" else CALIBRATED_ACTS):
         cid = ch["id"]
         reg, bos, sfp = pct(agg(recs, cid, "reg")), pct(agg(recs, cid, "boss")), pct(agg(recs, cid, "sf"))
         has_boss = any(sum(r["ch"][cid]["boss"]) for r in recs if cid in r["ch"])
@@ -353,8 +356,9 @@ def test_grinder_campaign():
 
 
 def test_policies_ordering():
-    """Sanidade: Forca no inicio dos capitulos (apos o capitulo 1): grinder >= gulosa >= passiva."""
-    ch = playable()[-1]["id"]
+    """Sanidade: Forca no inicio dos capitulos (apos o capitulo 1): grinder >= gulosa >= passiva (no ultimo
+    capitulo que a passiva joga)."""
+    ch = playable(PASSIVE_ACTS)[-1]["id"]
     f = {p: sum(r["ch"][ch]["F0"] for r in campaigns(p)) / N for p in ("passive", "greedy", "grinder")}
     print("  F inicio cap %s: passiva %.1f | gulosa %.1f | grinder %.1f" % (ch, f["passive"], f["greedy"], f["grinder"]))
     assert f["grinder"] >= f["greedy"] - 0.5 and f["greedy"] > f["passive"]

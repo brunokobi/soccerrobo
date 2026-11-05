@@ -31,7 +31,10 @@ Planejamento e especificações do jogo. O código e os comandos do dia a dia es
   versões pela escolha B2, com a escolha B4) jogáveis e o X-Ômega. C11 pronto: caps. 12 (Copa dos
   Campeões) e 13 (O Chip Zero) e os **3 finais** (Garagem Livre, Contrato Dourado e o secreto O
   Chinelo Estrutural, que depende das 4 Fitas do Vô do C13). **A campanha tem começo, meio e fim**
-  (P-13, 132 cenas). O Ato 3 usa ovr/Força provisórios até a calibração (C12). Próximo: C12.
-  Deploy pendente: falta saber onde o site é hospedado.
+  (P-13, 132 cenas). C12 pronto: Ato 3 calibrado no motor (Força 85 → 94; acima de ~85 o motor
+  "achata", então os adversários do Ato 3 ficam quase planos e o SIMULAR ganhou uma correção para Força
+  alta; tabela em `tests/calib_campaign.py`). O ponto de atenção do Ato 2 piora no Ato 3: quem nunca
+  evolui o time não termina a campanha. Próximo: C13 (14 missões secundárias). Deploy pendente: falta
+  saber onde o site é hospedado.
   Onda D (pós-campanha) planejada. Passos em [specs/plano-de-implementacao.md](specs/plano-de-implementacao.md)
 - Fase 5 (Editor de firmware): planejada

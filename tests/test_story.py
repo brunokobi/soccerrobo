@@ -458,10 +458,12 @@ def test_tournaments():
             assert st.TEAMS[t["boss"]]["ovr"] >= max(regs + ovrs([t["sf"]])), tid
             c = chap[t["chapter"]]
             assert abs(c["F_end"] - t["boss_delta"] - st.TEAMS[t["boss"]]["ovr"]) <= 0.6, tid
+            # passo 16: o motor exige regulares bem abaixo da Forca (F-O ~ 6..13 para 58-66%). C12: no Ato 3
+            # (F 85-94) o motor achata e as diferencas crescem (regulares ate ~22, SF ate ~18).
+            reg_max, sf_max = (22, 18) if c.get("act") == "3" else (18, 11)
             for o in regs:
-                # passo 16: o motor exige regulares bem abaixo da Forca (F-O ~ 6..13 para 58-66%)
-                assert 4 <= c["F_start"] - o <= 18, (tid, o)
-            assert 1 <= c["F_start"] - st.TEAMS[t["sf"]]["ovr"] <= 11
+                assert 4 <= c["F_start"] - o <= reg_max, (tid, o)
+            assert 1 <= c["F_start"] - st.TEAMS[t["sf"]]["ovr"] <= sf_max, tid
             ids = t["group"] + [t["sf"], t["boss"]] + ([t["qf"]] if t.get("qf") else [])
             assert len(set(ids)) == len(ids), tid
         elif t["format"] == "league":

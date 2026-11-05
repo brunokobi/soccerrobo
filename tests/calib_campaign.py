@@ -123,6 +123,37 @@ treino do Ato 2 usa train_delta 18 (o 12 do Ato 1 dava ~55%).
   |SIM - motor| media ~4; o SIMULAR fica otimista (+6 a +10) contra adversarios de O 66-69 fora do chefe
   (sim_bias satura em 8 a partir de O 42). Nao foi mexido: mudar sim_bias desloca o Ato 1 calibrado; fica
   como ponto de atencao para o C12 (um sim_bias por Ato, se o Ato 3 repetir o padrao).
+
+C12 - ATO 3 (05/11/2026, --skills, n=200, 3 rodadas). F medido (gulosa com skills): 85,4->86,8 | 89,7->91,3 |
+92,2->92,9 | 93,8->94,2. Rodada 1 com as diferencas do Ato 2 (regulares F-O ~17, chefes ~8): motor bem
+abaixo das metas (regulares 52,6, chefes 38,8; X-Omega 31,2) e SIMULAR +14 em media (ate +24): acima de
+F ~85 o motor ACHATA (atributos perto do teto; a Forca segue subindo por nivel/skills). Correcoes: ovr do
+Ato 3 quase planos (regulares 68-72, SF/duelo do meio 72-75, chefes 76-78; o min/max de ovr nunca cai
+entre capitulos), train_delta 21 e sim_bias(O, F) com +0,8 por ponto de F acima de 82 (teto 12; Ato 1 nao
+muda, Ato 2 so no fim do cap. 9). Rodada 3 (final):
+  checkpoint                 F    O  motor  SIM(O)  dif
+  10 treino                85.3   64   66.8   73.2  +6.4
+  10 G1 Sakura Reboot      85.3   68   60.0   65.0  +5.0
+  10 G2 Staubsauger Pro    85.3   69   62.0   62.8  +0.8
+  10 G3 Les Aspirateurs N  86.2   69   61.2   63.2  +1.9
+  10 SF Seleção Nipo-Teut  86.2   72   52.2   56.5  +4.2
+  10 F Time dos Mundos     87.0   76   47.2   47.7  +0.5
+  11 treino                89.6   69   64.5   64.6  +0.1
+  11 S1 Linha de Montagem  89.6   71   58.2   60.3  +2.0
+  11 S2 Controle de Quali  90.4   73   52.0   56.1  +4.1   (duelo do meio: meta de SF)
+  11 S3 Gerente Mk II      91.2   77   51.0   47.4  -3.6
+  12 treino                92.1   71   64.0   61.4  -2.6
+  12 G1 Campeões do Sul    92.1   71   67.0   61.4  -5.6
+  12 G2 Rainha da Cera     92.1   71   67.0   61.4  -5.6
+  12 G3 Titãs do Vale      92.9   72   54.8   59.5  +4.7
+  12 QF Dojo All-Stars     92.9   73   60.0   57.3  -2.7
+  12 SF Platinum Imperial  92.9   75   52.0   52.7  +0.7
+  12 F Imaculados Ômega    92.9   77   52.5   48.1  -4.4
+  13 treino                93.7   73   58.2   57.6  -0.6
+  13 S1 Droides Ômega      93.7   72   59.8   59.9  +0.1
+  13 S2 Guarda Pretoriana  94.5   75   52.0   53.4  +1.4   (duelo do meio: meta de SF)
+  13 S3 X-Ômega Prime      94.5   78   43.5   46.6  +3.1   (chefe final: meta 42-50)
+  motor: treino 58-67 | regulares 55-67 | SF/duelo do meio 52 | chefes 47-52 (final 43,5). |SIM - motor| media 2,9.
 """
 import argparse
 import math
@@ -364,7 +395,7 @@ def main_table(a):
         for name, kind, tid, ovr, F in cells:
             Fr, w, d, l = measure(pool, F, kind, tid, ovr, a.n, a.skills)
             eng = 100.0 * (w + d / 2.0) / a.n
-            pw, pd, _ = poisson_wdl(Fr - cm.sim_bias(ovr), ovr)
+            pw, pd, _ = poisson_wdl(Fr - cm.sim_bias(ovr, Fr), ovr)
             ow, od, _ = poisson_wdl(Fr - 2.0, ovr)
             sim = points(pw, pd)
             rows.append({"name": name, "kind": kind, "F": Fr, "O": ovr, "eng": eng, "sim": sim,

@@ -56,6 +56,7 @@ SIM_BIAS0 = 5.0              # vies (pontos de Forca) em O = SIM_O_REF
 SIM_BIAS_SLOPE = 1.5         # variacao do vies por ponto de ovr do adversario
 SIM_O_REF = 40
 SIM_BIAS_MIN, SIM_BIAS_MAX = -2.0, 8.0
+SIM_HIGHF_REF, SIM_HIGHF_SLOPE, SIM_HIGHF_MAX = 82.0, 0.8, 12.0   # C12: motor achata com F alto (Ato 3)
 PITY_STEP = story.PITY_STEP
 PITY_MAX = story.PITY_MAX
 DONE = "DONE"
@@ -155,14 +156,20 @@ def shootout(rating_h, rating_a, rng):
     return h, a
 
 
-def sim_bias(O):
-    """Vies (em pontos de Forca) que faz o Poisson imitar o motor contra um adversario de ovr O."""
-    return G.clamp(SIM_BIAS0 + SIM_BIAS_SLOPE * (O - SIM_O_REF), SIM_BIAS_MIN, SIM_BIAS_MAX)
+def sim_bias(O, F=None):
+    """Vies (em pontos de Forca) que faz o Poisson imitar o motor contra um adversario de ovr O. C12: acima
+    de F = SIM_HIGHF_REF o motor "achata" (os atributos chegam perto do teto e a Forca continua subindo
+    por nivel/skills), entao o vies cresce SIM_HIGHF_SLOPE por ponto de F (ate SIM_HIGHF_MAX). Ato 1
+    (F <= 66) nao muda; no Ato 2 so o fim do cap. 9 encosta."""
+    b = G.clamp(SIM_BIAS0 + SIM_BIAS_SLOPE * (O - SIM_O_REF), SIM_BIAS_MIN, SIM_BIAS_MAX)
+    if F is not None and F > SIM_HIGHF_REF:
+        b += min(SIM_HIGHF_MAX, SIM_HIGHF_SLOPE * (F - SIM_HIGHF_REF))
+    return b
 
 
 def sim_match(user_F, O, rng):
-    """Simula (my, opp) por Poisson com o vies do motor: quick_sim(F - sim_bias(O), O)."""
-    return RL.quick_sim(user_F - sim_bias(O), O, rng)
+    """Simula (my, opp) por Poisson com o vies do motor: quick_sim(F - sim_bias(O, F), O)."""
+    return RL.quick_sim(user_F - sim_bias(O, user_F), O, rng)
 
 
 def stages_of(tr):
