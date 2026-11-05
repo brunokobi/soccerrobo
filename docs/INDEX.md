@@ -17,6 +17,9 @@ Planejamento e especificações do jogo. O código e os comandos do dia a dia es
 - Fases 1, 2 e 3: prontas e publicadas em https://copaaspirador.brunokobi.tech
 - Fase 4 (Campanha Expandida): **Onda A (torcida, robôs detalhados, retratos, cenários e câmera de
   estádio) e Onda B (peças novas, sets, relíquias, slot Módulo, 16 skills, itens de partida, Mochila e
-  cosméticos) prontas**; Ondas C (Atos 2 e 3) e D (pós-campanha) planejadas em
-  [specs/plano-de-implementacao.md](specs/plano-de-implementacao.md)
+  cosméticos) prontas**. Onda C (Atos 2 e 3) em andamento na branch `feat/fase4-onda-c-estrutura`:
+  C1-C5 prontos (fachada do `story.py`, save v2 com migração, torneios de liga e série, nós
+  condicionais, finais, missões secundárias, mapa por Ato); o cap. 6 ainda é provisório (só o
+  epílogo), então a branch não deve ir para produção antes do C6. Próximo: C6 (roteiro do cap. 6).
+  Onda D (pós-campanha) planejada. Passos em [specs/plano-de-implementacao.md](specs/plano-de-implementacao.md)
 - Fase 5 (Editor de firmware): planejada

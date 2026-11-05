@@ -542,7 +542,7 @@ class Campaign:
     def ending(self):
         """Cenas do final desta campanha: o final ja comecado (alguma cena em done) ou o primeiro de
         story.ENDINGS cuja cond vale. None se nenhum vale."""
-        opts = [(c, [x] if isinstance(x, str) else list(x)) for c, x in story.ENDINGS]
+        opts = [(e[0], [e[1]] if isinstance(e[1], str) else list(e[1])) for e in story.ENDINGS]
         for _c, scenes in opts:
             if any(self.is_done(x) for x in scenes):
                 return scenes

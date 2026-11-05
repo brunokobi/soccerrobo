@@ -123,7 +123,7 @@ def check_cond_format(cond, where):
 
 
 def ending_scenes():
-    return [x for _c, sc in st.ENDINGS for x in ([sc] if isinstance(sc, str) else sc)]
+    return [x for e in st.ENDINGS for x in ([e[1]] if isinstance(e[1], str) else e[1])]
 
 
 def side_scenes():
@@ -656,15 +656,18 @@ def test_sides_and_endings_data():
         assert set(sp["reward"]) <= FX_KEYS and sp["reward"], sid
         assert not sp.get("repeat"), "missoes repetiveis nao sao suportadas (%s)" % sid
     seen = set()
-    for i, (cond, scenes) in enumerate(st.ENDINGS):
-        scenes = [scenes] if isinstance(scenes, str) else scenes
+    for i, e in enumerate(st.ENDINGS):
+        assert len(e) in (2, 3), i
+        cond, scenes = e[0], ([e[1]] if isinstance(e[1], str) else e[1])
+        if len(e) == 3:
+            assert isinstance(e[2], str) and 1 <= len(e[2]) <= 24, i
         check_cond_format(cond, "ENDINGS[%d]" % i)
         assert 1 <= len(scenes) <= 3 and all(x in st.SCENES for x in scenes), i
         assert not (set(scenes) & seen), "cena repetida entre finais"
         seen |= set(scenes)
     if st.ENDINGS:
         assert st.ENDINGS[-1][0] is None, "o ultimo final e o padrao (cond None)"
-        assert all(c is not None for c, _ in st.ENDINGS[:-1])
+        assert all(e[0] is not None for e in st.ENDINGS[:-1])
 
 
 def main():

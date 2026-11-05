@@ -160,7 +160,7 @@ O jogador controlado troca sozinho (o mais perto da bola).
 | 1 | Robôs com chassis e 8 atributos, bateria, arena tecnológica (neon) | pronta |
 | 2 | Garagem e laboratório: peças, upgrades, XP, evolução, loja e liga (Modo Robôs) | pronta e jogável |
 | 3 | **Campanha** "A Garagem do Vô": história, diálogos, torneios, chefes e treino (escola -> mundial) | pronta e jogável |
-| 4 | **Campanha Expandida**: torcida realista, câmera de estádio e desenhos mais detalhados (Onda A), peças/sets/relíquias/itens/cosméticos e 16 skills dos robôs (Onda B), Atos 2 e 3, missões secundárias e 3 finais (Ondas C e D) | Ondas A e B prontas; C e D planejadas ([docs/roadmap.md](docs/roadmap.md)) |
+| 4 | **Campanha Expandida**: torcida realista, câmera de estádio e desenhos mais detalhados (Onda A), peças/sets/relíquias/itens/cosméticos e 16 skills dos robôs (Onda B), Atos 2 e 3, missões secundárias e 3 finais (Ondas C e D) | Ondas A e B prontas; Onda C em andamento (estrutura C1-C5 pronta: save v2, liga/série, finais, missões, mapa por Ato; falta o roteiro dos Atos 2 e 3); D planejada ([docs/roadmap.md](docs/roadmap.md)) |
 | 5 | Editor de firmware (regras da IA em blocos) | planejada |
 
 O planejamento detalhado fica em [`docs/`](docs/INDEX.md).
@@ -203,7 +203,7 @@ export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy
 .venv/bin/python tests/test_campaign.py                # lógica da campanha (torneios, pity, treino, recompensas)
 .venv/bin/python tests/test_campaign_save.py           # save da campanha (validação, reparo, save inválido)
 .venv/bin/python tests/test_campaign_migration.py      # migração v1 -> v2 com 4 saves reais do cap. 5 e build antigo lendo v2
-.venv/bin/python tests/test_campaign_ui.py             # telas da campanha (menu, mapa, diálogo, torneio, fim)
+.venv/bin/python tests/test_campaign_ui.py             # telas da campanha (menu, mapa por Ato, missões, diálogo, torneio, fim e galeria)
 .venv/bin/python tests/test_portraits.py               # retratos e cenários desenhados por código
 .venv/bin/python tests/test_prefs.py                   # preferências do jogador (store, valor inválido -> padrão)
 .venv/bin/python tests/test_crowd.py                   # torcida: locais, reações, extras, LOD, zero Surface por quadro
@@ -244,7 +244,7 @@ Utilitários do harness (`tests/sim_harness.py`): `golden`/`golden-new` com
 - `game/career.py` / `game/career_ui.py`: carreira de clubes (liga, mercado, finanças, save) e suas telas
 - `game/story.py`: dados da campanha (personagens, times, cenas/diálogos, torneios, capítulos, recompensas); módulo puro, sem pygame. É a fachada da campanha: guarda o Ato 1 e junta `story_a2.py` (Ato 2), `story_a3.py` (Ato 3) e `story_side.py` (missões secundárias), que por enquanto estão vazios
 - `game/campaign.py`: lógica da campanha (progresso, torneios, chefes/pity, treino, recompensas, save)
-- `game/campaign_ui.py`: telas da campanha (menu, mapa, diálogo, torneio, resultado, fim de capítulo), reaproveitando garagem/bancada/loja do Modo Robôs
+- `game/campaign_ui.py`: telas da campanha (menu, mapa com abas por Ato, missões secundárias, diálogo, torneio de copa/liga/série, resultado, fim de capítulo, fim com galeria de finais), reaproveitando garagem/bancada/loja do Modo Robôs
 - `game/portraits.py`: retratos e cenários da campanha, desenhados por código
 - `docs/`: planejamento e especificações (`docs/INDEX.md`); `docs/img/`: capturas de tela do README
 - `tests/`: testes, harness de simulação e baselines (`baseline_golden*.json`) (ficam fora de `game/` para não entrar no pacote do pygbag)

@@ -1152,6 +1152,186 @@ def test_tourney_screen_league_and_series():
             ui.to_menu()
 
 
+# --- C5: mapa por Ato, missoes secundarias e finais com galeria ----------------------------------
+class story_patch:
+    """CHAPTERS extras/nos trocados, SIDES e ENDINGS sinteticos (restaura ao sair)."""
+
+    def __init__(self, extra=(), nodes=None, sides=None, endings=None):
+        self.extra, self.nodes = list(extra), nodes or {}
+        self.sides, self.endings = sides or {}, endings
+
+    def __enter__(self):
+        self.orig = (story.CHAPTERS, dict(story.SIDES), list(story.ENDINGS))
+        chs = copy.deepcopy(story.CHAPTERS) + copy.deepcopy(self.extra)
+        for c in chs:
+            if c["id"] in self.nodes:
+                c["nodes"] = list(self.nodes[c["id"]])
+        story.CHAPTERS = chs
+        story.SIDES.update(self.sides)
+        if self.endings is not None:
+            story.ENDINGS[:] = self.endings
+        return self
+
+    def __exit__(self, *exc):
+        story.CHAPTERS = self.orig[0]
+        story.SIDES.clear()
+        story.SIDES.update(self.orig[1])
+        story.ENDINGS[:] = self.orig[2]
+        return False
+
+
+def _draft_ch(cid, act):
+    return {"id": cid, "act": act, "title": "Capítulo %s" % cid, "subtitle": "Sintético %s" % cid,
+            "local": "Lugar %s" % cid, "F_start": 70.0, "F_end": 71.0, "econ_tier": 3,
+            "tier_done_on_close": 3, "reward": None, "nodes": [], "draft": True}
+
+
+def _buttons_with(label_pred):
+    frame()
+    return [(r, en) for r, fn, en in ui.buttons if label_pred(r)]
+
+
+def test_map_act_tabs_14_nodes_and_no_surface():
+    extra = [_draft_ch(c, "2") for c in ("7", "8", "9")] + [_draft_ch(c, "3") for c in ("10", "11", "12", "13")]
+    with story_patch(extra=extra):
+        fresh_campaign(31)
+        assert ui.shown_act() == "1"
+        total = 0
+        for act, n in (("1", 6), ("2", 4), ("3", 4)):
+            ui.set_map_tab(act)
+            frame()
+            chs = ui.act_chapters(act)
+            assert len(chs) == n, (act, len(chs))
+            total += n
+            dx = cui.node_dx(n)
+            assert cui.NODE_X0 + (n - 1) * dx <= cui.NODE_X_MAX
+            assert all(text_cache_has(c["subtitle"].split()[0]) for c in chs), act
+            assert _no_surface_frames() == 0, act
+            shot("map_act%s" % act)
+        assert total == 14
+        ui.set_map_tab(None)
+    fresh_campaign(31)                                   # dados reais: Ato 3 sem capitulos = aba desligada
+    x, y, w, h = cui.ACT_TAB
+    tabs = _buttons_with(lambda r: r.y == y and r.h == h)
+    assert [en for _r, en in tabs] == [True, True, False], tabs
+    click(tabs[1][0].center)
+    frame()
+    assert ui.map_tab == "2" and text_cache_has("Taça de Acesso")
+    click(tabs[2][0].center)                             # desligada: nada muda
+    assert ui.map_tab == "2"
+    ui.to_menu()
+
+
+SIDE_UI = {"title": "Missão teste", "local": "Quadra do colégio", "bg": "quadra", "team": "coral",
+           "delta": 14, "unlock": ("done", "reward:rw_P"),
+           "scenes": {"pre": "c2_intro", "win": "c2_end", "lose": "c1_final_lose"},
+           "reward": {"scrap": 50, "xp_team": 20}, "repeat": False}
+
+
+def _drive_side(score_seq, limit=400):
+    """Joga a missao ativa por cliques ate voltar ao mapa; devolve as telas vistas."""
+    seen = []
+    for _ in range(limit):
+        frame()
+        sid = ui.screen_id
+        seen.append(sid)
+        if sid == "map":
+            return seen
+        if sid == "dialog":
+            dialog_step()
+        elif sid == "tourney":
+            SIMQ.append(score_seq.pop(0))
+            click_rect(BTN_SIM)
+        elif sid == "round":
+            click_rect(ROUND_CONT)
+        else:
+            raise AssertionError("tela inesperada " + sid)
+    raise AssertionError("missao nao voltou ao mapa")
+
+
+def test_sides_screen_play_lose_win_and_back_to_map():
+    with story_patch(sides={"s_t": SIDE_UI, "s_u": dict(SIDE_UI, title="Outra missão", team="detetives")}):
+        fresh_campaign(32)
+        cp = ui.campaign
+        frame()
+        assert text_cache_has("MISSÕES") and not text_cache_has("MISSÕES (")       # nada liberado
+        cp.done.append("reward:rw_P")
+        frame()
+        assert text_cache_has("MISSÕES (2)")
+        click_rect((430, 536, 240, 44))
+        assert ui.screen_id == "sides" and len(ui.side_rows()) == 2
+        assert _no_surface_frames() == 0
+        shot("sides_list")
+        click_rect((880, 184 + 16, 160, 44))                 # JOGAR na 1a
+        assert cp.side is not None and cp.side["id"] == "s_t" and ui.screen_id == "dialog"
+        scrap0 = cp.garage.scrap
+        seen = _drive_side([(0, 1), (3, 0)])
+        assert "tourney" in seen and seen.count("round") == 2
+        assert cp.side is None and cp.side_done("s_t") and "c1_final_lose#1" in cp.done and "c2_end" in cp.done
+        assert cp.garage.scrap >= scrap0 + 50 and cp.stats["sides"] == 1
+        saved = cm.Campaign.load()
+        assert saved is not None and saved.side_done("s_t") and saved.side is None
+        # a missao nao emenda na historia: o capitulo continua onde estava
+        assert ui.screen_id == "map" and (cp.ch, cp.node) == ("P", 0)
+        # desistir da segunda
+        ui.open_sides()
+        frame()
+        assert [r[0] for r in ui.side_rows()] == ["s_u", "s_t"] and text_cache_has("CONCLUÍDA")
+        click_rect((880, 184 + 16, 160, 44))
+        ui.go("map")
+        frame()
+        assert text_cache_has("CONTINUAR MISSÃO") and text_cache_has("Missão em andamento")
+        shot("map_side_active")
+        click_rect((430, 590, 240, 40))                      # DESISTIR DA MISSÃO
+        assert cp.side is None and not cp.side_done("s_u") and ui.screen_id == "map"
+        assert cm.Campaign.load().side is None
+        ui.to_menu()
+
+
+def test_side_tourney_screen_and_round_texts():
+    with story_patch(sides={"s_t": SIDE_UI}):
+        fresh_campaign(33)
+        cp = ui.campaign
+        cp.done.append("reward:rw_P")
+        cp.start_side("s_t")
+        cp.finish_scene("c2_intro")
+        ui.do_story()
+        frame()
+        assert ui.screen_id == "tourney" and ui.tview["side"] == "s_t"
+        assert text_cache_has("MISSÃO SECUNDÁRIA") and text_cache_has("Missão: só a vitória conclui")
+        assert _no_surface_frames() == 0
+        shot("tourney_side")
+        SIMQ.append((2, 0))
+        click_rect(BTN_SIM)
+        assert ui.screen_id == "round" and ui.round_info["side"] == "s_t"
+        frame()
+        assert text_cache_has("MISSÃO - Missão teste") and text_cache_has("MISSÃO CONCLUÍDA!")
+        shot("round_side_win")
+        ui.to_menu()
+
+
+def test_ending_auto_title_and_gallery():
+    endings = [(("flag", "fim_b"), ["c1_intro"], "Contrato Dourado"), (None, ["c2_intro"], "Garagem Livre")]
+    with story_patch(nodes={"6": [("end", cm.AUTO_END)]}, endings=endings):
+        fresh_campaign(34)
+        cp = ui.campaign
+        cp.ch, cp.node = "6", 0
+        ui.do_story()
+        for _ in range(40):
+            if ui.screen_id != "dialog":
+                break
+            dialog_step()
+        assert ui.screen_id == "ending", ui.screen_id
+        v = ui.end_view
+        assert v["ending"] == "Garagem Livre" and v["gallery"] == [("Contrato Dourado", False), ("Garagem Livre", True)]
+        frame()
+        assert text_cache_has("Final: Garagem Livre") and text_cache_has("Finais (1/2)")
+        assert _no_surface_frames() == 0
+        shot("ending_gallery")
+        assert cm.Campaign.load().endings == ["c2_intro"]
+        ui.to_menu()
+
+
 def test_latin1_source():
     src = open(os.path.join(ROOT, "game", "campaign_ui.py"), encoding="utf-8").read()
     assert max(ord(c) for c in src) <= 255

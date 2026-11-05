@@ -43,9 +43,9 @@ from robots_ui import RobotsUI
 
 TABS = [("map", "HISTÓRIA"), ("garage", "GARAGEM"), ("shop", "LOJA"), ("skills", "HABILIDADES")]
 FRAME_SCREENS = tuple(t for t, _ in TABS)
-STUB_SCREENS = ("tourney", "training", "round", "chapter_end", "ending")   # Esc = volta ao mapa
+STUB_SCREENS = ("tourney", "training", "round", "chapter_end", "ending", "sides")   # Esc = volta ao mapa
 SCREENS = ("menu", "map", "garage", "shop", "skills", "bench", "dialog") + STUB_SCREENS
-FRAME_EXTRA = ("tourney", "training")          # telas com cabecalho + abas (HISTORIA fica ativa)
+FRAME_EXTRA = ("tourney", "training", "sides")          # telas com cabecalho + abas (HISTORIA fica ativa)
 NODE_X0, NODE_DX = 110, 176
 NODE_X_MAX = 990                  # ultimo no do mapa (o painel vai ate x = 1080)
 
@@ -54,6 +54,9 @@ def node_dx(n):
     """Espacamento entre os nos do mapa: 176 px ate 6 capitulos; com mais, encolhe para caber."""
     return NODE_DX if n <= 1 else min(NODE_DX, (NODE_X_MAX - NODE_X0) // (n - 1))
 NODE_Y = (200, 262)
+ACTS = (("1", "ATO 1"), ("2", "ATO 2"), ("3", "ATO 3"))      # abas do mapa (C5)
+ACT_TAB = (32, 139, 112, 24)                              # x, y, w, h da 1a aba; as outras a direita
+SIDE_ROWS = 5                                             # missoes por pagina na tela "sides"
 NODE_R = 26
 PULSE_PERIOD = 1.6
 NEON = (0, 230, 255)
@@ -127,6 +130,17 @@ def stage_team(tr, stage):
     return C.stage_team(tr, stage)
 
 
+def ending_title(first_scene):
+    """Titulo do final cuja primeira cena e `first_scene` (3o campo opcional de story.ENDINGS)."""
+    if not first_scene:
+        return None
+    for e in story.ENDINGS:
+        scenes = [e[1]] if isinstance(e[1], str) else list(e[1])
+        if scenes and scenes[0] == first_scene:
+            return e[2] if len(e) > 2 else first_scene
+    return first_scene
+
+
 def force_text(lo, hi):
     """Faixa de Força recomendada ("45" ou "45 a 47")."""
     a, b = int(round(lo)), int(round(hi))
@@ -157,6 +171,8 @@ class CampaignUI(RobotsUI):
         self.train_back = "map"
         self.ce_view = None             # modelo da tela "chapter_end"
         self.end_view = None            # modelo da tela "ending"
+        self.map_tab = None             # Ato exibido no mapa (None = o do capitulo atual)
+        self.side_page = 0              # pagina da tela "sides"
 
     # `self.garage` aponta SEMPRE para a garagem da campanha (os metodos herdados usam self.garage)
     @property
@@ -180,6 +196,8 @@ class CampaignUI(RobotsUI):
         self.dlg = None
         self.toast = ""
         self.tview = self.train = self.ce_view = self.end_view = None
+        self.map_tab = None
+        self.side_page = 0
         self.confirm_new = False
         self.menu_msg = ""
         self.screen_id = "menu"
@@ -394,15 +412,41 @@ class CampaignUI(RobotsUI):
             return "done"
         return "current" if ch["id"] == self.campaign.ch else "future"
 
+    def current_act(self):
+        return self.campaign.chapter().get("act", "1")
+
+    def shown_act(self):
+        return self.map_tab or self.current_act()
+
+    def set_map_tab(self, act):
+        self.map_tab = act
+
+    def act_chapters(self, act):
+        return [c for c in story.CHAPTERS if c.get("act", "1") == act]
+
+    def draw_act_tabs(self):
+        shown = self.shown_act()
+        x, y, w, h = ACT_TAB
+        for k, (act, label) in enumerate(ACTS):
+            r = (x + k * (w + 8), y, w, h)
+            has = bool(self.act_chapters(act))
+            col = (0, 120, 160) if act == shown else (30, 50, 72)
+            self.btn(r, label if has else label + " (em breve)", lambda a=act: self.set_map_tab(a),
+                     enabled=has, color=col, size=20 if has else 16)
+
     def draw_map(self):
         cp = self.campaign
         scr = self.g.screen
-        chs = story.CHAPTERS
         self.panel((20, 134, 1060, 270))
+        self.draw_act_tabs()
+        chs = self.act_chapters(self.shown_act())
+        if not chs:                                                 # aba sem capitulos (nao clicavel)
+            chs = self.act_chapters(self.current_act())
         dx = node_dx(len(chs))
         pts = [(NODE_X0 + i * dx, NODE_Y[i % 2]) for i in range(len(chs))]
         states = [self.chapter_state(c) for c in chs]
-        pygame.draw.lines(scr, LINE, False, pts, 5)
+        if len(pts) > 1:
+            pygame.draw.lines(scr, LINE, False, pts, 5)
         for i in range(len(pts) - 1):                               # trecho concluido em verde
             if states[i] == "done":
                 pygame.draw.line(scr, GREEN, pts[i], pts[i + 1], 5)
@@ -434,9 +478,13 @@ class CampaignUI(RobotsUI):
         # ---- painel do capitulo atual
         ch = cp.chapter()
         self.panel((20, 414, 1060, 268))
-        self.text("%s - %s" % (ch["title"], ch["subtitle"]), 36, GOLD, topleft=(40, 428), shadow=True)
+        self.text(self.fit("%s - %s" % (ch["title"], ch["subtitle"]), 36, 640), 36, GOLD, topleft=(40, 428),
+                  shadow=True)
         self.text(self.fit(ch["local"], 26, 620), 26, TEXT, topleft=(40, 470))
-        if ch.get("draft"):
+        side = story.SIDES.get(cp.side["id"]) if cp.side is not None else None
+        if side is not None:
+            self.text(self.fit("Missão em andamento: %s" % side["title"], 24, 640), 24, NEON, topleft=(40, 506))
+        elif ch.get("draft"):
             self.text("Este capítulo ainda está em produção: em breve.", 24, DIM, topleft=(40, 506))
         self.text("Força recomendada: %s" % force_text(ch["F_start"], ch["F_end"]), 28, TEXT,
                   topleft=(40, 546))
@@ -451,7 +499,15 @@ class CampaignUI(RobotsUI):
                    "end": "Próximo: em breve" if act.get("draft") else "Próximo: fim da campanha"}.get(
                        act["kind"], "")
         self.text(nxt, 24, DIM, topleft=(40, 616))
-        self.btn((700, 446, 360, 76), "CONTINUAR HISTÓRIA", self.do_story, size=34, color=(0, 140, 110))
+        if side is not None:
+            self.btn((700, 446, 360, 76), "CONTINUAR MISSÃO", self.do_story, size=34, color=(0, 120, 160))
+            self.btn((430, 590, 240, 40), "DESISTIR DA MISSÃO", self.do_cancel_side, size=22,
+                     color=(110, 50, 50))
+        else:
+            self.btn((700, 446, 360, 76), "CONTINUAR HISTÓRIA", self.do_story, size=34, color=(0, 140, 110))
+            n = len(cp.available_sides())
+            self.btn((430, 536, 240, 44), "MISSÕES (%d)" % n if n else "MISSÕES", self.open_sides,
+                     size=24, color=(90, 70, 140) if n else (50, 50, 70))
         self.text("Sucata: %d" % self.garage.scrap, 26, GOLD, midleft=(704, 552))
         self.btn((880, 532, 180, 40), "TREINO", lambda: self.open_training("map"), size=26,
                  color=(60, 80, 130))
@@ -464,6 +520,76 @@ class CampaignUI(RobotsUI):
         elif self.msg:
             for k, line in enumerate(self.wrap(self.msg, 22, 340)[:2]):
                 self.text(line, 22, GOLD, topleft=(704, 590 + k * 24))
+
+    # ------------------------------------------------------------ missoes secundarias (C5)
+    def open_sides(self):
+        self.side_page = 0
+        self.go("sides")
+
+    def do_cancel_side(self):
+        self.campaign.cancel_side()
+        self.persist()
+        self.go("map")
+
+    def do_start_side(self, sid):
+        try:
+            self.campaign.start_side(sid)
+        except ValueError as ex:
+            self.msg = str(ex)
+            return self.go("map")
+        self.persist()
+        self.do_story()
+
+    def side_rows(self):
+        """[(sid, spec, concluida)]: disponiveis primeiro, depois as concluidas (bloqueadas nao aparecem)."""
+        cp = self.campaign
+        avail = cp.available_sides()
+        done = [sid for sid in story.SIDES if cp.side_done(sid)]
+        return [(sid, story.SIDES[sid], False) for sid in avail] + [(sid, story.SIDES[sid], True) for sid in done]
+
+    def draw_sides(self):
+        cp = self.campaign
+        cx = W // 2
+        self.text("MISSÕES SECUNDÁRIAS", 44, TEXT, center=(cx, 150), shadow=True)
+        rows = self.side_rows()
+        pages = max(1, (len(rows) + SIDE_ROWS - 1) // SIDE_ROWS)
+        self.side_page = max(0, min(self.side_page, pages - 1))
+        if not rows:
+            self.panel((150, 200, 800, 160))
+            for k, line in enumerate(self.wrap("Nenhuma missão liberada ainda. Elas aparecem conforme a "
+                                               "história avança.", 28, 720)):
+                self.text(line, 28, DIM, center=(cx, 250 + k * 34))
+        for k, (sid, sp, done) in enumerate(rows[self.side_page * SIDE_ROWS:(self.side_page + 1) * SIDE_ROWS]):
+            y = 184 + k * 84
+            self.panel((40, y, 1020, 76))
+            self.text(self.fit(sp["title"], 28, 420), 28, DIM if done else GOLD, topleft=(60, y + 8), shadow=True)
+            self.text(self.fit(sp["local"], 20, 420), 20, DIM, topleft=(60, y + 44))
+            team = story.TEAMS[sp["team"]]["name"]
+            self.text(self.fit("Adversário: %s (Força %d)" % (team, cp.side_ovr(sid)), 22, 360), 22, TEXT,
+                      topleft=(500, y + 10))
+            rw = fx_text(sp.get("reward")) or "recompensa especial"
+            self.text(self.fit("Prêmio: " + rw, 20, 360), 20, GREEN if not done else DIM, topleft=(500, y + 44))
+            if done:
+                self.text("CONCLUÍDA", 24, GREEN, center=(960, y + 38))
+            else:
+                self.btn((880, y + 16, 160, 44), "JOGAR", lambda s=sid: self.do_start_side(s), size=26,
+                         color=(0, 140, 110))
+        if pages > 1:
+            self.btn((300, 610, 120, 44), "<", lambda: setattr(self, "side_page", self.side_page - 1),
+                     enabled=self.side_page > 0, size=30)
+            self.text("%d / %d" % (self.side_page + 1, pages), 26, DIM, center=(cx, 632))
+            self.btn((680, 610, 120, 44), ">", lambda: setattr(self, "side_page", self.side_page + 1),
+                     enabled=self.side_page < pages - 1, size=30)
+        self.text("Derrota em missão não tem penalidade: dá para tentar de novo.", 20, DIM, center=(cx, 590))
+        self.btn((cx - 150, 640, 300, 50), "VOLTAR AO MAPA", self.back_to_map, size=28, color=(60, 80, 130))
+
+    def leave_side_if_closed(self, was_side):
+        """Depois de uma cena/partida de missao: se a missao fechou, volta ao mapa (True)."""
+        if was_side and self.campaign.side is None:
+            self.persist()
+            self.go("map")
+            return True
+        return False
 
     # ------------------------------------------------------------ dialogo (passo 9)
     def start_dialog(self, act):
@@ -561,6 +687,7 @@ class CampaignUI(RobotsUI):
             return
         d["final"] = True
         sid = d["sid"]
+        was_side = self.campaign.side is not None
         try:
             self.campaign.finish_scene(sid, choice_idx)
         except (KeyError, ValueError):
@@ -570,6 +697,13 @@ class CampaignUI(RobotsUI):
                 pass
         self.persist()
         self.dlg = None
+        if was_side:
+            try:
+                self.campaign.next_action()          # fecha a missao se a cena era a ultima
+            except Exception:  # noqa: BLE001
+                pass
+            if self.leave_side_if_closed(True):
+                return
         self.dlg_next()
 
     def dlg_next(self):
@@ -769,6 +903,12 @@ class CampaignUI(RobotsUI):
 
     def build_tview(self, act):
         cp = self.campaign
+        if act.get("side"):
+            sp = story.SIDES[act["side"]]
+            return {"single": True, "side": act["side"], "title": sp["title"], "local": sp["local"],
+                    "label": "MISSÃO", "rows": [], "ko": [], "fmt": "side", "adv": 0,
+                    "reward": fx_text(sp.get("reward")) or "recompensa especial",
+                    "names": [e["name"] for e in act["opp"]["squad"]]}
         tour = cp.tour
         tr = cp.tournament(act["tournament"])
         single = tr["format"] == "single"
@@ -899,7 +1039,9 @@ class CampaignUI(RobotsUI):
                                                           {"name": opp["name"], "color": tuple(opp["color"])}),
             "score": (out["my"], out["opp"]), "sim": simulated, "fin": False, "rew": rew, "rows": rows,
             "goals": goals, "equipped": eq, "rating": self.info()["rating"], "base": base,
-            "stage": out.get("stage"), "tname": cp.chapter()["subtitle"], "pen": out.get("pen"),
+            "stage": out.get("stage"), "pen": out.get("pen"),
+            "tname": story.SIDES[out["side"]]["title"] if out.get("side") else cp.chapter()["subtitle"],
+            "side": out.get("side"), "side_reward": fx_text(out.get("side_reward")),
             "outcome": out.get("outcome"), "boss": bool(out.get("boss")), "group_pos": out.get("group_pos"),
             "pity": cp.pity, "single": out.get("outcome") == "done",
             "items": [SK.ITEMS[i]["name"] for i in (items or ()) if i in SK.ITEMS], "ph": out.get("ph", 0)}
@@ -910,6 +1052,13 @@ class CampaignUI(RobotsUI):
         info = self.round_info
         if info is not None and info.get("training"):
             return self.back_from_training()
+        if info is not None and info.get("side"):
+            try:
+                self.campaign.next_action()
+            except Exception:  # noqa: BLE001
+                pass
+            if self.leave_side_if_closed(True):
+                return
         self.dlg_next()
 
     def outcome_text(self, info):
@@ -917,10 +1066,16 @@ class CampaignUI(RobotsUI):
         if info.get("training"):
             return "Treino concluído - o torneio não avançou", DIM
         oc, st = info.get("outcome"), info.get("stage")
+        if oc == "side_win":
+            rw = info.get("side_reward")
+            return ("MISSÃO CONCLUÍDA! " + rw) if rw else "MISSÃO CONCLUÍDA!", GOLD
+        if oc == "side_lose":
+            return "Não foi dessa vez - sem penalidade, tente de novo", RED
         if oc == "champion":
             return "CAMPEÃO!", GOLD
         if oc == "elim":
-            return "Eliminado no grupo - o torneio recomeça", RED
+            where = "na liga" if st and st[0] == "R" else "no grupo"
+            return "Eliminado %s - o torneio recomeça" % where, RED
         if oc == "retry":
             if info.get("boss") and info.get("pity"):
                 return "Derrota - tente de novo (o chefe perde %d de Força)" % (info["pity"] * C.PITY_STEP), RED
@@ -929,8 +1084,11 @@ class CampaignUI(RobotsUI):
             return "Peneira concluída!", GREEN
         if st in ("G1", "G2"):
             return "Rodada do grupo concluída", TEXT
-        if st == "G3":
-            return "Você avançou! (%dº no grupo)" % (info.get("group_pos") or 0), GREEN
+        if st and st[0] == "R" and not info.get("group_pos"):
+            return "Rodada da liga concluída", TEXT
+        if st == "G3" or (st and st[0] == "R"):
+            where = "no grupo" if st[0] == "G" else "na liga"
+            return "Você avançou! (%dº %s)" % (info.get("group_pos") or 0, where), GREEN
         return "Você avançou!", GREEN
 
     def draw_round_header(self, info):
@@ -940,6 +1098,8 @@ class CampaignUI(RobotsUI):
         th, ta = info["teams"]
         if info.get("training"):
             title = "TREINO"
+        elif info.get("side"):
+            title = "MISSÃO - %s" % info["tname"]
         else:
             title = "%s - %s" % (stage_label(info["stage"], info.get("single")), info["tname"])
         if info["sim"]:
@@ -970,7 +1130,14 @@ class CampaignUI(RobotsUI):
             return
         self.text(self.fit(v["title"], 34, 640), 34, GOLD, topleft=(24, 130), shadow=True)
         self.text(self.fit(v["local"], 22, 400), 22, DIM, midright=(W - 24, 148))
-        if v["single"]:
+        if v.get("side"):
+            self.panel((20, 172, 1060, 190))
+            self.text("MISSÃO SECUNDÁRIA", 32, TEXT, topleft=(44, 188), shadow=True)
+            for k, line in enumerate(self.wrap(
+                    "Partida única: vencer conclui a missão e dá o prêmio (%s). Empate ou derrota não têm "
+                    "penalidade; dá para tentar de novo ou desistir no mapa." % v["reward"], 26, 980)):
+                self.text(line, 26, DIM, topleft=(44, 236 + k * 30))
+        elif v["single"]:
             self.panel((20, 172, 1060, 190))
             self.text("PENEIRA", 32, TEXT, topleft=(44, 188), shadow=True)
             for k, line in enumerate(self.wrap(
@@ -1109,7 +1276,9 @@ class CampaignUI(RobotsUI):
         if gg.mod_on():
             self.draw_backpack_strip(pygame.Rect(380, 538, 300, 64))
         self.text(self.fit("Robôs: " + ", ".join(v["names"]), 20, 640), 20, DIM, topleft=(40, 614))
-        if v["single"]:
+        if v.get("side"):
+            self.text("Missão: só a vitória conclui; sem pênaltis.", 20, DIM, topleft=(40, 640))
+        elif v["single"]:
             self.text("Peneira: qualquer resultado conclui.", 20, DIM, topleft=(40, 640))
         else:
             self.text(RULES_TEXT.get(v.get("fmt"), RULES_TEXT["cup"]), 20, DIM, topleft=(40, 640))
@@ -1271,6 +1440,15 @@ class CampaignUI(RobotsUI):
                 n += sum(1 for k in done if k.startswith(pre))
         return n
 
+    def gallery(self):
+        """[(titulo, visto)] dos finais de story.ENDINGS (galeria; C5)."""
+        seen = set(self.campaign.endings)
+        out = []
+        for e in story.ENDINGS:
+            first = e[1] if isinstance(e[1], str) else e[1][0]
+            out.append((ending_title(first), first in seen))
+        return out
+
     def enter_ending(self):
         self.end_view = None
         act = self.sync_act("end")
@@ -1278,10 +1456,13 @@ class CampaignUI(RobotsUI):
             return
         cp = self.campaign
         st = cp.stats
-        self.end_view = {"draft": bool(act.get("draft")), "matches": st["matches"], "sims": st["sims"],
+        self.end_view = {"ending": ending_title(act.get("ending")), "gallery": self.gallery(),
+                         "draft": bool(act.get("draft")), "matches": st["matches"], "sims": st["sims"],
                          "trained": st["trained"], "titles": cp.garage.stats["titles"],
                          "boss_losses": self.count_keys("lose"), "elims": self.count_keys("elim"),
                          "rating": int(round(cp.garage.rating()))}
+        if act.get("ending"):
+            self.persist()                        # o final entrou na galeria (c.endings) agora
 
     def draw_ending(self):
         v = self.end_view
@@ -1303,7 +1484,8 @@ class CampaignUI(RobotsUI):
             self.text("O TREINO continua livre no mapa.", 22, DIM, center=(cx, 430))
         else:
             self.text("CAMPANHA CONCLUÍDA", 56, GOLD, center=(cx, 80), shadow=True)
-            self.text("A Garagem do Vô", 30, TEXT, center=(cx, 130))
+            sub = ("Final: %s" % v["ending"]) if v.get("ending") else "A Garagem do Vô"
+            self.text(sub, 30, TEXT, center=(cx, 130))
             self.panel((200, 170, 700, 350))
             self.text("ESTATÍSTICAS", 22, GOLD, topleft=(230, 184))
             rows = (("Partidas jogadas", "%d (%d simuladas)" % (v["matches"], v["sims"])),
@@ -1316,5 +1498,11 @@ class CampaignUI(RobotsUI):
                 y = 226 + k * 44
                 self.text(a, 28, DIM, midleft=(230, y))
                 self.text(b, 30, TEXT, midright=(870, y), shadow=True)
-            self.text("O TREINO continua livre no mapa.", 22, DIM, center=(cx, 500))
+            gal = v.get("gallery") or []
+            if gal:
+                seen = sum(1 for _t, ok in gal if ok)
+                names = ", ".join(t if ok else "???" for t, ok in gal)
+                self.text(self.fit("Finais (%d/%d): %s" % (seen, len(gal), names), 24, 660), 24, GOLD,
+                          center=(cx, 488))
+            self.text("O TREINO continua livre no mapa.", 22, DIM, center=(cx, 540))
         self.btn((cx - 150, 560, 300, 60), "VOLTAR AO MAPA", self.back_to_map, size=32, color=(60, 80, 130))
