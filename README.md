@@ -126,7 +126,8 @@ No menu (teclas 1-6): `1 - AMISTOSO`, `2 - AMISTOSO`, `3 - NOVA CARREIRA`, `4 - 
      escolhas que mudam adversários, falas e recompensas. **Ato 3** "A Copa dos Campeões":
      Capítulos 10 (Intercâmbio), 11 (A Fábrica, que muda conforme o patrocínio), 12 (Copa dos
      Campeões) e 13 (O Chip Zero, contra o X-Ômega), com **3 finais** conforme as escolhas (um
-     deles secreto). São ~132 cenas de diálogo. Retratos e
+     deles secreto). Mais **14 missões secundárias** no botão MISSÕES do mapa (as 4 "Fitas do Vô"
+     levam ao final secreto). São ~160 cenas de diálogo. Retratos e
      cenários são **desenhados por código** (sem imagens externas). O mapa tem uma aba por Ato
      e um botão de **MISSÕES** secundárias (as missões entram com o roteiro dos próximos passos).
    - **Escolhas:** algumas cenas oferecem 2-3 opções que mudam falas seguintes e podem dar
@@ -168,7 +169,7 @@ O jogador controlado troca sozinho (o mais perto da bola).
 | 1 | Robôs com chassis e 8 atributos, bateria, arena tecnológica (neon) | pronta |
 | 2 | Garagem e laboratório: peças, upgrades, XP, evolução, loja e liga (Modo Robôs) | pronta e jogável |
 | 3 | **Campanha** "A Garagem do Vô": história, diálogos, torneios, chefes e treino (escola -> mundial) | pronta e jogável |
-| 4 | **Campanha Expandida**: torcida realista, câmera de estádio e desenhos mais detalhados (Onda A), peças/sets/relíquias/itens/cosméticos e 16 skills dos robôs (Onda B), Atos 2 e 3, missões secundárias e 3 finais (Ondas C e D) | Ondas A e B prontas; Onda C em andamento (C1-C12: campanha completa P-13 com 3 finais e os 3 Atos calibrados; faltam as missões); D planejada ([docs/roadmap.md](docs/roadmap.md)) |
+| 4 | **Campanha Expandida**: torcida realista, câmera de estádio e desenhos mais detalhados (Onda A), peças/sets/relíquias/itens/cosméticos e 16 skills dos robôs (Onda B), Atos 2 e 3, missões secundárias e 3 finais (Ondas C e D) | Ondas A e B prontas; Onda C em andamento (C1-C13: campanha completa P-13, 3 finais, 14 missões e os 3 Atos calibrados); D planejada ([docs/roadmap.md](docs/roadmap.md)) |
 | 5 | Editor de firmware (regras da IA em blocos) | planejada |
 
 O planejamento detalhado fica em [`docs/`](docs/INDEX.md).

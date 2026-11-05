@@ -988,7 +988,9 @@ class patched:
             if c["id"] in self.nodes:
                 c["nodes"] = list(self.nodes[c["id"]])
         story.CHAPTERS = chs
-        story.SIDES.update(self.sides)
+        if self.sides:                                   # substitui as missoes reais (C13) pelas sinteticas
+            story.SIDES.clear()
+            story.SIDES.update(self.sides)
         if self.endings is not None:
             story.ENDINGS[:] = self.endings
         for k, v in self.tours.items():
@@ -1291,6 +1293,41 @@ def test_three_endings_by_flags():
             assert c.next_action()["id"] == sid
             c.finish_scene(sid)
         assert c.next_action() == {"kind": "end", "draft": False, "ending": first} and c.endings == [first]
+
+
+def test_all_14_sides_playable_and_fitas_unlock_secret_ending():
+    """C13: cada missao real libera pela recompensa do capitulo, joga pre -> partida -> win, da a recompensa
+    uma vez e grava side:<id>; as 4 Fitas do Vo contam para o final secreto."""
+    assert len(story.SIDES) == 14
+    c = new(91)
+    c.garage.flags[gm.MOD_FLAG] = 1
+    for sid, sp in story.SIDES.items():
+        if sp["unlock"][1] not in c.done:                 # algumas missoes liberam juntas (ex.: cap. 2)
+            assert sid not in c.available_sides(), sid
+            c.done.append(sp["unlock"][1])                # ("done", "reward:rw_X" | cena)
+        assert sid in c.available_sides(), sid
+        c.start_side(sid)
+        a = c.next_action()
+        assert a["kind"] == "scene" and a["id"] == sp["scenes"]["pre"], sid
+        c.finish_scene(a["id"])
+        a = c.next_action()
+        assert a["kind"] == "match" and a["side"] == sid and a["opp"]["name"] == story.TEAMS[sp["team"]]["name"]
+        out = c.record_match(3, 0)
+        assert out["outcome"] == "side_win" and c.side_done(sid), sid
+        rw = sp["reward"]
+        if rw.get("cosmetic"):
+            assert c.garage.owns_cosmetic(rw["cosmetic"]), sid
+        if rw.get("flag"):
+            assert c.garage.flags.get(rw["flag"]) == 1, sid
+        a = c.next_action()
+        assert a["kind"] == "scene" and a["id"] == sp["scenes"]["win"], sid
+        c.finish_scene(a["id"])
+        c.next_action()
+        assert c.side is None and sid not in c.available_sides()
+    assert c.stats["sides"] == 14 and c.check_cond(("count", "side:s_fita", 4))
+    d = copy_json(c.to_dict())
+    c2 = cm.Campaign.from_dict(d)
+    assert c2 is not None and not c2.repaired and all(c2.side_done(s) for s in story.SIDES)
 
 
 def main():

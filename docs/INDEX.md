@@ -34,7 +34,9 @@ Planejamento e especificações do jogo. O código e os comandos do dia a dia es
   (P-13, 132 cenas). C12 pronto: Ato 3 calibrado no motor (Força 85 → 94; acima de ~85 o motor
   "achata", então os adversários do Ato 3 ficam quase planos e o SIMULAR ganhou uma correção para Força
   alta; tabela em `tests/calib_campaign.py`). O ponto de atenção do Ato 2 piora no Ato 3: quem nunca
-  evolui o time não termina a campanha. Próximo: C13 (14 missões secundárias). Deploy pendente: falta
-  saber onde o site é hospedado.
+  evolui o time não termina a campanha. C13 pronto: as **14 missões secundárias** (aba MISSÕES; as 4
+  Fitas do Vô liberam o final secreto; recompensas incluem peças, relíquias, skills e cosméticos).
+  Próximos: C14-C18 (revisão de recompensas, rivais recorrentes, torcida por capítulo, autoplay
+  completo e fechamento). Deploy pendente: falta saber onde o site é hospedado.
   Onda D (pós-campanha) planejada. Passos em [specs/plano-de-implementacao.md](specs/plano-de-implementacao.md)
 - Fase 5 (Editor de firmware): planejada

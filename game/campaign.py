@@ -465,6 +465,8 @@ class Campaign:
             self._give_skill(fx["skill"])
         if fx.get("pts"):
             self._give_pts(fx["pts"])
+        if fx.get("cosmetic"):                       # C13: recompensa de missao (so visual)
+            g.grant_cosmetic(fx["cosmetic"])
 
     def _skill_targets(self, who):
         """Robos alvo de `skill`/`pts` (B11): "hero" (padrao) ou "team" (todo o elenco)."""

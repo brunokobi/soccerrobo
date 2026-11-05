@@ -56,7 +56,7 @@ def node_dx(n):
 NODE_Y = (200, 262)
 ACTS = (("1", "ATO 1"), ("2", "ATO 2"), ("3", "ATO 3"))      # abas do mapa (C5)
 ACT_TAB = (32, 139, 112, 24)                              # x, y, w, h da 1a aba; as outras a direita
-SIDE_ROWS = 5                                             # missoes por pagina na tela "sides"
+SIDE_ROWS = 4                                             # missoes por pagina na tela "sides"
 NODE_R = 26
 PULSE_PERIOD = 1.6
 NEON = (0, 230, 255)
@@ -111,6 +111,8 @@ def fx_text(fx):
     if fx.get("pts"):
         n = fx["pts"].get("n", 0) if isinstance(fx["pts"], dict) else fx["pts"]
         out.append("%+d PH" % int(n))
+    if fx.get("cosmetic"):
+        out.append("cosmético novo")
     return "   ".join(out)
 
 
@@ -574,14 +576,14 @@ class CampaignUI(RobotsUI):
             else:
                 self.btn((880, y + 16, 160, 44), "JOGAR", lambda s=sid: self.do_start_side(s), size=26,
                          color=(0, 140, 110))
+        self.text("Derrota em missão não tem penalidade: dá para tentar de novo.", 20, DIM, center=(cx, 532))
         if pages > 1:
-            self.btn((300, 610, 120, 44), "<", lambda: setattr(self, "side_page", self.side_page - 1),
+            self.btn((300, 556, 120, 42), "<", lambda: setattr(self, "side_page", self.side_page - 1),
                      enabled=self.side_page > 0, size=30)
-            self.text("%d / %d" % (self.side_page + 1, pages), 26, DIM, center=(cx, 632))
-            self.btn((680, 610, 120, 44), ">", lambda: setattr(self, "side_page", self.side_page + 1),
+            self.text("%d / %d" % (self.side_page + 1, pages), 26, DIM, center=(cx, 577))
+            self.btn((680, 556, 120, 42), ">", lambda: setattr(self, "side_page", self.side_page + 1),
                      enabled=self.side_page < pages - 1, size=30)
-        self.text("Derrota em missão não tem penalidade: dá para tentar de novo.", 20, DIM, center=(cx, 590))
-        self.btn((cx - 150, 640, 300, 50), "VOLTAR AO MAPA", self.back_to_map, size=28, color=(60, 80, 130))
+        self.btn((cx - 150, 620, 300, 50), "VOLTAR AO MAPA", self.back_to_map, size=28, color=(60, 80, 130))
 
     def leave_side_if_closed(self, was_side):
         """Depois de uma cena/partida de missao: se a missao fechou, volta ao mapa (True)."""

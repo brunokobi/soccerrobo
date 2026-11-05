@@ -1183,7 +1183,9 @@ class story_patch:
             if c["id"] in self.nodes:
                 c["nodes"] = list(self.nodes[c["id"]])
         story.CHAPTERS = chs
-        story.SIDES.update(self.sides)
+        if self.sides:                                   # substitui as missoes reais (C13) pelas sinteticas
+            story.SIDES.clear()
+            story.SIDES.update(self.sides)
         if self.endings is not None:
             story.ENDINGS[:] = self.endings
         return self
@@ -1270,9 +1272,11 @@ def test_sides_screen_play_lose_win_and_back_to_map():
     with story_patch(sides={"s_t": SIDE_UI, "s_u": dict(SIDE_UI, title="Outra missão", team="detetives")}):
         fresh_campaign(32)
         cp = ui.campaign
+        g.text_cache.clear()                            # outros testes ja desenharam "MISSOES (n)" reais
         frame()
         assert text_cache_has("MISSÕES") and not text_cache_has("MISSÕES (")       # nada liberado
         cp.done.append("reward:rw_P")
+        g.text_cache.clear()
         frame()
         assert text_cache_has("MISSÕES (2)")
         click_rect((430, 536, 240, 44))

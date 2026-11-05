@@ -22,7 +22,7 @@ import story as st  # noqa: E402
 PASS, FAIL = [], []
 
 BOX_W, MAX_LINES, MAX_TEXT, MAX_OPT, MAX_NAME = 780, 4, 260, 46, 14
-FX_KEYS = {"flag", "scrap", "xp_hero", "xp_team", "piece", "skill", "pts"}     # skill/pts: B11
+FX_KEYS = {"flag", "scrap", "xp_hero", "xp_team", "piece", "skill", "pts", "cosmetic"}   # skill/pts: B11; cosmetic: C13
 BAD_CHARS = "‘’“”–—…→←"
 FLAG_RE = re.compile(r"^[A-Za-z0-9_]{1,32}$")
 ID_RE = re.compile(r"^[A-Za-z0-9_]+$")
@@ -674,7 +674,16 @@ def test_sides_and_endings_data():
         check_cond_format(sp["unlock"], sid)
         assert set(sp["scenes"]) <= {"pre", "win", "lose"} and sp["scenes"].get("pre"), sid
         assert all(x in st.SCENES for x in sp["scenes"].values() if x), sid
-        assert set(sp["reward"]) <= FX_KEYS and sp["reward"], sid
+        rw = sp["reward"]
+        assert set(rw) <= FX_KEYS and rw, sid
+        if rw.get("piece"):
+            check_piece(rw["piece"])
+        if rw.get("skill"):
+            check_skill(rw["skill"])
+        if rw.get("cosmetic"):
+            assert rw["cosmetic"] in parts.COSMETICS, (sid, rw["cosmetic"])
+        if rw.get("flag"):
+            assert FLAG_RE.match(rw["flag"]), sid
         assert not sp.get("repeat"), "missoes repetiveis nao sao suportadas (%s)" % sid
     seen = set()
     for i, e in enumerate(st.ENDINGS):

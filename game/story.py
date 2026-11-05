@@ -26,7 +26,8 @@ SCENES[id] = {"bg", "cast": [ids], "lines": [...]}. Item de "lines":
     | ("count", prefixo, n) (>= n chaves de `done` com o prefixo; C4) | ("all", [conds]) | ("any", [conds]).
     fx (so estas chaves): flag (str), scrap (int, <=100), xp_hero (int), xp_team (int),
     piece ({"model": parts.PARTS, "rar": 0..3}), skill ({"robot": "hero"|"team", "id": skills.SKILLS,
-    "rank": 1..3}: aprende direto, nao equipa), pts (int 1..5: PH extras do heroi). Escolha: opcoes 2-3;
+    "rank": 1..3}: aprende direto, nao equipa), pts (int 1..5: PH extras do heroi), cosmetic (id de
+    parts.COSMETICS; C13, recompensa de missao). Escolha: opcoes 2-3;
     "fx" e "reply" opcionais.
 TOURNAMENTS[id]: ver o bloco proprio (formato, hooks, boss_delta/regular_delta).
 CHAPTERS: lista ordenada; "act" = "1".."3" (aba do mapa); "nodes" em ordem: ("scene", id) | ("tournament", id) | ("chapter_end", cap_id)
