@@ -518,5 +518,30 @@ frameborder="1"
 
     </script>
 
+    <script>
+    // Guarda da proporcao do jogo (1100x700). O ajuste do pygbag le canvas.width/height na hora; se
+    // roda antes do set_mode (canvas ainda 1x1) a tela fica quadrada/espremida ate o proximo resize.
+    // Aqui: confere a cada 500 ms e em todo resize e encaixa o canvas na janela sem distorcer.
+    (function () {
+        function fit_canvas() {
+            const c = document.getElementById("canvas");
+            if (!c || c.width <= 1 || c.height <= 1) return;
+            const ar = c.width / c.height;
+            const mw = window.innerWidth, mh = window.innerHeight;
+            let w = mw, h = Math.trunc(mw / ar);
+            if (h > mh) { h = mh; w = Math.trunc(mh * ar); }
+            const cw = parseFloat(c.style.width) || 0, ch = parseFloat(c.style.height) || 0;
+            if (Math.abs(cw - w) <= 1 && Math.abs(ch - h) <= 1) return;
+            c.style.position = "absolute";
+            c.style.left = 0; c.style.right = 0; c.style.top = 0; c.style.bottom = 0;
+            c.style.margin = "auto";
+            c.style.width = w + "px";
+            c.style.height = h + "px";
+        }
+        window.addEventListener("resize", () => setTimeout(fit_canvas, 150));
+        setInterval(fit_canvas, 500);
+    })();
+    </script>
+
 </body>
 </html>
