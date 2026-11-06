@@ -701,13 +701,16 @@ class RobotsUI(CareerUI):
                 r = pygame.Rect(20 + k * (cw + 8), y0 + 20, cw, ch)
                 if gg.owns_cosmetic(cid):
                     st, col = "TENHO", GREEN
+                elif not P.cosmetic_for_sale(cid):          # Onda D: so de recompensa (origem)
+                    st, col = "prêmio: " + P.REWARD_COSMETICS[cid], DIM
                 else:
                     st, col = str(price), (TEXT if gg.scrap >= price else RED)
                 self.cos_card(r, cid, cid == self.cos_sel, st, col)
                 self.hit(r, lambda c=cid: self.pick_cosmetic(c))
         cid = self.cos_sel
-        ok = cid is not None and not gg.owns_cosmetic(cid) and gg.scrap >= P.cosmetic_price(cid)
-        lab = "COMPRAR" if cid is None or gg.owns_cosmetic(cid) else "COMPRAR %d" % P.cosmetic_price(cid)
+        sale = cid is not None and P.cosmetic_for_sale(cid)
+        ok = sale and not gg.owns_cosmetic(cid) and gg.scrap >= P.cosmetic_price(cid)
+        lab = "COMPRAR" if not sale or gg.owns_cosmetic(cid) else "COMPRAR %d" % P.cosmetic_price(cid)
         self.btn((860, 650, 220, 44), lab, self.do_buy_cosmetic, enabled=ok, size=26)
         msg = self.msg or ("Cosméticos são só visuais (não mudam a partida). Equipe na bancada, botão VISUAL.")
         for k, line in enumerate(self.wrap(msg, 20, 820)[:2]):
@@ -778,6 +781,8 @@ class RobotsUI(CareerUI):
                     st, col = "EQUIPADO", (0, 230, 255)
                 elif have:
                     st, col = "equipar", GREEN
+                elif not P.cosmetic_for_sale(cid):          # Onda D: so de recompensa (origem)
+                    st, col = P.REWARD_COSMETICS[cid], (110, 125, 120)
                 else:
                     st, col = "na LOJA", (110, 125, 120)
                 self.cos_card(r, cid, cid == cur, st, col)

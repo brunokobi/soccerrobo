@@ -474,6 +474,52 @@ def test_cosmetics_buy_grant_equip_and_sanitize():
     assert all(r["look"] == {} for r in gm.Garage.sanitize(d)["robots"])
 
 
+def test_mythic_pieces_and_reward_cosmetics():
+    """Onda D: Mitica = Lendaria +2 de potencia; so equipamento (reliquia/modulo voltam a Lendaria no
+    sanitize); loja e drops nunca a sorteiam; cosmeticos de recompensa nao se compram, so se ganham."""
+    M, L = parts.MYTHIC, parts.LEGEND
+    assert parts.RAR_NAMES[M] == "Mítica" and parts.POWER[M] == parts.POWER[L] + 2
+    for m in ("Turbina", "Chip Zero", "Célula Longa"):
+        assert parts.max_rarity(m) == M
+        for lvl in range(parts.MAX_UP + 1):
+            a, b = parts.part_bonus(m, M, lvl), parts.part_bonus(m, L, lvl)
+            assert all(a[k] >= b[k] for k in a) and sum(a.values()) > sum(b.values())
+    assert parts.max_rarity("Módulo Arrancada") == L and parts.max_rarity("Chip do Vovô") == L
+    assert set(parts.MYTHIC_MODELS) <= set(parts.ALL_MODELS) and not set(parts.MYTHIC_MODELS) & set(parts.RELIC_MODELS)
+    assert parts.part_name({"model": "Turbina", "rar": M, "lvl": 2}) == "Turbina Mítica +2"
+    assert parts.upgrade_cost(M, 0) == 900 and parts.sell_price({"rar": M}) == 1500
+    g = v2_garage(8)
+    for tier in range(len(gm.TIER_MUL)):                     # loja nunca vende Mitica
+        for k in range(40):
+            g.refresh_shop(tier, random.Random(k))
+            assert all(p["rar"] <= L for p in g.shop["stock"])
+    pc, pm, pr = g.new_piece("Turbina", M), g.new_piece("Módulo Arrancada", M), g.new_piece("Chip do Vovô", M)
+    g.inventory += [pc, pm, pr]
+    g.shop["stock"].append(g.new_piece("Solenoide", M))
+    d = json.loads(json.dumps(g.to_dict()))
+    g2 = gm.Garage.from_dict(d)
+    by = g2.pieces_by_id()
+    assert by[pc["id"]]["rar"] == M and by[pm["id"]]["rar"] == L and by[pr["id"]]["rar"] == L
+    assert all(p["rar"] <= L for p in g2.shop["stock"])
+    rid = g2.lineup[0]
+    assert g2.equip(rid, pc["id"])[0]
+    g2.scrap = 10000
+    ok, _msg = g2.upgrade(pc["id"])
+    assert ok and g2.piece(pc["id"])["lvl"] == 1 and g2.scrap == 10000 - parts.upgrade_cost(M, 0)
+    # cosmeticos finais
+    rc = parts.REWARD_COSMETICS
+    assert len(rc) == 7 and set(rc) <= parts.COSMETICS
+    assert all(len(ids) <= 6 for ids in parts.LOOK_KINDS.values())
+    assert all(parts.COSMETIC_NAMES[c] for c in parts.COSMETICS)
+    for cid in rc:
+        assert not parts.cosmetic_for_sale(cid)
+        ok, msg = g2.buy_cosmetic(cid)
+        assert not ok and "venda" in msg and cid not in g2.cosmetics and g2.scrap == 10000 - 900
+        assert g2.grant_cosmetic(cid) and not g2.grant_cosmetic(cid)
+        assert g2.equip_look(rid, cid)[0]
+    assert parts.cosmetic_for_sale("raio") and not parts.cosmetic_for_sale("nope")
+
+
 def main():
     saved = (gm._store_get, gm._store_set, gm._store_set_bad, cm._store_get, cm._store_set, cm._store_set_bad)
     names = [n for n in globals() if n.startswith("test_")]

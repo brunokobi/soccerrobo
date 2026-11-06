@@ -344,8 +344,10 @@ def test_modules():
 
 
 def test_cosmetics_catalog():
-    assert len(parts.DECALS) == 6 and len(parts.TRAILS) == 4 and len(parts.CELEBRATIONS) == 4
-    assert len(parts.COSMETICS) == len(parts.DECALS) + len(parts.TRAILS) + len(parts.ANTENNAS) + 4
+    # Onda D: +2 rastros, +3 antenas e +2 comemoracoes de recompensa (6 por tipo = 1 linha da loja/galeria)
+    assert len(parts.DECALS) == 6 and len(parts.TRAILS) == 6 and len(parts.CELEBRATIONS) == 6
+    assert len(parts.ANTENNAS) == 6
+    assert len(parts.COSMETICS) == len(parts.DECALS) + len(parts.TRAILS) + len(parts.ANTENNAS) + 6
     for c in parts.COSMETICS:
         c.encode("ascii")
 

@@ -54,7 +54,7 @@ RADAR_AB = (-5, 5)      # radar: 5 px atras e 5 px a direita do centro
 UNDER = ("turbina",)                                  # overlays desenhados sob o corpo
 OVER = ("canhao", "blindado", "vacuo", "radar", "antena", "modulo")
 ATLAS_PARTS = UNDER + OVER                            # "escova" so muda a contagem de escovas
-RAR_COLORS = ((190, 200, 210), (0, 170, 255), (190, 110, 255), (255, 200, 60))   # = parts.RAR_COLORS
+RAR_COLORS = ((190, 200, 210), (0, 170, 255), (190, 110, 255), (255, 200, 60), (255, 90, 130))   # = parts.RAR_COLORS
 METAL = (78, 86, 102)
 METAL_HI = (150, 160, 178)
 DARK = (14, 18, 26)
@@ -75,7 +75,9 @@ RAINBOW = ((255, 70, 70), (255, 160, 40), (255, 235, 60), (80, 220, 100), (60, 1
 CELEBRATION_COLORS = {"confete": ((255, 80, 120), (255, 220, 60), (80, 220, 120), (70, 170, 255)),
                       "bolo": ((255, 150, 190), (255, 245, 225), (150, 90, 50), (255, 220, 80)),
                       "chinelo_voando": ((60, 140, 255), (255, 220, 60), (60, 200, 110)),
-                      "fogos": ((255, 210, 70), (255, 80, 60), (120, 230, 255))}
+                      "fogos": ((255, 210, 70), (255, 80, 60), (120, 230, 255)),
+                      "trofeu": ((255, 210, 60), (255, 240, 170), (230, 160, 40)),          # Onda D
+                      "relampagos": ((150, 230, 255), (255, 255, 255), (90, 150, 255))}
 
 STATS = {"atlas": 0, "body": 0, "halo": 0}           # construcoes (testes de cache)
 
@@ -374,7 +376,7 @@ def _draw_chassis_over(s, ch, d, led):
 
 
 def _draw_part(s, name, rar, d, led):
-    acc = RAR_COLORS[max(0, min(3, int(rar)))]
+    acc = RAR_COLORS[max(0, min(len(RAR_COLORS) - 1, int(rar)))]
     if name == "turbina":                              # cone traseiro + bocal
         cone = _poly(d, [(-PR + 4, -5), (-PR + 4, 5), (-PR - 7, 7), (-PR - 7, -7)])
         pygame.draw.polygon(s, METAL, cone)
@@ -509,6 +511,19 @@ def _draw_antenna(s, aid, d, led, cx=C, cy=C):
             pygame.draw.line(s, dark, p(-5, b * 3), p(-PR - 3, b * 8), 2)
             pygame.draw.circle(s, led, p(-PR - 3, b * 8), 2)
             pygame.draw.circle(s, (250, 252, 255), p(-PR - 3, b * 8), 1)
+    elif aid == "para_raios":                          # Onda D (Torre 20): haste com raio amarelo
+        pygame.draw.line(s, (186, 192, 206), p(-6, 0), p(-PR - 5, 0), 2)
+        pygame.draw.lines(s, (255, 220, 60), False, [p(-PR - 5, 0), p(-PR - 2, 3), p(-PR, -2), p(-PR + 3, 2)], 2)
+        pygame.draw.circle(s, (255, 250, 200), p(-PR - 5, 0), 2)
+    elif aid == "coroa":                               # Onda D (Torre 40): coroa dourada de 3 pontas
+        base = [p(-5, -5), p(-5, 5), p(-11, 5), p(-9, 2), p(-12, 0), p(-9, -2), p(-11, -5)]
+        pygame.draw.polygon(s, (255, 200, 60), base)
+        pygame.draw.polygon(s, (150, 100, 20), base, 1)
+        pygame.draw.circle(s, (255, 90, 130), p(-7, 0), 1)
+    elif aid == "aureola":                             # Onda D (Turne III): anel dourado acima
+        c = p(-PR - 2, 0)
+        pygame.draw.circle(s, (255, 230, 120), c, 5, 2)
+        pygame.draw.circle(s, (255, 250, 220), c, 2, 1)
 
 
 def look_key(look):
@@ -536,6 +551,14 @@ def build_trail(tid):
             pygame.draw.circle(s, mix(c, (255, 255, 220), 0.4) + (a,), (h, h - 1), max(1, r - 1))
         elif tid == "arco_iris":
             pygame.draw.circle(s, RAINBOW[i % len(RAINBOW)] + (a,), (h, h), r)
+        elif tid == "poeira":                           # Onda D (Torre 10): poeira dourada
+            c = (255, 214, 90) if i % 2 == 0 else (210, 170, 110)
+            pygame.draw.circle(s, c + (a,), (h - 2, h + 1), max(1, r - 1))
+            pygame.draw.circle(s, c + (a // 2,), (h + 3, h - 2), max(1, r - 2))
+        elif tid == "cometa":                           # Onda D (Turne I): cauda branco-azulada
+            c = mix((255, 255, 255), (90, 150, 255), i / float(TRAIL_N - 1))
+            pygame.draw.circle(s, c + (a // 3,), (h, h), min(h, r + 3))
+            pygame.draw.circle(s, c + (a,), (h, h), max(1, r))
         else:                                           # estrelas: estrelinhas de 4 pontas
             c = (255, 230, 90) if i % 2 == 0 else (255, 255, 235)
             e = r + 1
@@ -575,6 +598,16 @@ def build_cosmetic_icon(cid):
         elif cid == "chinelo_voando":
             _draw_decal(s, "chinelo", 14, 22, 2.6)
             _draw_decal(s, "chinelo", 28, 16, 2.0)
+        elif cid == "trofeu":                       # Onda D (Torre 30): taca dourada
+            pygame.draw.polygon(s, cols[0], [(11, 9), (29, 9), (26, 21), (14, 21)])
+            pygame.draw.rect(s, cols[2], (18, 21, 4, 6))
+            pygame.draw.rect(s, cols[0], (13, 27, 14, 4), border_radius=1)
+            for x in (9, 31):
+                pygame.draw.circle(s, cols[0], (x, 13), 4, 2)
+            pygame.draw.line(s, cols[1], (15, 11), (16, 18), 2)
+        elif cid == "relampagos":                   # Onda D (Turne II): dois raios azuis
+            for ox, c in ((0, cols[0]), (12, cols[2])):
+                pygame.draw.lines(s, c, False, [(12 + ox, 6), (8 + ox, 18), (14 + ox, 18), (10 + ox, 32)], 3)
         elif cid == "fogos":
             for (fx, fy, r), c in zip(((13, 14, 9), (28, 22, 8)), cols):
                 for k in range(8):
@@ -703,8 +736,8 @@ class Art:
         self.nbrush = brush_count(vis)
         self.orbital = ch == "Orbital"
         self.rad = TITA_R if ch == "Titã" else PR
-        self.radar = RAR_COLORS[parts["radar"]] if "radar" in parts else None
-        self.modulo = RAR_COLORS[parts["modulo"]] if "modulo" in parts else None
+        self.radar = RAR_COLORS[min(len(RAR_COLORS) - 1, parts["radar"])] if "radar" in parts else None
+        self.modulo = RAR_COLORS[min(len(RAR_COLORS) - 1, parts["modulo"])] if "modulo" in parts else None
         self.turbina = "turbina" in parts
         self.hot = bool((vis or {}).get("hot"))
         offs = (-BRUSH_OFF_DEG, BRUSH_OFF_DEG) if self.nbrush == 2 else (BRUSH_OFF_DEG,)

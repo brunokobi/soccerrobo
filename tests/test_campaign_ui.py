@@ -2139,6 +2139,47 @@ def test_fx_skill_pts_rewards_recruit_and_training_ph():
         assert lv_ph >= SK.TRAIN_PH_MAX                                   # treino (+ niveis ganhos)
 
 
+# ================================================================== Onda D: pecas Miticas
+
+def test_mythic_piece_in_bench_and_reward_cosmetics_in_shop():
+    fresh_campaign(47)
+    cp = ui.campaign
+    gg = cp.garage
+    rb = gg.robot(gg.lineup[4])
+    pc = gg.new_piece("Canhão de Plasma", parts.MYTHIC, 3)
+    free = gg.new_piece("Railgun de Bolso", parts.MYTHIC)
+    gg.inventory += [pc, free]
+    assert gg.equip(rb["id"], pc["id"])[0]
+    gg.cosmetics += ["coroa", "cometa"]
+    ui.sel = rb["id"]
+    ui.open_bench()
+    ui.pick_slot("chutador")
+    ui.pick_piece(free["id"])
+    frame()
+    assert ui.screen_id == "bench"
+    assert any("Mítica" in k[0] and k[2] == parts.RAR_COLORS[parts.MYTHIC] for k in g.text_cache)
+    assert _no_surface_frames() == 0
+    shot("d3_mitica_bancada")
+    ui.go("shop")
+    ui.shop_tab = "cosmetics"
+    frame()
+    assert text_cache_has("prêmio: Torre 40") or text_cache_has("TENHO")
+    assert text_cache_has("prêmio: Turnê II") and _no_surface_frames() == 0
+    ui.pick_cosmetic("relampagos")
+    frame()
+    btn = [b for b in ui.buttons if b[0] == pygame.Rect(860, 650, 220, 44)]
+    assert btn and not btn[0][2]                                     # COMPRAR desabilitado
+    shot("d3_loja_cosmeticos_premio")
+    ui.sel = rb["id"]
+    ui.open_bench()
+    ui.open_visual()
+    frame()
+    assert _no_surface_frames() == 0
+    shot("d3_visual_premios")
+    ui.close_visual()
+    ui.to_menu()
+
+
 if __name__ == "__main__":
     names = sys.argv[1:]
     tests = [(k, v) for k, v in sorted(globals().items(), key=lambda kv: kv[1].__code__.co_firstlineno

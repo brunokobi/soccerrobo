@@ -10,6 +10,12 @@ Fase 4 / Onda B (docs/specs/itens-e-habilidades.md):
   nao compraveis nem vendaveis).
 * MODULE_MODELS = 12 modulos (slot "modulo", `w` vazio, `skill` = id em skills.SKILLS).
 * `set` opcional: bonus de conjunto (SETS, set_bonus, set_bonus_text).
+
+Onda D: raridade MITICA (indice 4) = Lendaria com +2 de potencia (spec campanha-expandida secao 12). So sai
+como recompensa do pos-campanha (NG+ "Turne Lendaria" e marcos da Torre do Po): a loja e os drops nunca a
+sorteiam (LEGEND continua 3; shop_models/refresh_shop so vao ate a Lendaria). Vale so para pecas de
+equipamento comuns (MYTHIC_MODELS): reliquia segue sempre Lendaria e modulo no maximo Lendaria (o
+sanitize do garage corrige). Cosmeticos finais (REWARD_COSMETICS) so vem de recompensa, nunca da loja.
 """
 
 GEAR_SLOTS = ("motor", "bateria", "parachoque", "chutador", "succao", "sensor", "chip")
@@ -26,15 +32,17 @@ RARITIES = (
     {"name": "Rara", "color": (0, 170, 255), "power": 8, "up_step": 1.2, "price": 220},
     {"name": "Épica", "color": (190, 110, 255), "power": 12, "up_step": 1.6, "price": 700},
     {"name": "Lendária", "color": (255, 200, 60), "power": 19, "up_step": 2.0, "price": 2200},
+    {"name": "Mítica", "color": (255, 90, 130), "power": 21, "up_step": 2.0, "price": 3000},   # Onda D
 )
 POWER = tuple(r["power"] for r in RARITIES)
 UP_STEP = tuple(r["up_step"] for r in RARITIES)
 PRICE = tuple(r["price"] for r in RARITIES)
 RAR_NAMES = tuple(r["name"] for r in RARITIES)
 RAR_COLORS = tuple(r["color"] for r in RARITIES)
-LEGEND = len(RARITIES) - 1
+LEGEND = 3                             # Lendaria: a maior raridade da loja/drops
+MYTHIC = 4                             # Mitica (Onda D): so recompensa do pos-campanha
 RELIC_POWER = 22                       # reliquias: potencia fixa (Lendaria comum = 19)
-MODULE_RANK = (1, 1, 2, 3)             # raridade do modulo -> rank da skill
+MODULE_RANK = (1, 1, 2, 3, 3)          # raridade do modulo -> rank da skill (Mitica: so por seguranca)
 SHOP_ALL_TIER = 4                      # tier a partir do qual a loja sorteia ALL_MODELS
 
 # modelo -> slot, pesos por atributo (o primeiro = primario), heat (dreno de bat; 0 = nenhum)
@@ -127,6 +135,14 @@ RELIC_MODELS = tuple(m for m in PARTS if PARTS[m].get("unique"))
 MODULE_MODELS = tuple(m for m in PARTS if PARTS[m]["slot"] == "modulo")
 UNIQUE_MODELS = frozenset(RELIC_MODELS)
 BALANCED_MODELS = tuple(m for m in CORE_MODELS if PARTS[m]["heat"] == 0.0)
+MYTHIC_MODELS = ALL_MODELS             # Onda D: modelos que podem ser Miticos (equipamento, sem reliquia/modulo)
+
+
+def max_rarity(model):
+    """Maior raridade valida do modelo: reliquia = so Lendaria; modulo ate Lendaria; resto ate Mitica."""
+    if is_unique(model) or PARTS[model]["slot"] == "modulo":
+        return LEGEND
+    return MYTHIC
 
 # --- sets (spec secao 3; faixas 2/3/4 por decisao do dev: com 1 peca por slot as faixas 4/6 da spec
 # eram inalcancaveis). Magnitudes: faixa 2 = a 2 da spec; faixa 3 = a 4 da spec; faixa 4 = a 6 da spec
@@ -145,9 +161,13 @@ SET_NAMES = tuple(SETS)
 
 # --- cosmeticos (spec secao 6; so visuais) ---
 DECALS = ("estrela", "raio", "pao_queijo", "chinelo", "caveira", "coracao")
-TRAILS = ("neon", "fogo", "arco_iris", "estrelas")
-ANTENNAS = ("curta", "mola", "dupla")              # provisorio: a spec cita `antenna` sem catalogo
-CELEBRATIONS = ("confete", "bolo", "chinelo_voando", "fogos")
+TRAILS = ("neon", "fogo", "arco_iris", "estrelas", "poeira", "cometa")
+ANTENNAS = ("curta", "mola", "dupla", "para_raios", "coroa", "aureola")   # a spec cita `antenna` sem catalogo
+CELEBRATIONS = ("confete", "bolo", "chinelo_voando", "fogos", "trofeu", "relampagos")
+# Onda D: cosmeticos finais, so de recompensa (nunca na loja); a origem aparece na loja/galeria.
+# Cada linha da loja/galeria cabe no maximo 6 por tipo (COS_CARD/VIS_CARD em robots_ui).
+REWARD_COSMETICS = {"poeira": "Torre 10", "para_raios": "Torre 20", "trofeu": "Torre 30", "coroa": "Torre 40",
+                    "cometa": "Turnê I", "relampagos": "Turnê II", "aureola": "Turnê III"}
 # B13: slots de `robot["look"]` (a comemoracao e por robo: toca quando ESSE robo marca; a spec fala em
 # "por time", mas um campo de time exigiria subir a versao do save)
 LOOK_KINDS = {"decal": DECALS, "antenna": ANTENNAS, "trail": TRAILS, "celebration": CELEBRATIONS}
@@ -158,13 +178,20 @@ COSMETIC_NAMES = {"estrela": "Estrela", "raio": "Raio", "pao_queijo": "Pão de Q
                   "caveira": "Caveira", "coracao": "Coração",
                   "neon": "Neon", "fogo": "Fogo", "arco_iris": "Arco-Íris", "estrelas": "Estrelas",
                   "curta": "Curta", "mola": "Mola", "dupla": "Dupla",
-                  "confete": "Confete", "bolo": "Bolo", "chinelo_voando": "Chinelo Voando", "fogos": "Fogos"}
+                  "confete": "Confete", "bolo": "Bolo", "chinelo_voando": "Chinelo Voando", "fogos": "Fogos",
+                  "poeira": "Poeira Dourada", "cometa": "Cometa", "para_raios": "Para-raios", "coroa": "Coroa do Pó",
+                  "aureola": "Auréola", "trofeu": "Troféu", "relampagos": "Relâmpagos"}
 LOOK_LABELS = {"decal": "ADESIVO", "antenna": "ANTENA", "trail": "RASTRO", "celebration": "COMEMORAÇÃO"}
 LOOK_TITLES = {"decal": "Adesivo", "antenna": "Antena", "trail": "Rastro", "celebration": "Comemoração"}
 
 
 def cosmetic_price(cid):
     return COSMETIC_PRICE[COSMETIC_KIND[cid]]
+
+
+def cosmetic_for_sale(cid):
+    """False para os cosmeticos de recompensa (REWARD_COSMETICS, Onda D)."""
+    return cid in COSMETICS and cid not in REWARD_COSMETICS
 
 
 def models_for_slot(slot, pool=None):

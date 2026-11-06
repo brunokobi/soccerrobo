@@ -494,6 +494,8 @@ class Garage:
         name = parts.COSMETIC_NAMES[cid]
         if cid in self.cosmetics:
             return False, "Você já tem %s." % name
+        if not parts.cosmetic_for_sale(cid):             # Onda D: cosmetico de recompensa
+            return False, "%s não está à venda (prêmio: %s)." % (name, parts.REWARD_COSMETICS[cid])
         price = parts.cosmetic_price(cid)
         if self.scrap < price:
             return False, "Sucata insuficiente (precisa de %d)." % price
@@ -982,9 +984,12 @@ def _piece(p):
     model = p.get("model")
     if pid is None or not isinstance(model, str) or model not in parts.PARTS:
         return None
-    rar = _int(p.get("rar"), 0, len(parts.RARITIES) - 1, 0)
+    rar = _int(p.get("rar"), 0, 10 ** 6, 0)
+    if rar > parts.MYTHIC:                       # lixo acima da faixa: Lendaria, como antes da Onda D
+        rar = parts.LEGEND
     if parts.is_unique(model):
         rar = parts.LEGEND                       # reliquia: sempre Lendaria
+    rar = min(rar, parts.max_rarity(model))      # Onda D: Mitica so em equipamento (modulo ate Lendaria)
     return {"id": pid, "model": model, "rar": rar,
             "lvl": _int(p.get("lvl"), 0, parts.MAX_UP, 0)}
 
@@ -1160,6 +1165,8 @@ def _sanitize(data):
     st_raw = sh.get("stock")
     for p in (st_raw[:SHOP_MAX * 2] if isinstance(st_raw, list) else []):
         pc = _piece(p)
+        if pc is not None and pc["rar"] > parts.LEGEND:          # Onda D: a loja nunca vende Mitica
+            pc["rar"] = parts.LEGEND
         if pc is not None and pc["id"] not in ids and len(stock) < SHOP_MAX and pc["model"] not in uniq:
             ids.add(pc["id"])
             if parts.is_unique(pc["model"]):

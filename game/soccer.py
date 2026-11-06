@@ -119,6 +119,8 @@ FX_KINDS = {
     "cel_bolo": (8, 60, 220, 0.8, 1.4, None, 3),
     "cel_chinelo_voando": (5, 160, 360, 0.7, 1.2, None, 4),
     "cel_fogos": (10, 160, 380, 0.5, 1.0, None, 2),
+    "cel_trofeu": (8, 80, 260, 0.8, 1.4, None, 3),         # Onda D (cosmeticos de recompensa)
+    "cel_relampagos": (8, 200, 420, 0.4, 0.8, None, 2),
 }
 # estilo da particula: indice em robot_art.PUFF_COLORS (fumaca/poeira desenhadas com sprites prontos);
 # ausente = faisca (linha + circulo). FX_RISE: deriva para cima (fumaca).

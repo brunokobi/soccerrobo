@@ -50,8 +50,8 @@ def test_catalog():
         prim = max(d["w"].values())
         # heat so em agressivos (peso primario > 1.0)
         assert (d["heat"] > 0) == (prim > 1.0), m
-    assert len(parts.RARITIES) == 4
-    assert parts.PRICE == (60, 220, 700, 2200) and parts.POWER == (4, 8, 12, 19)
+    assert len(parts.RARITIES) == 5 and parts.LEGEND == 3 and parts.MYTHIC == 4     # Onda D: Mitica
+    assert parts.PRICE == (60, 220, 700, 2200, 3000) and parts.POWER == (4, 8, 12, 19, 21)
     for m in parts.PARTS:
         for rar in range(4):
             for lvl in range(parts.MAX_UP):
