@@ -31,6 +31,13 @@ pelas habilidades dos robôs.
 | ![Mochila de itens](docs/img/mochila.png) | ![Galeria de cosméticos](docs/img/visual-cosmeticos.png) |
 | **Mochila** - até 2 itens de partida, gastos ao jogar | **Visual** - adesivo, antena, rastro e comemoração por robô |
 
+| ![Mapa do Ato 2](docs/img/campanha-mapa-ato2.png) | ![Superliga em pontos corridos](docs/img/campanha-superliga.png) |
+| **Ato 2** - mapa por Ato (Ato 1 escola ao Mundial, Ato 2 Superliga Limpex, Ato 3 Copa dos Campeões) | **Superliga** - liga em pontos corridos, os 4 primeiros vão à semifinal |
+
+![Missões secundárias](docs/img/campanha-missoes.png)
+
+**Missões secundárias** - 14 missões avulsas com prêmio próprio; as 4 "Fitas do Vô" levam ao final secreto.
+
 Robôs em campo com cosméticos (câmera PERTO):
 
 ![Partida com robôs personalizados](docs/img/partida-perto.png)
@@ -129,7 +136,7 @@ No menu (teclas 1-6): `1 - AMISTOSO`, `2 - AMISTOSO`, `3 - NOVA CARREIRA`, `4 - 
      deles secreto). Mais **14 missões secundárias** no botão MISSÕES do mapa (as 4 "Fitas do Vô"
      levam ao final secreto). São ~160 cenas de diálogo. Retratos e
      cenários são **desenhados por código** (sem imagens externas). O mapa tem uma aba por Ato
-     e um botão de **MISSÕES** secundárias (as missões entram com o roteiro dos próximos passos).
+     e um botão de **MISSÕES** secundárias.
    - **Escolhas:** algumas cenas oferecem 2-3 opções que mudam falas seguintes e podem dar
      recompensas (sucata, XP, peça). Esc na cena abre um mini-menu; PULAR CENA pede
      confirmação (e, se há escolha, assume a opção 1).
@@ -169,7 +176,7 @@ O jogador controlado troca sozinho (o mais perto da bola).
 | 1 | Robôs com chassis e 8 atributos, bateria, arena tecnológica (neon) | pronta |
 | 2 | Garagem e laboratório: peças, upgrades, XP, evolução, loja e liga (Modo Robôs) | pronta e jogável |
 | 3 | **Campanha** "A Garagem do Vô": história, diálogos, torneios, chefes e treino (escola -> mundial) | pronta e jogável |
-| 4 | **Campanha Expandida**: torcida realista, câmera de estádio e desenhos mais detalhados (Onda A), peças/sets/relíquias/itens/cosméticos e 16 skills dos robôs (Onda B), Atos 2 e 3, missões secundárias e 3 finais (Ondas C e D) | Ondas A, B e C prontas (C na branch `feat/fase4-onda-c-estrutura`, ainda não publicada); D planejada ([docs/roadmap.md](docs/roadmap.md)) |
+| 4 | **Campanha Expandida**: torcida realista, câmera de estádio e desenhos mais detalhados (Onda A), peças/sets/relíquias/itens/cosméticos e 16 skills dos robôs (Onda B), Atos 2 e 3, missões secundárias e 3 finais (Ondas C e D) | Ondas A, B e C prontas e publicadas; D (pós-campanha) planejada ([docs/roadmap.md](docs/roadmap.md)) |
 | 5 | Editor de firmware (regras da IA em blocos) | planejada |
 
 O planejamento detalhado fica em [`docs/`](docs/INDEX.md).
@@ -251,8 +258,8 @@ Utilitários do harness (`tests/sim_harness.py`): `golden`/`golden-new` com
 - `game/crowd.py`: torcida (locais, espectadores pré-renderizados, reações, confete/LED/telão, LOD) e a geometria das câmeras PERTO/ESTÁDIO
 - `game/robots_ui.py`: telas do Modo Robôs (hub, garagem, banco, loja, habilidades, mochila, visual, liga)
 - `game/career.py` / `game/career_ui.py`: carreira de clubes (liga, mercado, finanças, save) e suas telas
-- `game/story.py`: dados da campanha (personagens, times, cenas/diálogos, torneios, capítulos, recompensas); módulo puro, sem pygame. É a fachada da campanha: guarda o Ato 1 e junta `story_a2.py` (Ato 2), `story_a3.py` (Ato 3) e `story_side.py` (missões secundárias), que por enquanto estão vazios
-- `game/campaign.py`: lógica da campanha (progresso, torneios, chefes/pity, treino, recompensas, save)
+- `game/story.py`: dados da campanha (personagens, times, cenas/diálogos, torneios, capítulos, recompensas); módulo puro, sem pygame. É a fachada da campanha: guarda o Ato 1 e junta `story_a2.py` (Ato 2), `story_a3.py` (Ato 3) e `story_side.py` (missões secundárias), com os dados de cada parte
+- `game/campaign.py`: lógica da campanha (progresso, torneios de copa/liga/série, chefes/pity, treino, missões secundárias, finais, recompensas, save v2 com migração do v1)
 - `game/campaign_ui.py`: telas da campanha (menu, mapa com abas por Ato, missões secundárias, diálogo, torneio de copa/liga/série, resultado, fim de capítulo, fim com galeria de finais), reaproveitando garagem/bancada/loja do Modo Robôs
 - `game/portraits.py`: retratos e cenários da campanha, desenhados por código
 - `docs/`: planejamento e especificações (`docs/INDEX.md`); `docs/img/`: capturas de tela do README

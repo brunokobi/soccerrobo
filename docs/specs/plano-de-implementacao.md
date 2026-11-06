@@ -57,7 +57,7 @@ Comandos de validação padrão (rodar da raiz com `export SDL_VIDEODRIVER=dummy
 | B18 | rotineiro | Fechamento da Onda B: suíte completa, goldens, `draw`, `ms_step`, tabela de calibração | - | tudo verde |
 
 ## Onda C - Campanha maior (marcos M3 e M4)
-> **Estado (05/11/2026): C1-C18 prontos** na branch `feat/fase4-onda-c-estrutura`. Desvios do plano,
+> **Estado (05/11/2026): C1-C18 prontos** e publicados (main). Desvios do plano,
 > todos documentados nos commits: o cap. 6 provisório do C2 virou rascunhos "em breve" até o conteúdo
 > chegar; a Força dos Atos 2 e 3 ficou bem acima da spec (skills com teto 9,0 e o motor achatando acima
 > de F ~85), então os ovr foram recalibrados no motor (C9/C12) e o SIMULAR ganhou uma correção para

@@ -9,7 +9,7 @@ Tabela original do planejamento (HEAD fd5e17b); a linha da Fase 4 está atualiza
 | 1 | 6 chassis, 8 atributos, bateria, arena neon | pronta |
 | 2 | Garagem: 14 peças (7 slots x 2 modelos, 4 raridades, upgrade 0-5), XP/nível até 10, loja, liga de 6 times (Modo Robôs) | pronta |
 | 3 | Campanha "A Garagem do Vô": Prólogo + 5 capítulos + epílogo, 53 cenas / 626 falas, 27 times, 12 personagens, 6 escolhas, torneios (grupo de 4 + mata-mata), chefes com pity, treino, save próprio `soccerpy_campaign_v1` (v1, sv1) | pronta e jogável |
-| 4 (nova) | **Campanha Expandida**: torcida + desenhos detalhados, itens/skills, campanha 3 atos | Onda A (visual, torcida, câmera de estádio) e Onda B (peças, sets, módulo, 16 skills, itens, cosméticos) prontas; Ondas A, B e C prontas (C: campanha P-13 com 3 finais, 14 missões e os 3 Atos calibrados; ainda não publicada); Onda D planejada; Onda D planejada |
+| 4 (nova) | **Campanha Expandida**: torcida + desenhos detalhados, itens/skills, campanha 3 atos | Ondas A (visual, torcida, câmera de estádio), B (peças, sets, módulo, 16 skills, itens, cosméticos) e C (campanha Prólogo + 13 capítulos em 3 Atos, 3 finais, 14 missões, calibrada no motor) prontas e publicadas; Onda D planejada |
 | 5 | Editor de firmware (regras da IA em blocos) | planejada (era a antiga Fase 4) |
 
 Números do código hoje:

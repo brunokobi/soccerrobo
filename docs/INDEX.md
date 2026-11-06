@@ -17,7 +17,7 @@ Planejamento e especificações do jogo. O código e os comandos do dia a dia es
 - Fases 1, 2 e 3: prontas e publicadas em https://copaaspirador.brunokobi.tech
 - Fase 4 (Campanha Expandida): **Ondas A (torcida, robôs detalhados, retratos, cenários, câmera de
   estádio), B (peças, sets, relíquias, slot Módulo, 16 skills, itens, Mochila, cosméticos) e C (Atos 2
-  e 3) prontas.** A Onda C está na branch `feat/fase4-onda-c-estrutura` (ainda não publicada):
+  e 3) prontas e publicadas.** Onda C:
   - campanha completa: Prólogo + 13 capítulos em 3 Atos, 161 cenas, 4 escolhas grandes (B1-B4) que
     mudam adversários, falas e recompensas, **3 finais** (Garagem Livre, Contrato Dourado e o secreto
     O Chinelo Estrutural) com galeria e recompensa própria, e **14 missões secundárias** (as 4 Fitas do
@@ -32,6 +32,5 @@ Planejamento e especificações do jogo. O código e os comandos do dia a dia es
     Ato 2 e não termina o Ato 3 — ideias: equipar sozinhas as skills de história ou pity maior a
     partir do Ato 2; dois testes sensíveis à carga da máquina (`test_camera`, limite de tempo do
     `test_skills_engine`).
-  - **deploy pendente:** falta saber onde o site é hospedado (o build web não fica no repositório).
   - Onda D (NG+, Torre do Pó, peças Míticas): planejada.
 - Fase 5 (Editor de firmware): planejada
