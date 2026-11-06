@@ -1009,7 +1009,7 @@ def test_draw_time_budget():
 REAL_SIM = cm.sim_match
 REAL_SHOOT = cm.shootout
 SIMQ = []                                   # placares forcados (my, opp) consumidos por sim_match
-cm.sim_match = lambda F, O, rng: SIMQ.pop(0) if SIMQ else REAL_SIM(F, O, rng)
+cm.sim_match = lambda F, O, rng, relief=None: SIMQ.pop(0) if SIMQ else REAL_SIM(F, O, rng, relief)
 MAP_CONT = (700, 446, 360, 76)
 BTN_WATCH, BTN_SIM, BTN_TRAIN, BTN_BACK = (700, 390, 360, 76), (700, 478, 360, 56), (700, 546, 360, 50), (700, 608, 360, 44)
 ROUND_CONT = (420, 650, 260, 42)
@@ -2139,7 +2139,78 @@ def test_fx_skill_pts_rewards_recruit_and_training_ph():
         assert lv_ph >= SK.TRAIN_PH_MAX                                   # treino (+ niveis ganhos)
 
 
-# ================================================================== Onda D: pecas Miticas
+# ================================================================== Onda D: NG+ e Miticas
+def finish_campaign_api(seed=41):
+    """Campanha nova pela UI e jogada ate o fim pela API pura (rapido); a UI fica no mapa."""
+    fresh_campaign(seed)
+    cp = ui.campaign
+    for _ in range(6000):
+        a = cp.next_action()
+        k = a["kind"]
+        if k == "scene":
+            ch = next((i for i in cp.scene_lines(a["id"]) if isinstance(i, dict)), None)
+            cp.finish_scene(a["id"], 0 if ch else None)
+        elif k == "match":
+            cp.record_match(3, 0)
+        elif k == "chapter_end":
+            cp.advance_chapter()
+        else:
+            break
+    assert cp.finished() and cp.can_start_ng()
+    ui.persist()
+    ui.go("map")
+    return cp
+
+
+def test_ng_entry_from_ending_revanche_and_chapter_end():
+    cp = finish_campaign_api(41)
+    frame()
+    assert text_cache_has("Turnê Lendária liberada")
+    click_rect(MAP_CONT)
+    assert ui.screen_id == "ending" and ui.end_view["can_ng"]
+    frame()
+    assert text_cache_has("TURNÊ LENDÁRIA I") and _no_surface_frames() == 0
+    shot("d1_ng_entrada_fim")
+    click_rect(cui.END_NG)
+    assert ui.screen_id == "map" and cp.ng == 1 and cp.ch == "1" and cp.ng_active()
+    assert json.loads(CAMP["save"])["c"]["ng"] == 1 and not FORBIDDEN
+    frame()
+    assert text_cache_has("TURNÊ LENDÁRIA I - revanches") and text_cache_has("Rivais: +20")
+    assert ui.chapter_state(story.CHAPTERS[1]) == "current" and ui.chapter_state(story.CHAPTERS[2]) == "future"
+    assert _no_surface_frames() == 0
+    shot("d1_ng_mapa")
+    click_rect(MAP_CONT)
+    assert ui.screen_id == "dialog" and ui.dlg["sid"] == story.NG_REVANCHE["1"]
+    shot("d1_ng_revanche_cena")
+    for _ in range(20):
+        if ui.screen_id != "dialog":
+            break
+        dialog_step()
+    assert ui.screen_id == "tourney" and ui.tview["title"].startswith("Revanche I:")
+    act = ui.map_act
+    base = story.TEAMS[cm.stage_team(cp.tournament(), act["stage"])]["ovr"]
+    assert act["O"] == min(90, base + 20) and act["ng"] == 1
+    assert _no_surface_frames() == 0
+    shot("d1_ng_torneio_revanche")
+    drive_until(lambda: ui.screen_id == "chapter_end", score=(3, 0))
+    v = ui.ce_view
+    assert "Turnê Lendária I" in v["title"] and v["scrap"] == cm.NG_CHAPTER_SCRAP[1] and v["piece"] is None
+    assert _no_surface_frames() == 0
+    shot("d1_ng_fim_capitulo")
+    click_rect(CE_CONT)
+    assert ui.screen_id == "map" and cp.ch == "2" and cp.ng_chapter_done("1")
+    assert ui.chapter_state(story.CHAPTERS[1]) == "done"
+    # cap. 5 na volta: Mitica no relatorio
+    cp.ch, cp.node, cp.tour = "5", 0, None
+    ui.go("map")
+    drive_until(lambda: ui.screen_id == "chapter_end", score=(3, 0))
+    v = ui.ce_view
+    assert v["piece"] and "Mítica" in v["piece"][0] and v["piece"][1] == parts.RAR_COLORS[parts.MYTHIC]
+    shot("d1_ng_fim_capitulo_mitica")
+    click_rect(CE_CONT)
+    assert not FORBIDDEN
+    ui.to_menu()
+
 
 def test_mythic_piece_in_bench_and_reward_cosmetics_in_shop():
     fresh_campaign(47)

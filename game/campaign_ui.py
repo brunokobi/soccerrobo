@@ -9,6 +9,8 @@ Telas (screen_id): menu, map (aba HISTÓRIA), garage (aba GARAGEM), shop (aba LO
 (cena com retratos/cenarios por codigo, digitacao e escolhas; ver game/portraits.py),
 tourney (grupo + chaveamento + ASSISTIR/SIMULAR/TREINO), training (partida de treino), round (resultado,
 reaproveita draw_round_body de RobotsUI), chapter_end (relatorio de recompensas), ending (fim/em producao).
+NG+ (Onda D): o botao TURNE LENDARIA fica na tela de fim; durante a volta o mapa marca os capitulos pela
+volta atual e o torneio mostra "Revanche".
 
 Partidas (passo 10): ASSISTIR chama Game.start_robot_match(..., return_state="campaign") e o Game devolve
 (score, events) a match_done(); SIMULAR chama Campaign.simulate_current(). Ambos terminam em finish_result(),
@@ -58,6 +60,8 @@ ACTS = (("1", "ATO 1"), ("2", "ATO 2"), ("3", "ATO 3"))      # abas do mapa (C5)
 ACT_TAB = (32, 139, 112, 24)                              # x, y, w, h da 1a aba; as outras a direita
 SIDE_ROWS = 4                                             # missoes por pagina na tela "sides"
 NODE_R = 26
+NG_ROMAN = ("", "I", "II", "III")                         # voltas do NG+ (Turne Lendaria)
+END_NG = (80, 560, 300, 60)                               # botao TURNE LENDARIA na tela de fim
 PULSE_PERIOD = 1.6
 NEON = (0, 230, 255)
 # ---- dialogo
@@ -409,10 +413,16 @@ class CampaignUI(RobotsUI):
 
     def chapter_state(self, ch):
         """"done" (recompensa aplicada), "current" ou "future"."""
+        cp = self.campaign
+        if cp.ng_active():                                  # NG+: estado pela volta atual
+            ids = [c["id"] for c in story.CHAPTERS]
+            if cp.ng_chapter_done(ch["id"]) or ids.index(ch["id"]) < ids.index(C.NG_START):
+                return "done"                               # (o Prologo fica fora da volta)
+            return "current" if ch["id"] == cp.ch else "future"
         rid = ch.get("reward")
-        if rid and ("reward:%s" % rid) in self.campaign.done:
+        if rid and ("reward:%s" % rid) in cp.done:
             return "done"
-        return "current" if ch["id"] == self.campaign.ch else "future"
+        return "current" if ch["id"] == cp.ch else "future"
 
     def current_act(self):
         return self.campaign.chapter().get("act", "1")
@@ -484,22 +494,30 @@ class CampaignUI(RobotsUI):
                   shadow=True)
         self.text(self.fit(ch["local"], 26, 620), 26, TEXT, topleft=(40, 470))
         side = story.SIDES.get(cp.side["id"]) if cp.side is not None else None
+        ng = cp.ng if cp.ng_active() else 0
         if side is not None:
             self.text(self.fit("Missão em andamento: %s" % side["title"], 24, 640), 24, NEON, topleft=(40, 506))
+        elif ng:
+            self.text("TURNÊ LENDÁRIA %s - revanches" % NG_ROMAN[ng], 24, (255, 120, 160), topleft=(40, 506))
         elif ch.get("draft"):
             self.text("Este capítulo ainda está em produção: em breve.", 24, DIM, topleft=(40, 506))
-        self.text("Força recomendada: %s" % force_text(ch["F_start"], ch["F_end"]), 28, TEXT,
-                  topleft=(40, 546))
+        if ng:
+            self.text("Rivais: +%d de Força (teto %d)" % (C.NG_SHIFT[ng], C.NG_OVR_CAP), 28, TEXT,
+                      topleft=(40, 546))
+        else:
+            self.text("Força recomendada: %s" % force_text(ch["F_start"], ch["F_end"]), 28, TEXT,
+                      topleft=(40, 546))
         mine = int(round(self.info()["rating"]))
         low = int(round(ch["F_start"]))
         self.text("Sua Força: %d" % mine, 28, GREEN if mine >= low else GOLD, topleft=(40, 580))
         act = self.map_act
         nxt = ""
         if act is not None:
+            end = "Próximo: em breve" if act.get("draft") else "Próximo: fim da campanha"
+            if act["kind"] == "end" and cp.can_start_ng():
+                end = "Fim: Turnê Lendária liberada"
             nxt = {"scene": "Próximo: cena", "match": "Próximo: partida (%s)" % act.get("stage_name", ""),
-                   "chapter_end": "Próximo: fim do capítulo",
-                   "end": "Próximo: em breve" if act.get("draft") else "Próximo: fim da campanha"}.get(
-                       act["kind"], "")
+                   "chapter_end": "Próximo: fim do capítulo", "end": end}.get(act["kind"], "")
         self.text(nxt, 24, DIM, topleft=(40, 616))
         if side is not None:
             self.btn((700, 446, 360, 76), "CONTINUAR MISSÃO", self.do_story, size=34, color=(0, 120, 160))
@@ -599,7 +617,7 @@ class CampaignUI(RobotsUI):
         (todas as falas filtradas por cond) e concluida e a campanha segue."""
         cp = self.campaign
         sid = act.get("id") if isinstance(act, dict) else None
-        if cp is None or sid not in story.SCENES:
+        if cp is None or story.scene_data(sid) is None:          # Onda D: inclui as revanches do NG+
             self.dlg = None
             self.screen_id = "map"
             self.refresh_map()
@@ -610,7 +628,7 @@ class CampaignUI(RobotsUI):
                 choice = it if it.get("opts") else None
                 break
             main.append(it)
-        sc = story.SCENES[sid]
+        sc = story.scene_data(sid)
         d = {"sid": sid, "bg": sc.get("bg"), "cast": [c for c in sc.get("cast", ()) if c in story.CHARACTERS],
              "main": main, "choice": choice, "list": main, "i": 0, "mode": "say", "reply": False,
              "choice_idx": None, "fx": "", "final": False, "paused": False, "confirm": False,
@@ -914,7 +932,10 @@ class CampaignUI(RobotsUI):
         tour = cp.tour
         tr = cp.tournament(act["tournament"])
         single = tr["format"] == "single"
-        v = {"single": single, "title": cp.chapter()["subtitle"], "local": tr["local"],
+        title = cp.chapter()["subtitle"]
+        if act.get("ng"):                                   # NG+: torneio de revanche
+            title = "Revanche %s: %s" % (NG_ROMAN[act["ng"]], title)
+        v = {"single": single, "title": title, "local": tr["local"],
              "label": stage_label(act["stage"], single), "rows": [], "ko": [],
              "names": [e["name"] for e in act["opp"]["squad"]], "fmt": tr["format"],
              "adv": C.advance_pos(tr)}
@@ -1336,8 +1357,18 @@ class CampaignUI(RobotsUI):
             return
         cp = self.campaign
         ch = cp.chapter()
-        rw = cp.reward_spec(ch["reward"]) if ch.get("reward") in story.REWARDS else {}
         rep = act.get("report") or {}
+        if act.get("ng"):                                   # NG+: sucata da volta + Mitica no fim de cada Ato
+            spec = cp.ng_reward_spec(ch["id"], act["ng"])
+            v = {"title": "%s - %s (Turnê Lendária %s)" % (ch["title"], ch["subtitle"], NG_ROMAN[act["ng"]]),
+                 "scrap": int(rep.get("scrap") or spec["scrap"]), "piece": None, "recruits": [], "unlocked": [],
+                 "xp_hero": 0, "xp_team": 0, "equip": None, "skills": [], "pts": 0,
+                 "warnings": list(act.get("warnings") or rep.get("warnings") or [])}
+            if spec["mythic"]:
+                v["piece"] = (rep.get("mythic") or "Peça %s" % P.RAR_NAMES[P.MYTHIC], P.RAR_COLORS[P.MYTHIC])
+            self.ce_view = v
+            return
+        rw = cp.reward_spec(ch["reward"]) if ch.get("reward") in story.REWARDS else {}
         v = {"title": "%s - %s" % (ch["title"], ch["subtitle"]), "scrap": int(rw.get("scrap", 0)),
              "piece": None, "recruits": [], "unlocked": list(rw.get("unlock", ())),
              "xp_hero": int(rw.get("xp_hero", 0)), "xp_team": int(rw.get("xp_team", 0)),
@@ -1466,9 +1497,10 @@ class CampaignUI(RobotsUI):
                          "draft": bool(act.get("draft")), "matches": st["matches"], "sims": st["sims"],
                          "trained": st["trained"], "titles": cp.garage.stats["titles"],
                          "boss_losses": self.count_keys("lose"), "elims": self.count_keys("elim"),
-                         "rating": int(round(cp.garage.rating()))}
-        if act.get("ending"):
-            self.persist()                        # o final entrou na galeria (c.endings) agora
+                         "rating": int(round(cp.garage.rating())), "ng_done": act.get("ng_done", 0),
+                         "cosmetic": act.get("cosmetic"), "can_ng": cp.can_start_ng(), "next_ng": cp.ng + 1}
+        if act.get("ending") or act.get("ng_done"):
+            self.persist()                        # o final entrou na galeria / a volta do NG+ fechou agora
 
     def draw_ending(self):
         v = self.end_view
@@ -1489,8 +1521,12 @@ class CampaignUI(RobotsUI):
                       center=(cx, 380))
             self.text("O TREINO continua livre no mapa.", 22, DIM, center=(cx, 430))
         else:
-            self.text("CAMPANHA CONCLUÍDA", 56, GOLD, center=(cx, 80), shadow=True)
+            k = v.get("ng_done") or 0
+            self.text("TURNÊ LENDÁRIA %s CONCLUÍDA" % NG_ROMAN[k] if k else "CAMPANHA CONCLUÍDA", 56, GOLD,
+                      center=(cx, 80), shadow=True)
             sub = ("Final: %s" % v["ending"]) if v.get("ending") else "A Garagem do Vô"
+            if k and v.get("cosmetic"):
+                sub = "Prêmio da volta: %s (cosmético)" % P.COSMETIC_NAMES[v["cosmetic"]]
             self.text(sub, 30, TEXT, center=(cx, 130))
             self.panel((200, 170, 700, 350))
             self.text("ESTATÍSTICAS", 22, GOLD, topleft=(230, 184))
@@ -1512,3 +1548,21 @@ class CampaignUI(RobotsUI):
                           center=(cx, 488))
             self.text("O TREINO continua livre no mapa.", 22, DIM, center=(cx, 540))
         self.btn((cx - 150, 560, 300, 60), "VOLTAR AO MAPA", self.back_to_map, size=32, color=(60, 80, 130))
+        if v.get("can_ng"):                       # Onda D: proxima volta do NG+
+            k = v["next_ng"]
+            self.btn(END_NG, "TURNÊ LENDÁRIA %s" % NG_ROMAN[k], self.do_start_ng, size=28, color=(150, 50, 100))
+            self.text(self.fit("Recomeça no cap. 1 com rivais +%d de Força; a garagem fica." % C.NG_SHIFT[k],
+                               20, 1040), 20, DIM, center=(cx, 650))
+
+    # ================================================================ NG+ (Onda D)
+    def do_start_ng(self):
+        """TURNE LENDARIA: comeca a proxima volta do NG+ (garagem mantida) e volta ao mapa no cap. 1."""
+        try:
+            self.campaign.start_ng()
+        except ValueError:
+            return self.go("map")
+        self.map_tab = None
+        self.persist()
+        self.go("map")
+        self.add_notice("Turnê Lendária %s: rivais +%d (teto %d). Prêmios: sucata, peças Míticas e um "
+                        "cosmético." % (NG_ROMAN[self.campaign.ng], C.NG_SHIFT[self.campaign.ng], C.NG_OVR_CAP))

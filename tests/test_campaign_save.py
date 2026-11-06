@@ -725,6 +725,33 @@ def test_repeat_keys_capped_at_99_roundtrip():
     assert r is not None and r.done == c.done
 
 
+def test_onda_d_done_keys_mythic_ng_and_tower_roundtrip():
+    """Onda D: chaves "ng<k>:<cap>|end" e "<revanche>#<k>" validas ficam; invalidas saem sem reparo; peca
+    Mitica sobrevive ao save (modulo Mitico volta a Lendario); ng/tower voltam iguais."""
+    use_mem()
+    c = new(4)
+    d = c.to_dict()
+    good = ["ng1:1", "ng3:end", "ng1:13", "ngr_5#2", "ng2:P"]
+    bad = ["ng4:1", "ng0:1", "ng1:99", "ng1:", "ngr_5", "ngr_99#1", "ngx:1", "ngr_5#007"]
+    d["c"]["done"] = d["c"]["done"] + good + bad
+    r = cm.Campaign.from_dict(copy.deepcopy(d))
+    assert r is not None and not r.repaired, r and r.warnings
+    assert [k for k in r.done if k.startswith("ng")] == good
+    g = c.garage
+    pc = g.new_piece("Turbina", 4)
+    pm = g.new_piece("Módulo Arrancada", 4)
+    pr = g.new_piece("Chip do Vovô", 4)
+    g.inventory += [pc, pm, pr]
+    c.ng, c.tower = 2, {"floor": 5, "best": 12}
+    assert c.save() is True
+    lo = cm.Campaign.load()
+    assert lo is not None and lo.ng == 2 and lo.tower == {"floor": 5, "best": 12}
+    by = lo.garage.pieces_by_id()
+    assert by[pc["id"]]["rar"] == 4 and by[pm["id"]]["rar"] == 3 and by[pr["id"]]["rar"] == 3
+    saved = json.loads(MEM["main"])
+    assert saved["v"] == cm.VERSION == 3
+
+
 def main():
     names = sys.argv[1:] or [n for n in globals() if n.startswith("test_")]
     for n in names:

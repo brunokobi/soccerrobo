@@ -1375,6 +1375,141 @@ def test_autoplay_reaches_all_three_endings():
         assert c2.next_action() == a
 
 
+# --- Onda D: NG+ "Turne Lendaria" e Torre do Po ------------------------------------------------
+_FINISHED = {}
+
+
+def finished(seed=300):
+    """Campanha terminada (rota independente, final Garagem Livre); copia nova a cada chamada."""
+    if seed not in _FINISHED:
+        c, a = play_route(seed, {"independente", "gabi_amigo", "poupou_ze"})
+        assert a["kind"] == "end" and a["ending"] == "end_a1"
+        _FINISHED[seed] = copy_json(c.to_dict())
+    c = cm.Campaign.from_dict(copy_json(_FINISHED[seed]))
+    assert c is not None and not c.repaired
+    return c
+
+
+def ng_walk(c, result=(3, 0), limit=3000):
+    """Joga a volta atual do NG+ ate o "end"; devolve (acao end, cenas vistas, partidas [(O, F_rec, stage)])."""
+    scenes, matches = [], []
+    for _ in range(limit):
+        a = c.next_action()
+        k = a["kind"]
+        if k == "scene":
+            scenes.append(a["id"])
+            assert not any(isinstance(i, dict) for i in c.scene_lines(a["id"]))
+            c.finish_scene(a["id"])
+        elif k == "match":
+            matches.append((a["O"], a["F_rec"], a["tournament"], a["stage"], a.get("ng")))
+            c.record_match(*result)
+        elif k == "chapter_end":
+            assert a["ng"] == c.ng and a["report"]["applied"] is True
+            assert c.advance_chapter() is not None
+        else:
+            return a, scenes, matches
+    raise AssertionError("volta do NG+ nao terminou")
+
+
+def test_ng_locked_until_an_ending():
+    c = new(5)
+    assert not c.finished() and not c.can_start_ng() and c.ng == 0 and not c.ng_active()
+    try:
+        c.start_ng()
+        raise AssertionError("NG+ abriu sem final")
+    except ValueError:
+        pass
+    c = finished()
+    assert c.finished() and c.can_start_ng()
+    c.tour = {"id": "t_c13"}                         # torneio em andamento bloqueia (seguranca)
+    assert not c.can_start_ng()
+
+
+def test_ng_run_revanches_shift_cap_and_rewards():
+    c = finished()
+    g = c.garage
+    robots_before = [r["id"] for r in g.robots]
+    lv = [r["level"] for r in g.robots]
+    done_before = list(c.done)
+    flags = dict(g.flags)
+    assert c.start_ng() == 1 and (c.ch, c.node, c.tour, c.pity) == (cm.NG_START, 0, None, 0)
+    assert c.ng_active() and c.econ_tier() == cm.NG_ECON_TIER
+    assert [r["id"] for r in g.robots] == robots_before and [r["level"] for r in g.robots] == lv
+    assert g.flags == flags and c.done[:len(done_before)] == done_before          # garagem/flags/done ficam
+    end, scenes, matches = ng_walk(c)
+    chs = [x["id"] for x in story.CHAPTERS if x["id"] != "P"]
+    assert scenes == [story.NG_REVANCHE[x] for x in chs], scenes        # so a revanche de cada capitulo
+    assert all(cm.Campaign._scene_key(c, sid) in c.done for sid in scenes)
+    for O, f_rec, tid, st, ng in matches:
+        tr = c.tournament(tid)
+        base = story.TEAMS[cm.stage_team(tr, st)]["ovr"]
+        assert ng == 1 and O == min(cm.NG_OVR_CAP, base + cm.NG_SHIFT[1]), (tid, st, O, base)
+        assert f_rec <= cm.NG_FREC_CAP
+    assert max(m[0] for m in matches) == cm.NG_OVR_CAP
+    assert end == {"kind": "end", "draft": False, "ending": None, "ng_done": 1, "cosmetic": "cometa",
+                   "new": True, "ng": 1}
+    assert not c.ng_active() and g.owns_cosmetic("cometa")
+    assert all(c.ng_key(x) in c.done for x in chs) and c.ng_key("end") in c.done
+    myth = [p for p in g.inventory if p["rar"] == 4]
+    assert len(myth) == len(cm.NG_MYTHIC_CHAPTERS) and all(p["model"] in __import__("parts").MYTHIC_MODELS
+                                                           for p in myth)
+    # idempotente: o end e os fechamentos nao reaplicam
+    scrap = g.scrap
+    assert c.next_action()["kind"] == "end" and g.scrap == scrap
+    assert c.apply_ng_rewards()["applied"] is False or not c.ng_active()
+    check_roundtrip(c)
+    # volta 2 e 3; depois da 3 acabou
+    for k in (2, 3):
+        assert c.can_start_ng() and c.start_ng() == k
+        end, scenes, matches = ng_walk(c)
+        assert len(scenes) == len(chs) and end["ng_done"] == k and end["cosmetic"] == cm.NG_END_COSMETIC[k]
+        assert all(m[0] == min(cm.NG_OVR_CAP, story.TEAMS[cm.stage_team(c.tournament(m[2]), m[3])]["ovr"]
+                                + cm.NG_SHIFT[k]) for m in matches)
+    assert c.ng == cm.NG_MAX and not c.can_start_ng()
+    assert sum(1 for p in g.inventory if p["rar"] == 4) == 3 * len(cm.NG_MYTHIC_CHAPTERS)
+    assert all(g.owns_cosmetic(x) for x in cm.NG_END_COSMETIC[1:])
+    check_roundtrip(c)
+
+
+def test_ng_pity_after_cap_and_group_sim_shifted():
+    c = finished()
+    c.start_ng()
+    # avanca ate a final do cap. 1 na volta 1
+    for _ in range(200):
+        a = c.next_action()
+        if a["kind"] == "scene":
+            c.finish_scene(a["id"])
+            continue
+        if a["kind"] == "match" and a["stage"] == "F":
+            break
+        c.record_match(3, 0)
+    base = story.TEAMS[c.tournament()["final"]]["ovr"]
+    assert a["boss"] and a["O"] == min(90, base + 20)
+    c.record_match(0, 1)
+    a = c.next_action()
+    assert a["O"] == min(90, base + 20) - 1                      # pity depois do deslocamento
+    # tabela do grupo usa os ovr deslocados (simulacao dos outros jogos)
+    assert c.ng_ovr(40) == 60 and c.ng_ovr(85) == 90
+
+
+def test_ng_simulate_uses_post_relief():
+    seen = []
+    real = cm.sim_match
+    cm.sim_match = lambda F, O, rng, relief=None: (seen.append((F, O, relief)), (2, 0))[1]
+    try:
+        c = finished()
+        c.start_ng()
+        for _ in range(5):
+            a = c.next_action()
+            if a["kind"] == "scene":
+                c.finish_scene(a["id"])
+        assert c.next_action()["kind"] == "match"
+        c.simulate_current()
+        assert seen[-1][2] == cm.POST_SIM_RELIEF
+    finally:
+        cm.sim_match = real
+
+
 def main():
     names = sys.argv[1:] or [n for n in globals() if n.startswith("test_")]
     for n in names:

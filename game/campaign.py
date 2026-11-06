@@ -32,6 +32,17 @@ Convencoes
   em done). ("done", x) em cond vale se x ou algum "x#..." esta em done. Cenas before/after/win: uma vez.
 * Consolacao (derrota na SF/final): as recompensas de derrota de match_rewards (sucata 15+5/gol e XP
   base sem bonus de vitoria), sem extras; repete-se so aquela partida.
+
+Pos-campanha (Onda D, spec campanha-expandida secao 12; save v3)
+------------------------------------------------------------
+* NG+ "Turne Lendaria" (`ng` 1..NG_MAX): depois de ver um final (c.endings nao vazio) start_ng() volta ao
+  cap. NG_START, no 0, sem torneio, MANTENDO garagem, flags e `done`. Durante a volta (ng_active()) as cenas
+  da historia e os ganchos dos torneios sao pulados; cada capitulo abre com UMA cena curta de revanche
+  (story.POST_SCENES, chave "<cena>#<ng>"). Adversarios: ovr + NG_SHIFT[ng], teto NG_OVR_CAP (o pity do
+  chefe vale depois do teto). Fechar um capitulo grava "ng<k>:<cap>" e da NG_CHAPTER_SCRAP[k] sucata (+ uma
+  peca Mitica nos capitulos NG_MYTHIC_CHAPTERS); o no "end" grava "ng<k>:end" e da NG_END_COSMETIC[k]. As
+  partidas da volta usam o tier economico NG_ECON_TIER (o mais alto); o SIMULAR da volta devolve
+  POST_SIM_RELIEF ao vies (o motor achata com Forca alta).
 """
 import copy
 import json
@@ -79,7 +90,7 @@ PEN_SLOPE, PEN_BASE, PEN_CAP = 0.008, 0.72, 60
 # --- persistencia (padrao de garage.py; chave PROPRIA, nunca a do modo livre) ---------------
 SAVE_KEY = "soccerpy_campaign_v1"
 SAVE_PATH = os.path.join(os.path.expanduser("~"), ".soccerpy_campaign.json")
-VERSION = 2
+VERSION = 3                         # 3 = Onda D (NG+, Torre do Po, pecas Miticas)
 MAX_SAVE_CHARS = 2_000_000
 SAVE_NONE, SAVE_OK, SAVE_BAD = "none", "ok", "bad"
 # Migracoes: chave ("v", n) = formato n -> n+1; ("sv", n) = roteiro n -> n+1. Cada uma recebe e devolve
@@ -117,13 +128,44 @@ def _migrate_sv1(data):
     return data
 
 
+def _migrate_v2(data):
+    """Formato 2 -> 3 (Onda D): NG+/Torre passam a gravar chaves novas em `done` ("ng<k>:<cap>",
+    "<revanche>#<k>") e a garagem pode ter peca Mitica (rar 4). Nenhum campo muda de forma: so garante os
+    padroes (ng, tower) e sobe a versao, para um build v2 em cache tratar o save v3 como "bad" (preservado
+    em .bad) em vez de descartar as chaves novas e rebaixar a Mitica sem avisar. Saves terminados seguem
+    no no "end" do cap. 13, prontos para o NG+ (sem rewind)."""
+    c = data.get("c")
+    if isinstance(c, dict):
+        c.setdefault("ng", 0)
+        c.setdefault("tower", None)
+    data["v"] = 3
+    return data
+
+
 MIGRATIONS[("v", 1)] = _migrate_v1
+MIGRATIONS[("v", 2)] = _migrate_v2
 MIGRATIONS[("sv", 1)] = _migrate_sv1
 MAX_DONE, MAX_DONE_RAW, MAX_RESULTS = 600, 1500, 12
 SEED_MAX, STAT_MAX = 2 ** 53, 10 ** 9
 STAT_KEYS = ("ev", "matches", "sims", "trained", "sides")
 NG_MAX, TOWER_FLOORS, MAX_ENDINGS = 3, 40, 3      # NG+ e Torre do Po: Onda D
 UNLOCK_REWARD = "rw_5"       # fim do Ato 1: liga modulos/skills (mod_on) e o nivel maximo 15
+
+# --- pos-campanha (Onda D) -----------------------------------------------------------------
+NG_SHIFT = (0, 20, 26, 30)   # +ovr dos adversarios por volta do NG+ (spec secao 12)
+NG_OVR_CAP = 90
+NG_START = "1"               # a volta comeca no cap. 1 (a peneira do Prologo e so treino)
+NG_ECON_TIER = len(G.TIER_MUL) - 1                # partidas do NG+ e da Torre: tier economico mais alto
+NG_CHAPTER_SCRAP = (0, 800, 1000, 1200)           # sucata ao fechar um capitulo na volta k
+NG_MYTHIC_CHAPTERS = ("5", "9", "13")             # fim de cada Ato na volta: 1 peca Mitica
+NG_END_COSMETIC = (None, "cometa", "relampagos", "aureola")   # fim da volta k
+NG_FREC_CAP = 95.0           # "Forca recomendada" no NG+ (o ovr satura em 90; o F do fim do Ato 3 e ~94)
+# SIMULAR do pos-campanha (tests/calib_campaign.py --post, n=100, 05/11/2026): com F 88-94 contra O 60-90 o
+# motor e ainda mais plano que no Ato 3 e o vies da campanha (sim_bias com a correcao de F alto) fica
+# pessimista (SIM - motor -7,5 em media, ate -23 contra O 90). POST_SIM_RELIEF devolve 4 pontos de Forca ao
+# vies no NG+ e na Torre (media com sinal +0,4, |dif| media 5,5 em 19 celulas; ruido do motor ~+-9 com
+# n=100).
+POST_SIM_RELIEF = 4.0
 
 
 # --- funcoes puras ------------------------------------------------------------------
@@ -167,9 +209,12 @@ def sim_bias(O, F=None):
     return b
 
 
-def sim_match(user_F, O, rng):
-    """Simula (my, opp) por Poisson com o vies do motor: quick_sim(F - sim_bias(O, F), O)."""
-    return RL.quick_sim(user_F - sim_bias(O, user_F), O, rng)
+def sim_match(user_F, O, rng, relief=None):
+    """Simula (my, opp) por Poisson com o vies do motor: quick_sim(F - sim_bias(O, F), O). relief (Onda D):
+    pontos de Forca devolvidos ao vies no pos-campanha (NG+ e Torre; None = campanha, conta identica)."""
+    if relief is None:
+        return RL.quick_sim(user_F - sim_bias(O, user_F), O, rng)
+    return RL.quick_sim(user_F - sim_bias(O, user_F) + relief, O, rng)
 
 
 def stages_of(tr):
@@ -352,6 +397,8 @@ class Campaign:
         return next(c for c in story.CHAPTERS if c["id"] == self.ch)
 
     def econ_tier(self):
+        if self.ng_active():
+            return NG_ECON_TIER
         return self.chapter()["econ_tier"]
 
     def econ_mults(self):
@@ -408,13 +455,15 @@ class Campaign:
     def scene_lines(self, scene_id):
         """Itens da cena visiveis agora (falas cujo cond e falso saem; escolhas ficam)."""
         out = []
-        for it in story.SCENES[scene_id]["lines"]:
+        for it in story.scene_data(scene_id)["lines"]:
             if isinstance(it, dict) or len(it) < 4 or self.check_cond(it[3]):
                 out.append(it)
         return out
 
     # ------------------------------------------------------------------ cenas
     def _scene_key(self, scene_id):
+        if scene_id in story.POST_SCENES:                   # revanche do NG+: uma vez por volta
+            return "%s#%d" % (scene_id, min(REPEAT_MAX, self.ng))
         sd = self.side
         if sd is not None and scene_id == story.SIDES[sd["id"]]["scenes"].get("lose"):
             return "%s#%d" % (scene_id, min(REPEAT_MAX, sd["loses"]))
@@ -431,7 +480,7 @@ class Campaign:
         """Marca a cena como jogada e aplica o fx da escolha (so na primeira ocorrencia da cena).
         choice_index None = sem escolha (nenhum fx); fora da faixa levanta ValueError.
         Devolve True se registrou agora, False se esta ocorrencia ja estava em done."""
-        if scene_id not in story.SCENES:
+        if story.scene_data(scene_id) is None:
             raise KeyError(scene_id)
         key = self._scene_key(scene_id)
         if key in self.done:
@@ -530,12 +579,15 @@ class Campaign:
                 self.node += 1                       # no condicional falso (torneio ja iniciado segue)
                 continue
             if kind == "scene":
-                if self.is_done(arg):
+                if self.is_done(arg) or self.ng_active():        # NG+: cenas da historia sao puladas
                     self.node += 1
                     continue
                 return self._scene_action(arg)
             if kind == "tournament":
                 if self.tour is None or self.tour["id"] != arg:
+                    rev = story.NG_REVANCHE.get(self.ch) if self.ng_active() else None
+                    if rev in story.POST_SCENES and self._scene_key(rev) not in self.done:
+                        return self._scene_action(rev)          # NG+: a cena curta da revanche
                     self.start_tournament(arg)
                 act = self._tournament_step()
                 if act is None:
@@ -544,8 +596,10 @@ class Campaign:
             if kind == "chapter_end":
                 rep = self.apply_chapter_rewards()
                 return {"kind": "chapter_end", "chapter": arg, "report": rep,
-                        "warnings": list(rep.get("warnings", []))}
+                        "warnings": list(rep.get("warnings", [])), "ng": self.ng if self.ng_active() else 0}
             if kind == "end":
+                if self.ng_active():
+                    return self._ng_end()
                 if arg == AUTO_END:
                     return self._auto_end()
                 if not self.is_done(arg):
@@ -555,7 +609,7 @@ class Campaign:
         raise RuntimeError("next_action: laco de nos")
 
     def _scene_action(self, sid):
-        return {"kind": "scene", "id": sid, "key": self._scene_key(sid), "scene": story.SCENES[sid]}
+        return {"kind": "scene", "id": sid, "key": self._scene_key(sid), "scene": story.scene_data(sid)}
 
     # ------------------------------------------------------------------ finais (C4)
     def ending(self):
@@ -704,10 +758,17 @@ class Campaign:
     def pity_delta(self):
         return -min(self.pity, PITY_MAX) * PITY_STEP
 
+    def ng_ovr(self, ovr):
+        """ovr de um adversario da historia na volta atual do NG+ (+NG_SHIFT, teto NG_OVR_CAP); fora do
+        NG+ devolve o proprio ovr."""
+        if not self.ng_active():
+            return ovr
+        return min(NG_OVR_CAP, ovr + NG_SHIFT[self.ng])
+
     def _opp_ovr(self, tr, stage):
         spec = story.TEAMS[self._stage_team(tr, stage)]
         d = self.pity_delta() if self._is_boss(tr, stage) else 0
-        return spec["ovr"] + d
+        return self.ng_ovr(spec["ovr"]) + d
 
     def _opp_team(self, tr, stage, seed):
         tid = self._stage_team(tr, stage)
@@ -724,7 +785,7 @@ class Campaign:
         """Proxima acao do torneio atual; None se concluiu (no avancado)."""
         tour = self.tour
         tr = self.tournament()
-        hooks = tr["hooks"]
+        hooks = {"before": {}, "after": {}} if self.ng_active() else tr["hooks"]   # NG+: sem ganchos
         stages = stages_of(tr)
         idx = len(stages) if tour["stage"] == DONE else stages.index(tour["stage"])
         if tour["attempt"] > 0 and idx == 0 and not tour["results"]:
@@ -758,14 +819,17 @@ class Campaign:
         stages = stages_of(tr)
         opp = self._opp_team(tr, stage, tour["seed"])
         frac = stages.index(stage) / max(1, len(stages) - 1)
+        f_rec = ch["F_start"] + (ch["F_end"] - ch["F_start"]) * frac
+        if self.ng_active():                               # NG+: o mesmo deslocamento aplicado ao rival
+            base = story.TEAMS[self._stage_team(tr, stage)]["ovr"]
+            f_rec = min(NG_FREC_CAP, f_rec + self.ng_ovr(base) - base)
         return {"kind": "match", "tournament": tour["id"], "stage": stage, "bg": tr.get("bg"),
                 "venue": tr.get("venue"),
                 "stage_name": STAGE_NAMES[stage], "boss": self._is_boss(tr, stage),
                 "knockout": stage[0] not in "GR", "training": False, "opp": opp,
                 "home": self.garage.match_cfg(), "away": RL.match_cfg(opp),
-                "user_F": self.garage.match_F(), "O": opp["ovr"],
-                "F_rec": ch["F_start"] + (ch["F_end"] - ch["F_start"]) * frac,
-                "pity": self.pity, "attempt": tour["attempt"]}
+                "user_F": self.garage.match_F(), "O": opp["ovr"], "F_rec": f_rec,
+                "pity": self.pity, "attempt": tour["attempt"], "ng": self.ng if self.ng_active() else 0}
 
     # ---- grupo -------------------------------------------------------------------------
     def group_league(self):
@@ -786,7 +850,7 @@ class Campaign:
             results.append([i, 0, i + 1, r[1], r[2]])
             rng = random.Random("%d|grp|%d" % (tour["seed"], i))
             for a, b in round_pairs(len(specs), i):
-                hg, ag = RL.quick_sim(specs[a]["ovr"], specs[b]["ovr"], rng)
+                hg, ag = RL.quick_sim(self.ng_ovr(specs[a]["ovr"]), self.ng_ovr(specs[b]["ovr"]), rng)
                 results.append([i, a + 1, b + 1, hg, ag])
         return {"teams": teams, "results": results}
 
@@ -877,7 +941,10 @@ class Campaign:
     def simulate_current(self):
         """Simula a partida pendente (Poisson com sim_bias(O)) e registra. Devolve o dict de record_match."""
         act = self._peek_match()
-        my, opp = sim_match(act["user_F"], act["O"], self._rng("sim"))
+        if self.ng_active() and self.side is None:            # NG+: vies do pos-campanha
+            my, opp = sim_match(act["user_F"], act["O"], self._rng("sim"), POST_SIM_RELIEF)
+        else:
+            my, opp = sim_match(act["user_F"], act["O"], self._rng("sim"))
         return self.record_match(my, opp, simulated=True)
 
     def _peek_match(self):
@@ -946,6 +1013,8 @@ class Campaign:
         {"applied", "scrap","piece","recruits":[nomes],"unlocked":[..],"xp_hero","xp_team",
         "equip","tier_done","warnings":[..]}; chamadas seguintes: o mesmo relatorio com applied=False
         (ou vazio se foi carregado de um save)."""
+        if cid is None and self.ng_active():
+            return self.apply_ng_rewards()
         ch = self.chapter() if cid is None else next(c for c in story.CHAPTERS if c["id"] == cid)
         rid = ch.get("reward")
         key = "reward:%s" % rid
@@ -999,6 +1068,90 @@ class Campaign:
         rep["tier_done"] = g.tier_done
         self._reports[rid] = rep
         return dict(rep)
+
+    # ------------------------------------------------------------------ NG+ "Turne Lendaria" (Onda D)
+    def ng_key(self, what, ng=None):
+        return "ng%d:%s" % (self.ng if ng is None else ng, what)
+
+    def ng_active(self):
+        """True durante uma volta do NG+ ainda nao concluida."""
+        return self.ng > 0 and self.ng_key("end") not in self.done
+
+    def finished(self):
+        """A campanha ja viu um final (libera o NG+)."""
+        return bool(self.endings)
+
+    def can_start_ng(self):
+        """Proxima volta liberada: campanha terminada (volta 0) ou a volta atual concluida; ate NG_MAX; sem
+        torneio em andamento."""
+        if self.ng >= NG_MAX or self.tour is not None or not self.finished():
+            return False
+        return self.ng == 0 or self.ng_key("end") in self.done
+
+    def start_ng(self):
+        """Comeca a proxima volta do NG+ (mantem garagem, flags e `done`). ValueError se nao liberada."""
+        if not self.can_start_ng():
+            raise ValueError("NG+ indisponivel")
+        self.ng += 1
+        self.ch, self.node, self.tour, self.pity = NG_START, 0, None, 0
+        return self.ng
+
+    def ng_chapter_done(self, cid):
+        return self.ng > 0 and self.ng_key(cid) in self.done
+
+    def _give_mythic(self, tag):
+        """Peca Mitica de modelo sorteado (RNG da campanha); None se o inventario esta cheio."""
+        g = self.garage
+        if len(g.inventory) >= G.MAX_INVENTORY:
+            return None
+        model = self._rng(tag).choice(parts.MYTHIC_MODELS)
+        pc = g.new_piece(model, parts.MYTHIC)
+        g.inventory.append(pc)
+        return pc
+
+    def ng_reward_spec(self, cid=None, ng=None):
+        """{"scrap", "mythic"} do fechamento do capitulo `cid` na volta `ng` (padrao: os atuais)."""
+        cid = self.ch if cid is None else cid
+        ng = self.ng if ng is None else ng
+        return {"scrap": NG_CHAPTER_SCRAP[ng], "mythic": cid in NG_MYTHIC_CHAPTERS}
+
+    def apply_ng_rewards(self):
+        """Fechamento do capitulo na volta atual: UMA vez (chave "ng<k>:<cap>"). Relatorio no formato do
+        apply_chapter_rewards (+ "ng", "mythic": nome da peca ou None)."""
+        cid = self.ch
+        key = self.ng_key(cid)
+        rep = {"applied": False, "scrap": 0, "piece": None, "recruits": [], "unlocked": [], "xp_hero": 0,
+               "xp_team": 0, "equip": None, "tier_done": self.garage.tier_done, "warnings": [], "skills": [],
+               "pts": 0, "ng": self.ng, "mythic": None}
+        if key in self.done:
+            old = self._reports.get(key)
+            return dict(old, applied=False) if old else rep
+        g = self.garage
+        spec = self.ng_reward_spec(cid)
+        self.done.append(key)
+        rep["applied"] = True
+        g.scrap = G.clamp(g.scrap + spec["scrap"], 0, G.SCRAP_MAX)
+        rep["scrap"] = spec["scrap"]
+        if spec["mythic"]:
+            pc = self._give_mythic("ngmyth")
+            if pc is None:
+                rep["warnings"].append("Inventário cheio: a peça Mítica não foi entregue.")
+            else:
+                rep["mythic"] = parts.part_name(pc)
+        g.refresh_shop(NG_ECON_TIER, self._rng("shop"))
+        self._reports[key] = rep
+        return dict(rep)
+
+    def _ng_end(self):
+        """No "end" durante a volta: conclui a volta (chave "ng<k>:end") e da o cosmetico dela."""
+        k = self.ng
+        cos = NG_END_COSMETIC[k]
+        new = False
+        if self.ng_key("end") not in self.done:
+            self.done.append(self.ng_key("end"))
+            new = self.garage.grant_cosmetic(cos) if cos else False
+        return {"kind": "end", "draft": False, "ending": None, "ng_done": k, "cosmetic": cos, "new": new,
+                "ng": k}
 
     def reward_spec(self, rid):
         """REWARDS[rid] efetivo: a primeira variante `alt` [(cond, {campos}), ...] cuja cond vale e
@@ -1169,10 +1322,14 @@ def _done_keys(raw):
             ok = k[7:] in story.REWARDS
         elif k.startswith("side:"):
             ok = k[5:] in story.SIDES
+        elif k.startswith("ng") and ":" in k:            # Onda D: "ng<k>:<capitulo>" | "ng<k>:end"
+            pre, _, what = k.partition(":")
+            ok = (pre in ("ng%d" % i for i in range(1, NG_MAX + 1))
+                  and (what == "end" or what in _CHAPTER_IDS()))
         elif "#" in k:
             pre, _, n = k.partition("#")
-            ok = (pre in story.SCENES and n.isascii() and n.isdigit() and len(n) <= 2
-                  and (n == "0" or not n.startswith("0")))
+            ok = ((pre in story.SCENES or pre in story.POST_SCENES) and n.isascii() and n.isdigit()
+                  and len(n) <= 2 and (n == "0" or not n.startswith("0")))
         if ok:
             seen.add(k)
             out.append(k)
@@ -1182,6 +1339,10 @@ def _done_keys(raw):
         keep = set(fixed[:MAX_DONE]) | set(rep[-max(0, MAX_DONE - len(fixed)):])
         out = [k for k in out if k in keep]
     return out
+
+
+def _CHAPTER_IDS():
+    return {c["id"] for c in story.CHAPTERS}
 
 
 def _tour(t, ch_id, node_entry):

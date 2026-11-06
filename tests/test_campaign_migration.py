@@ -49,6 +49,7 @@ def n_titles():
     return sum(1 for r in story.REWARDS.values() if r.get("title"))
 FIX = os.path.join(ROOT, "tests", "fixtures")
 V1_COMMIT = "076d6ab"                    # ultimo commit com campanha v1 / roteiro 1
+V2_COMMIT = "fd1686a"                    # ultimo commit com campanha v2 (Onda C publicada)
 NAMES = ("mid_cap5", "chapter_end_cap5", "epilogue_cap5", "finished")
 MEM = {}
 
@@ -127,10 +128,10 @@ def test_no_rewind_and_defaults_for_every_fixture():
         g = c.garage
         assert g.scrap == old["garage"]["scrap"] and g.stats == old["garage"]["stats"], n
         d = c.to_dict()
-        assert d["v"] == cm.VERSION == 2 and d["sv"] == story.STORY_VERSION == 2, n
+        assert d["v"] == cm.VERSION == 3 and d["sv"] == story.STORY_VERSION == 2, n
         assert c.save() is True and MEM["writes"] == 1, n          # salva sem reparo
         saved = json.loads(MEM["main"])
-        assert saved["v"] == 2 and saved["sv"] == 2 and saved["garage"]["v"] == 2, n
+        assert saved["v"] == 3 and saved["sv"] == 2 and saved["garage"]["v"] == 2, n
         c2 = cm.Campaign.load()
         assert c2 is not None and not c2.repaired and c2.to_dict() == d, n
 
@@ -304,6 +305,60 @@ def test_old_build_reads_campaign_v2_as_bad():
         script = os.path.join(tmp, "check.py")
         with open(script, "w", encoding="utf-8") as f:
             f.write(_OLD_CHECK)
+        env = dict(os.environ, SDL_VIDEODRIVER="dummy", SDL_AUDIODRIVER="dummy")
+        out = subprocess.run([sys.executable, "-I", script, os.path.join(tmp, "game"), sp],
+                             capture_output=True, text=True, timeout=120, cwd=tmp, env=env)
+        assert out.returncode == 0, out.stderr
+        res = json.loads(out.stdout.strip().splitlines()[-1])
+        assert res == {"status": "bad", "none": True, "same": True, "bad_same": True, "writes": 0}, res
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+# --- Onda D: v2 -> v3 ------------------------------------------------------------------------------
+def test_v2_finished_save_migrates_to_v3_and_starts_ng():
+    """Um save v2 TERMINADO (no "end" do cap. 13, final na galeria) vira v3 sem rewind e libera NG+/Torre."""
+    c = load("finished")
+    play_to_end(c)
+    assert c.endings and c.finished()
+    d = json.loads(c.to_json())
+    d["v"] = 2                                                  # o formato v2 tinha os mesmos campos
+    out = cm._migrate_v2(copy.deepcopy(d))
+    assert out["v"] == 3 and out["c"] == d["c"]
+    c2 = cm.Campaign.from_dict(copy.deepcopy(d))
+    assert c2 is not None and not c2.repaired, c2 and c2.warnings
+    assert (c2.ch, c2.node, c2.done, c2.endings) == (c.ch, c.node, c.done, c.endings)
+    assert c2.next_action() == c.next_action() and c2.next_action()["kind"] == "end"
+    assert c2.can_start_ng()
+    assert c2.start_ng() == 1 and c2.next_action()["id"] == story.NG_REVANCHE["1"]
+    for bad_c in (None, [], "x"):                               # `c` invalido continua "bad"
+        d2 = copy.deepcopy(d)
+        d2["c"] = bad_c
+        assert cm.Campaign.from_dict(d2) is None
+
+
+def test_old_build_v2_reads_campaign_v3_as_bad():
+    """Build v2 em cache abrindo um save v3 (com Mitica e chaves do NG+): "bad", preservado em .bad."""
+    tmp = tempfile.mkdtemp(prefix="soccerpy_oldcamp2_")
+    try:
+        try:
+            arc = subprocess.run(["git", "-C", ROOT, "archive", V2_COMMIT, "game"], capture_output=True,
+                                 timeout=60, check=True).stdout
+            subprocess.run(["tar", "-x", "-C", tmp], input=arc, check=True, timeout=60)
+        except (OSError, subprocess.SubprocessError) as ex:
+            print("  [PULADO] sem git/tar para extrair o build v2:", ex)
+            return
+        c = load("finished")
+        play_to_end(c)
+        c.start_ng()
+        g = c.garage
+        g.inventory.append(g.new_piece("Turbina", 4))
+        sp = os.path.join(tmp, "camp_v3.json")
+        with open(sp, "w", encoding="utf-8") as f:
+            f.write(c.to_json())
+        script = os.path.join(tmp, "check.py")
+        with open(script, "w", encoding="utf-8") as f:
+            f.write(_OLD_CHECK.replace("assert cm.VERSION == 1", "assert cm.VERSION == 2"))
         env = dict(os.environ, SDL_VIDEODRIVER="dummy", SDL_AUDIODRIVER="dummy")
         out = subprocess.run([sys.executable, "-I", script, os.path.join(tmp, "game"), sp],
                              capture_output=True, text=True, timeout=120, cwd=tmp, env=env)

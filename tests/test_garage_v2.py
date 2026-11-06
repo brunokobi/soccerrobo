@@ -147,10 +147,10 @@ def test_campaign_real_v1_save_loads_and_saves_garage_v2():
     for a, b in zip(gv1["robots"], g.robots):
         assert all(a[k] == b[k] for k in V1_ROBOT_KEYS) and b["slots"] == dict(a["slots"], modulo=None)
     d = c.to_dict()
-    assert d["v"] == cm.VERSION == 2 and d["garage"]["v"] == 2           # campanha v2 (C2), garage v2
+    assert d["v"] == cm.VERSION == 3 and d["garage"]["v"] == 2           # campanha v3 (Onda D), garage v2
     assert c.save() is True and MEM["writes"] == 1
     saved = json.loads(MEM["main"])
-    assert saved["v"] == 2 and saved["garage"]["v"] == 2
+    assert saved["v"] == 3 and saved["garage"]["v"] == 2
     c2 = cm.Campaign.load()
     assert c2 is not None and c2.to_dict() == c.to_dict() and not c2.repaired
     # a campanha continua jogavel depois da migracao

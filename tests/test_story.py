@@ -702,6 +702,28 @@ def test_sides_and_endings_data():
         assert all(e[0] is not None for e in st.ENDINGS[:-1])
 
 
+def test_post_scenes_ng_revanches():
+    """Onda D: cenas curtas das revanches do NG+ (story.POST_SCENES): fora de SCENES, 2-4 falas sem escolha,
+    mesmas regras de texto; uma por capitulo jogavel depois do Prologo."""
+    assert not set(st.POST_SCENES) & set(st.SCENES)
+    chs = [c["id"] for c in chapters() if c["id"] != "P"]
+    assert sorted(st.NG_REVANCHE, key=int) == chs and set(st.NG_REVANCHE.values()) == set(st.POST_SCENES)
+    for s_ in all_strings([st.POST_SCENES]):
+        s_.encode("latin-1")
+        assert s_.isprintable() and not any(c in s_ for c in BAD_CHARS), repr(s_)
+    for sid, sc in st.POST_SCENES.items():
+        assert ID_RE.match(sid) and sc["bg"] in st.BGS, sid
+        assert st.scene_data(sid) is sc and st.scene_data("c1_intro") is st.SCENES["c1_intro"]
+        cast = sc["cast"]
+        assert len(set(cast)) == len(cast) and all(c in st.CHARACTERS for c in cast), sid
+        assert 2 <= len(sc["lines"]) <= 4 and all(isinstance(ln, tuple) and len(ln) == 3 for ln in sc["lines"])
+        for who, mood, text in sc["lines"]:
+            assert who in st.CHARACTERS and (who == "narrador" or who in cast), (sid, who)
+            assert mood in st.MOODS, (sid, mood)
+            assert len(text) <= MAX_TEXT and len(wrap(text)) <= MAX_LINES, (sid, text)
+    assert st.scene_data("nao_existe") is None
+
+
 def main():
     names = [n for n in globals() if n.startswith("test_")]
     want = sys.argv[1:]

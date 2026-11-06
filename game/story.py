@@ -1198,3 +1198,17 @@ import story_side  # noqa: E402
 for _m in (story_a2, story_a3, story_side):
     _extend(_m)
 del _m
+
+# --- pos-campanha (Onda D; dados em story_post.py): cenas curtas das revanches do NG+ ------------------
+# Ficam fora de SCENES (formato igual, 2-4 falas); use scene_data() para achar qualquer cena pelo id.
+import story_post  # noqa: E402
+
+POST_SCENES = story_post.POST_SCENES
+NG_REVANCHE = story_post.NG_REVANCHE
+if set(POST_SCENES) & set(SCENES):
+    raise ValueError("story_post.POST_SCENES repete ids de SCENES: %s" % sorted(set(POST_SCENES) & set(SCENES)))
+
+
+def scene_data(sid):
+    """Cena da historia (SCENES) ou do pos-campanha (POST_SCENES); None se o id nao existe."""
+    return SCENES.get(sid) or POST_SCENES.get(sid)
