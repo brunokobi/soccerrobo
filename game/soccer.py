@@ -15,6 +15,7 @@ import crowd
 import prefs
 import robot_art
 import robots
+import sfx
 import skills
 from campaign import Campaign
 from campaign_ui import CampaignUI
@@ -43,6 +44,8 @@ BATTERY_ON = True                      # bateria ligada (False so no modo legado
 FX_MAX = 120                           # teto de particulas
 TEXT_CACHE_MAX = 600
 CROWD_CYCLE = ("ALTA", "MEDIA", "OFF")    # opcao TORCIDA (prefs "crowd"), tecla T no menu e na pausa
+EVENT_SFX = {"kickoff": "whistle", "chance": "ooh", "save": "save", "goal": "goal", "post": "post",
+             "end": "whistle_end"}
 CROWD_LABELS = {"ALTA": "ALTA", "MEDIA": "MÉDIA", "OFF": "DESLIGADA"}
 # Camera (prefs "camera", tecla C no menu e na pausa). Regra: sem escolha do jogador (AUTO) as partidas
 # ASSISTIDAS (campanha, Modo Robos, carreira) usam ESTADIO e o Amistoso com humano (modos 1/2) usa PERTO;
@@ -475,8 +478,7 @@ class Game:
         b.owner = kicker
         self.state = "kickoff"
         self.timer = 1.6
-        if self.crowd is not None:
-            self.crowd_event("kickoff")
+        self.crowd_event("kickoff")
 
     def formation_pos(self, p, attack=0.0, kickoff=False):
         t, b = p.team, self.ball
@@ -498,6 +500,10 @@ class Game:
         return [pygame.Rect(W - 330 + i * 80, H - 36, 72, 28) for i in range(4)]
 
     def handle_event(self, e):
+        if e.type == pygame.KEYDOWN and not self.text_editing() and self.audio_key(e.key):
+            return
+        if self.state in ("career", "robots", "campaign") and e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE:
+            sfx.play("back")
         if self.state == "career":
             return self.career_ui.handle_event(e)
         if self.state == "robots":
@@ -516,6 +522,10 @@ class Game:
             return
         if e.type == pygame.KEYDOWN:
             if self.state == "menu":
+                if e.key in (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4, pygame.K_5, pygame.K_6):
+                    sfx.play("click")
+                elif e.key in (pygame.K_t, pygame.K_c):
+                    sfx.play("toggle")
                 if e.key == pygame.K_1:
                     self.new_match(1, crowd.FRIENDLY_VENUE)
                 elif e.key == pygame.K_2:
@@ -538,8 +548,10 @@ class Game:
                 elif e.key == pygame.K_p:
                     self.paused = not self.paused
                 elif e.key == pygame.K_t and self.paused:
+                    sfx.play("toggle")
                     self.toggle_crowd()
                 elif e.key == pygame.K_c and self.paused:
+                    sfx.play("toggle")
                     self.toggle_camera()
                 elif e.key in (pygame.K_RETURN, pygame.K_SPACE) and self.state == "over":
                     self.finish_career_match()
@@ -559,6 +571,10 @@ class Game:
                     self.toggle_camera()
         elif e.type == pygame.MOUSEBUTTONDOWN:
             if self.state == "menu":
+                if (any(r.collidepoint(e.pos) for r in self.menu_btns) or self.robots_btn().collidepoint(e.pos)
+                        or self.campaign_btn().collidepoint(e.pos)
+                        or (self.has_save and self.continue_btn.collidepoint(e.pos))):
+                    sfx.play("click")
                 for i, r in enumerate(self.menu_btns):
                     if r.collidepoint(e.pos):
                         [lambda: self.new_match(1, crowd.FRIENDLY_VENUE), lambda: self.new_match(2, crowd.FRIENDLY_VENUE),
@@ -577,6 +593,11 @@ class Game:
                     for i, r in enumerate(self.speed_rects()):
                         if r.collidepoint(e.pos):
                             self.speed_idx = i
+
+    def text_editing(self):
+        """Campo de texto ativo (nome do time no Modo Robos/campanha): teclas de som nao valem."""
+        ui = {"robots": "robots_ui", "campaign": "campaign_ui"}.get(self.state)
+        return bool(ui and getattr(getattr(self, ui, None), "editing", False))
 
     # ----------------------------------------------------------------- update
     def update(self, dt):
@@ -652,8 +673,7 @@ class Game:
         if self.state == "play" and self.time_left <= 0:
             self.time_left = 0
             self.state = "over"
-            if self.crowd is not None:
-                self.crowd_end()
+            self.crowd_end()
 
     def update_goal(self, dt):
         self.timer -= dt
@@ -668,8 +688,7 @@ class Game:
             if self.time_left <= 0:
                 self.time_left = 0
                 self.state = "over"
-                if self.crowd is not None:
-                    self.crowd_end()
+                self.crowd_end()
             else:
                 self.kickoff(1 - self.scorer)
 
@@ -746,7 +765,8 @@ class Game:
             self.sk_on_kick(p, d, power)
         if power >= 600:
             self.fx_emit("kick", b.pos, d=d)
-        if self.crowd is not None and power > 450:      # chance: chute forte perto do gol, na direcao dele
+        self.snd("kick" if power >= 600 else "touch")
+        if power > 450:                                 # chance: chute forte perto do gol, na direcao dele
             t = p.team
             if d.x * t.dir > 0.5 and abs(b.pos.x - t.target_x) < 300:
                 self.crowd_event("chance", t.idx)
@@ -823,6 +843,7 @@ class Game:
                         q.cd = 0.0
                         o.cd = 0.7
                         self.fx_emit("tackle", b.pos)
+                        self.snd("steal")
                         if self.sk_on:
                             self.on_steal(q, o)
                         break
@@ -853,7 +874,7 @@ class Game:
                     else:
                         self.deflect(p, 0.6, spread=25)
                         p.cd = 0.35
-                    if self.crowd is not None and speed >= CATCH_SPEED:   # defesa de chute forte
+                    if speed >= CATCH_SPEED:                       # defesa de chute forte
                         self.crowd_event("save", t.idx)
                     return
                 cs = p.f.catch_speed
@@ -926,8 +947,7 @@ class Game:
             self.fx_celebrate((lo.vis.get("look") or {}).get("celebration"), self.ball.pos)
         self.state = "goal"
         self.timer = 2.4
-        if self.crowd is not None:
-            self.crowd_event("goal", team_idx)
+        self.crowd_event("goal", team_idx)
 
     # ---------------------------------------------------------- movement
     def tick_battery(self, p, dt):
@@ -1375,6 +1395,7 @@ class Game:
         ex = p.sk_extra[sid]
         if "bat_add" in ex:                            # Recarga: carga imediata
             p.bat = min(1.0, p.bat + ex["bat_add"])
+        self.snd("dash" if s["fx"] in ("dash", "wheel") else "skill")
         if s["dur"] <= 0:                              # efeito imediato (Choque): sem variante
             return
         p.sk_cur = sid
@@ -1508,6 +1529,7 @@ class Game:
         q.tackle_cd = max(q.tackle_cd, o.sk_evade)
         q.vel = q.vel * 0.2
         o.sk_ev = ("evade", t + 0.6)
+        self.snd("dribble")
         self.sk_count["drible_evade"] = self.sk_count.get("drible_evade", 0) + 1
 
     def sk_gk_launch(self, p):
@@ -1634,11 +1656,10 @@ class Game:
     def fx_wall(self, impact):
         if impact > 200 and self.ball.owner is None:
             self.fx_emit("wall", self.ball.pos)
-            if self.crowd is not None:               # trave: batida no fundo, rente a boca do gol
-                b = self.ball
-                if (abs(b.pos.x - CX) > PITCH.w / 2 - BR - 2
-                        and GOAL_HALF - BR <= abs(b.pos.y - CY) < GOAL_HALF + 18):
-                    self.crowd_event("post")
+            b = self.ball                            # trave: batida no fundo, rente a boca do gol
+            if (abs(b.pos.x - CX) > PITCH.w / 2 - BR - 2
+                    and GOAL_HALF - BR <= abs(b.pos.y - CY) < GOAL_HALF + 18):
+                self.crowd_event("post")
 
     # --------------------------------------------------------------- torcida
     def warm_crowd(self, venue=None):
@@ -1786,13 +1807,50 @@ class Game:
         return self.crowd is not None and self.speed_idx != 3
 
     def crowd_event(self, kind, team=None):
-        """Hook do motor: so escreve no estado da torcida (nunca na simulacao nem no RNG global)."""
-        if self.crowd is not None and self.speed_idx != 3:
+        """Hook do motor: so escreve no estado da torcida e toca o som do lance (nunca na simulacao nem
+        no RNG global). Em MAX nada acontece."""
+        if self.speed_idx == 3:
+            return
+        sfx.play(EVENT_SFX.get(kind))
+        if self.crowd is not None:
             self.crowd.event(kind, team)
 
     def crowd_end(self):
         a, c = self.score
         self.crowd_event("end", None if a == c else (0 if a > c else 1))
+        if not self.career_match and self.speed_idx != 3:   # amistoso: jingle (modo 1 = visao do humano)
+            if self.mode == 1:
+                sfx.result(a, c)
+            elif a != c:
+                sfx.result(1, 0)
+            else:
+                sfx.play("draw")
+
+    def snd(self, sid):
+        """Efeito sonoro de lance do motor (no-op em MAX e antes de sfx.init)."""
+        if self.speed_idx != 3:
+            sfx.play(sid)
+
+    def music_track(self):
+        """Trilha do quadro: menus/telas = "menu"; partida (inclusive pausa e fim) = "match"."""
+        return "menu" if self.state in ("menu", "career", "robots", "campaign") else "match"
+
+    def audio_key(self, key):
+        """M (em qualquer tela), S/N (menu e pausa): som. True se a tecla foi usada."""
+        if key == pygame.K_m:
+            sfx.toggle_mute()
+            return True
+        if self.state == "menu" or (self.paused and self.state in ("kickoff", "play", "goal")):
+            if key == pygame.K_s:
+                sfx.cycle("sfx_vol")
+                return True
+            if key == pygame.K_n:
+                sfx.cycle("music_vol")
+                return True
+        return False
+
+    def audio_label(self):
+        return "  |  ".join(sfx.labels())
 
     def draw_fx(self, scr):
         now = time.perf_counter()
@@ -2066,6 +2124,8 @@ class Game:
             self.banner("PAUSADO", "P para continuar" + ("" if self.career_match else "  |  ESC para o menu"))
             if self.career_match or self.crowd_venue is not None:
                 self.draw_crowd_option()
+            else:
+                self.draw_audio_option()
         elif self.state == "kickoff":
             self.banner("PREPARAR!" if not self.career_match else "BOLA ROLANDO!", None)
         elif self.state == "goal":
@@ -2094,12 +2154,20 @@ class Game:
 
     def draw_crowd_option(self):
         """Pausa da partida assistida: opcao TORCIDA (tecla T), logo abaixo da faixa do PAUSADO."""
-        for lab, y in ((self.crowd_label(), CY + 100), (self.camera_label(), CY + 146)):
+        for lab, y in ((self.crowd_label(), CY + 100), (self.camera_label(), CY + 146), (self.audio_label(), CY + 192)):
             img = self.text_img(lab, 28, (255, 230, 120))
             r = img.get_rect(center=(W // 2, y))
             pygame.draw.rect(self.screen, (2, 8, 20), r.inflate(28, 14), border_radius=10)
             pygame.draw.rect(self.screen, (0, 200, 240), r.inflate(28, 14), 2, border_radius=10)
             self.screen.blit(img, r)
+
+    def draw_audio_option(self):
+        """Pausa sem torcida: so a linha do som (M / S / N)."""
+        img = self.text_img(self.audio_label(), 28, (255, 230, 120))
+        r = img.get_rect(center=(W // 2, CY + 100))
+        pygame.draw.rect(self.screen, (2, 8, 20), r.inflate(28, 14), border_radius=10)
+        pygame.draw.rect(self.screen, (0, 200, 240), r.inflate(28, 14), 2, border_radius=10)
+        self.screen.blit(img, r)
 
     def draw_scorers(self):
         for team in (0, 1):
@@ -2411,16 +2479,19 @@ class Game:
         col = (120, 160, 185)
         wa, wc = self.text_img(a, 22, col).get_width(), self.text_img(c, 22, col).get_width()
         x0 = cx - (wa + wc) // 2
-        self.text(a, 22, col, midleft=(x0, 672), shadow=False)
-        self.text(c, 22, col, midleft=(x0 + wa, 672), shadow=False)
+        self.text(a, 22, col, midleft=(x0, 664), shadow=False)
+        self.text(c, 22, col, midleft=(x0 + wa, 664), shadow=False)
+        self.text(self.audio_label(), 22, col, center=(cx, 688), shadow=False)
 
 
 async def main():
+    sfx.pre_init()
     pygame.init()
     screen = pygame.display.set_mode((W, H))
     pygame.display.set_caption("Copa Aspirador")
     clock = pygame.time.Clock()
     game = Game(screen)
+    sfx.init()                                  # depois do Game: o new_match do construtor nao apita
     while True:
         dt = min(clock.tick(60) / 1000.0, 1 / 20)
         for e in pygame.event.get():
@@ -2429,6 +2500,7 @@ async def main():
                 return
             game.handle_event(e)
         game.update(dt)
+        sfx.tick(game.music_track())
         game.draw()
         pygame.display.flip()
         await asyncio.sleep(0)

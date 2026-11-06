@@ -16,6 +16,7 @@ import parts as P
 import robot_art
 import robot_league as RL
 import robots
+import sfx
 import skills as SK
 from career_ui import (BG, BTN, DIM, GOLD, GREEN, LINE, PANEL, RED, TEXT, W,
                        CareerUI, ovr_color)
@@ -291,12 +292,17 @@ class RobotsUI(CareerUI):
             self.msg = "Falha ao salvar."
         return False
 
-    def act(self, result):
-        """Aplica um (ok, msg) do garage: mostra a mensagem, invalida o cache e salva."""
+    def act(self, result, snd=None):
+        """Aplica um (ok, msg) do garage: mostra a mensagem, invalida o cache e salva.
+        snd: efeito sonoro do sucesso ("buy", "upgrade"); recusa toca "error"."""
         ok, self.msg = result
         self.cache = None
         if ok:
             self.persist()
+            if snd:
+                sfx.play(snd)
+        else:
+            sfx.play("error")
         return ok
 
     def info(self):
@@ -366,6 +372,7 @@ class RobotsUI(CareerUI):
             for r, fn, enabled in reversed(self.buttons):
                 if enabled and r.collidepoint(e.pos):
                     self.buttons = []             # descarta cliques do mesmo frame até o próximo draw
+                    sfx.play("click")
                     fn()
                     break
         elif e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE:
@@ -511,7 +518,7 @@ class RobotsUI(CareerUI):
     def do_buy_part(self):
         if self.shop_sel is None:
             return
-        if self.act(self.garage.buy_part(self.shop_sel)):
+        if self.act(self.garage.buy_part(self.shop_sel), "buy"):
             self.shop_sel = None
 
     def do_sell_part(self):
@@ -528,7 +535,7 @@ class RobotsUI(CareerUI):
 
     def do_buy_robot(self):
         if self.model_sel is not None:
-            self.act(self.garage.buy_robot(self.model_sel, rng=self.rng))
+            self.act(self.garage.buy_robot(self.model_sel, rng=self.rng), "buy")
 
     @staticmethod
     def chassis_unlock_tier(ch):
@@ -624,7 +631,7 @@ class RobotsUI(CareerUI):
 
     def do_buy_item(self):
         if self.item_sel is not None:
-            self.act(self.garage.buy_item(self.item_sel))
+            self.act(self.garage.buy_item(self.item_sel), "buy")
 
     def draw_shop_items(self):
         gg = self.garage
@@ -676,7 +683,7 @@ class RobotsUI(CareerUI):
 
     def do_buy_cosmetic(self):
         if self.cos_sel is not None:
-            self.act(self.garage.buy_cosmetic(self.cos_sel))
+            self.act(self.garage.buy_cosmetic(self.cos_sel), "buy")
 
     def cos_card(self, r, cid, sel, status, status_col):
         """Cartão de cosmético: ícone pronto (sprite cache), nome e uma linha de situação."""
@@ -907,6 +914,9 @@ class RobotsUI(CareerUI):
         order = [r for r in gg.robots if r["id"] in gg.lineup] + [r for r in gg.robots if r["id"] not in gg.lineup]
         starters = set(gg.lineup)
         rew = G.match_rewards(gg, my, opp, pids, tier, self.rng)
+        sfx.result(my, opp)
+        if any(rew["levels"].values()):
+            sfx.play("reward")
         used = gg.consume_backpack()                  # Mochila (B12): gasta ao assistir ou simular
         rows = []
         for r in order:
@@ -1791,7 +1801,7 @@ class RobotsUI(CareerUI):
         pc = self.target_piece(rb, self.garage.pieces_by_id()) if rb else None
         self.confirm_sell = None
         if pc is not None:
-            self.act(self.garage.upgrade(pc["id"]))
+            self.act(self.garage.upgrade(pc["id"]), "upgrade")
 
     def do_sell(self):
         gg = self.garage

@@ -39,6 +39,7 @@ import crowd
 import garage as G
 import parts as P
 import portraits
+import sfx
 import skills as SK
 import story
 from career_ui import BG, DIM, GOLD, GREEN, LINE, PANEL, RED, TEXT, W
@@ -683,6 +684,7 @@ class CampaignUI(RobotsUI):
         d = self.dlg
         if d is None or d["mode"] != "say" or d["final"]:
             return
+        sfx.play("blip")
         if self.dlg_typing():
             d["t"] = d["total"] / TYPE_CPS + 0.001
             return
@@ -1053,6 +1055,13 @@ class CampaignUI(RobotsUI):
         cp = self.campaign
         gg = self.garage
         rew = out["rewards"]
+        my_g, opp_g = out.get("my"), out.get("opp")
+        if out.get("pen") and my_g == opp_g:          # decidido nos penaltis
+            my_g, opp_g = out["pen"]
+        sfx.result(my_g, opp_g)
+        if (any((rew.get("levels") or {}).values()) or out.get("side_reward") or out.get("mythic")
+                or out.get("mark")):
+            sfx.play("reward")
         by_id = {r["id"]: r["name"] for r in gg.robots}
         starters = set(gg.lineup)
         order = [r for r in gg.robots if r["id"] in starters] + [r for r in gg.robots if r["id"] not in starters]

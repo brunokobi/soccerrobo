@@ -117,7 +117,7 @@ def key(k):
 # --- prefs e regra AUTO ------------------------------------------------------------------------------
 def test_camera_rule_auto_and_explicit():
     set_prefs("ALTA")                                        # AUTO
-    assert prefs.get("camera") is None and prefs.load() == {"crowd": "ALTA"}
+    assert prefs.get("camera") is None and prefs.load() == {"crowd": "ALTA", "sfx_vol": "2", "music_vol": "2", "mute": "0"}
     assert start("arena").b.camera == "ESTADIO" and g.camera_on()          # assistida -> ESTADIO
     g.new_match(1, crowd.FRIENDLY_VENUE)                     # amistoso com humano -> PERTO
     assert g.crowd.b.camera == "PERTO" and not g.camera_on()

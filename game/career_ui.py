@@ -3,6 +3,7 @@ import pygame
 
 import career as C
 import crowd
+import sfx
 
 W, H = 1100, 700
 BG = (8, 14, 24)
@@ -117,6 +118,8 @@ class CareerUI:
     def make_round_info(self, events):
         c = self.career
         res = next(r for r in c.last_results if c.user in (r["h"], r["a"]))
+        mine, theirs = (res["hg"], res["ag"]) if res["h"] == c.user else (res["ag"], res["hg"])
+        sfx.result(mine, theirs)
         self.round_info = {"round": c.round, "res": res, "events": events, "fin": dict(c.last_fin)}
         self.screen_id = "round"
         self.save()
@@ -143,6 +146,7 @@ class CareerUI:
             for r, fn, enabled in reversed(self.buttons):
                 if enabled and r.collidepoint(e.pos):
                     self.buttons = []             # descarta cliques do mesmo frame até o próximo draw
+                    sfx.play("click")
                     fn()
                     break
         elif e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE and self.screen_id in ("pick", "hub"):
@@ -446,6 +450,7 @@ class CareerUI:
         c = self.career
         ok, self.msg = c.buy(c.market.index(self.msel))
         self.msel = None
+        sfx.play("buy" if ok else "error")
         if ok:
             self.save()
 

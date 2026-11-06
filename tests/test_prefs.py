@@ -17,6 +17,15 @@ import prefs  # noqa: E402
 import store  # noqa: E402
 
 PASS, FAIL = [], []
+SND = {"sfx_vol": "2", "music_vol": "2", "mute": "0"}         # padroes do som (Fase 6)
+
+
+def D(**kw):
+    """Preferencias completas esperadas: padroes + kw."""
+    d = {"crowd": "ALTA"}
+    d.update(SND)
+    d.update(kw)
+    return d
 FORBIDDEN = []
 ORIG = {"get": prefs._store_get, "set": prefs._store_set, "path": prefs.PREFS_PATH,
         "read": store.read, "write": store.write}
@@ -54,7 +63,7 @@ def fresh(raw=None):
 
 def test_defaults_when_absent():
     fresh()
-    assert prefs.load() == {"crowd": "ALTA"}
+    assert prefs.load() == D()
     assert prefs.get("crowd") == "ALTA"
     assert "writes" not in MEM                  # ler nao grava
 
@@ -63,10 +72,10 @@ def test_round_trip():
     fresh()
     for v in prefs.CROWD_LEVELS:
         assert prefs.set("crowd", v) is True
-        assert json.loads(MEM["raw"]) == {"v": 1, "crowd": v}
+        assert json.loads(MEM["raw"]) == dict(D(crowd=v), v=1)
         prefs.reset_cache()
         assert prefs.get("crowd") == v
-        assert prefs.load() == {"crowd": v}
+        assert prefs.load() == D(crowd=v)
 
 
 def test_set_invalid_value_or_field_is_ignored():
@@ -83,15 +92,15 @@ def test_invalid_stored_value_falls_back():
     for d in ({"crowd": "ULTRA"}, {"crowd": 1}, {"crowd": None}, {"crowd": ["ALTA"]},
               {"crowd": "alta"}, {}, {"v": 99}):
         fresh(json.dumps(d))
-        assert prefs.load() == {"crowd": "ALTA"}, d
+        assert prefs.load() == D(), d
 
 
 def test_unknown_fields_dropped_known_kept():
     fresh(json.dumps({"v": 1, "crowd": "OFF", "lixo": 1, "__class__": "x"}))
-    assert prefs.load() == {"crowd": "OFF"}
+    assert prefs.load() == D(crowd="OFF")
     assert prefs.get("lixo") is None
     assert prefs.save() is True
-    assert json.loads(MEM["raw"]) == {"v": 1, "crowd": "OFF"}
+    assert json.loads(MEM["raw"]) == dict(D(crowd="OFF"), v=1)
 
 
 def test_corrupt_inputs_never_raise():
@@ -101,7 +110,7 @@ def test_corrupt_inputs_never_raise():
     for raw in bad:
         fresh()
         MEM["raw"] = raw
-        assert prefs.load() == {"crowd": "ALTA"}, repr(raw)[:40]
+        assert prefs.load() == D(), repr(raw)[:40]
         assert prefs.get("crowd") == "ALTA"
 
 
@@ -111,7 +120,7 @@ def test_store_get_exception_falls_back():
     def explode():
         raise OSError("disco sumiu")
     prefs._store_get = explode
-    assert prefs.load() == {"crowd": "ALTA"}
+    assert prefs.load() == D()
 
 
 def test_write_failure_returns_false_never_raises():
@@ -152,10 +161,10 @@ def test_real_file_store_in_tempdir():
         assert prefs.get("crowd") == "MEDIA"
         with open(prefs.PREFS_PATH, "wb") as f:               # bytes invalidos em UTF-8
             f.write(b'{"crowd": "OFF"\xff\xfe}')
-        assert prefs.load() == {"crowd": "ALTA"}
+        assert prefs.load() == D()
         with open(prefs.PREFS_PATH, "w") as f:                # JSON corrompido
             f.write('{"crowd": "OFF"')
-        assert prefs.load() == {"crowd": "ALTA"}
+        assert prefs.load() == D()
     finally:
         prefs.PREFS_PATH = ORIG["path"]
         store.read = store.write = _boom
@@ -163,6 +172,29 @@ def test_real_file_store_in_tempdir():
     assert os.path.exists(home_file) == existed
     if existed:
         assert os.path.getmtime(home_file) == mtime
+
+
+def test_sound_fields():
+    """Fase 6: volumes "0".."3" (padrao "2" medio) e mudo "0"/"1" (padrao "0"), sanitize como os demais."""
+    assert prefs.FIELDS["sfx_vol"] == (("0", "1", "2", "3"), "2")
+    assert prefs.FIELDS["music_vol"] == (("0", "1", "2", "3"), "2")
+    assert prefs.FIELDS["mute"] == (("0", "1"), "0")
+    fresh()
+    assert prefs.get("sfx_vol") == "2" and prefs.get("music_vol") == "2" and prefs.get("mute") == "0"
+    for name in ("sfx_vol", "music_vol"):
+        for v in ("0", "1", "2", "3"):
+            assert prefs.set(name, v) is True
+            prefs.reset_cache()
+            assert prefs.get(name) == v
+        for bad in ("4", "-1", 2, None, "alto", ""):
+            assert prefs.set(name, bad) is False
+    assert prefs.set("mute", "1") is True and prefs.set("mute", "2") is False
+    prefs.reset_cache()
+    assert prefs.get("mute") == "1"
+    fresh(json.dumps({"v": 1, "crowd": "OFF", "sfx_vol": "9", "music_vol": 3, "mute": "sim"}))
+    assert prefs.load() == D(crowd="OFF")
+    fresh(json.dumps({"v": 1, "sfx_vol": "0", "music_vol": "3", "mute": "1"}))
+    assert prefs.load() == D(sfx_vol="0", music_vol="3", mute="1")
 
 
 def test_default_path_and_key():
