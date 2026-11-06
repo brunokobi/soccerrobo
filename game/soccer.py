@@ -1771,7 +1771,7 @@ class Game:
 
     def draw_fx(self, scr):
         now = time.perf_counter()
-        dt = 0.0 if self.paused else min(now - self.fx_last, 0.05)
+        dt = 0.0 if self.paused else max(0.0, min(now - self.fx_last, 0.05))   # relogio voltando nao "rejuvenesce" particulas
         self.fx_last = now
         if not self.fx:
             self.fx_amb = 0
