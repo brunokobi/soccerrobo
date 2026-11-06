@@ -11,6 +11,7 @@ Tabela original do planejamento (HEAD fd5e17b); a linha da Fase 4 está atualiza
 | 3 | Campanha "A Garagem do Vô": Prólogo + 5 capítulos + epílogo, 53 cenas / 626 falas, 27 times, 12 personagens, 6 escolhas, torneios (grupo de 4 + mata-mata), chefes com pity, treino, save próprio `soccerpy_campaign_v1` (v1, sv1) | pronta e jogável |
 | 4 (nova) | **Campanha Expandida**: torcida + desenhos detalhados, itens/skills, campanha 3 atos | Ondas A (visual, torcida, câmera de estádio), B (peças, sets, módulo, 16 skills, itens, cosméticos) e C (campanha Prólogo + 13 capítulos em 3 Atos, 3 finais, 14 missões, calibrada no motor) e D (NG+ "Turnê Lendária", Torre do Pó, peças Míticas) prontas e publicadas |
 | 5 | Editor de firmware (regras da IA em blocos) | planejada (era a antiga Fase 4) |
+| 6 | **Som**: efeitos sonoros e música sintetizados por código (stdlib), mudo e volumes nas prefs | pronta ([specs/som.md](specs/som.md)) |
 
 Números do código hoje:
 - ~17,9 mil linhas (game ~9,5 mil, tests ~8,4 mil).
@@ -38,8 +39,10 @@ Quatro frentes entregues em ondas jogáveis:
 - Dificuldade mantida nas metas calibradas em todos os 14 capítulos, nos dois ramos de patrocínio.
 
 ## 4. Fora de escopo
-- Áudio ou música (decisão adiada; ver "Decisões para o dev"). Só "som visual".
-- Imagens ou fontes externas. Tudo continua desenhado por código.
+- ~~Áudio ou música~~: saiu do "fora de escopo" e virou a **Fase 6 - Som** (pronta): efeitos e
+  música sintetizados por código, sem arquivos de áudio; o "som visual" continua. Ver
+  [specs/som.md](specs/som.md).
+- Imagens, fontes ou arquivos de áudio externos. Tudo continua desenhado (e sintetizado) por código.
 - Editor de firmware (Fase 5), multiplayer online, tradução.
 - Mudar o motor legado, os goldens, a carreira de clubes (`career.py`) ou os modos 1/2.
 - Mudar a chave dos saves (`soccerpy_robots_v1` e `soccerpy_campaign_v1` continuam; só o campo `v` interno sobe).

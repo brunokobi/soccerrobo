@@ -70,6 +70,22 @@ nas laterais e embaixo; no Amistoso com humano a câmera fica PERTO (campo em te
 cheia). Tecla **C** no menu gira AUTO / ESTÁDIO / PERTO e na pausa troca a câmera da
 partida (fica gravado). **F11** abre a tela cheia.
 
+## Som
+Efeitos sonoros e música **sintetizados por código** (nenhum arquivo de áudio: `game/sfx.py` e
+`game/music.py` geram tudo com `math`/`array` no início do jogo, aos poucos, em ~0,4 s no desktop).
+Ligados por padrão em volume médio.
+
+- **Efeitos:** chute e toque na bola, roubo e drible, trave (CLANG), apito de início e de fim, gol
+  (explosão da torcida + buzina), "uuuh" da chance, defesa, palmas, skill (BUZZ), arrancada (ZOOM),
+  cliques de menu, avanço de diálogo, vitória/derrota/empate, recompensa, compra e upgrade na loja.
+- **Música** chiptune em loop: uma trilha para menus/campanha e outra, mais animada e mais baixa,
+  para a partida; jingles de vitória e de derrota na tela de resultado.
+- **Teclas:** **M** liga/desliga o mudo geral (em qualquer tela); **S** gira o volume dos efeitos e
+  **N** o da música (DESL. / BAIXO / MÉDIO / ALTO), no menu ou na pausa. Tudo fica gravado nas
+  preferências. No modo MAX a partida fica sem efeitos.
+- No navegador o áudio só começa depois do primeiro clique (a página já pede esse clique); se o
+  áudio falhar, o jogo segue sem som. Detalhes em [docs/specs/som.md](docs/specs/som.md).
+
 **Robôs e cenas:** cada chassi tem desenho próprio (o Orbital com satélites, o
 Titã octogonal), as peças equipadas aparecem no robô (turbina, canhão, para-choque
 blindado, radar...), as escovas giram e a bateria baixa solta faíscas e fumaça.
@@ -193,6 +209,7 @@ No menu (teclas 1-6): `1 - AMISTOSO`, `2 - AMISTOSO`, `3 - NOVA CARREIRA`, `4 - 
 | Passar | Shift / X / Z | Shift esq. | Shift dir. |
 | Pausar | P | | |
 | Voltar ao menu | Esc | | |
+| Mudo / efeitos / música | M / S e N na pausa | | |
 
 O jogador controlado troca sozinho (o mais perto da bola).
 
@@ -204,6 +221,7 @@ O jogador controlado troca sozinho (o mais perto da bola).
 | 3 | **Campanha** "A Garagem do Vô": história, diálogos, torneios, chefes e treino (escola -> mundial) | pronta e jogável |
 | 4 | **Campanha Expandida**: torcida realista, câmera de estádio e desenhos mais detalhados (Onda A), peças/sets/relíquias/itens/cosméticos e 16 skills dos robôs (Onda B), Atos 2 e 3, missões secundárias e 3 finais (Onda C), NG+ "Turnê Lendária", Torre do Pó e peças Míticas (Onda D) | Ondas A, B, C e D (pós-campanha) prontas e publicadas ([docs/roadmap.md](docs/roadmap.md)) |
 | 5 | Editor de firmware (regras da IA em blocos) | planejada |
+| 6 | **Som**: efeitos e música sintetizados por código, mudo (M) e volumes (S/N) | pronta |
 
 O planejamento detalhado fica em [`docs/`](docs/INDEX.md).
 
@@ -248,6 +266,7 @@ export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy
 .venv/bin/python tests/test_campaign_ui.py             # telas da campanha (menu, mapa por Ato, missões, diálogo, torneio, fim e galeria)
 .venv/bin/python tests/test_portraits.py               # retratos e cenários desenhados por código
 .venv/bin/python tests/test_prefs.py                   # preferências do jogador (store, valor inválido -> padrão)
+.venv/bin/python tests/test_sfx.py                     # som: buffers sintetizados, formato do mixer, throttle, mudo, no-op sem mixer
 .venv/bin/python tests/test_crowd.py                   # torcida: locais, reações, extras, LOD, zero Surface por quadro
 .venv/bin/python tests/test_camera.py                  # câmera de estádio: prefs/tecla C, layout largo, LOD, zero Surface
 .venv/bin/python tests/test_robot_art.py               # robôs: chassis, peças visíveis, cache, FX, local da torcida por modo
@@ -285,7 +304,9 @@ Utilitários do harness (`tests/sim_harness.py`): `golden`/`golden-new` com
 - `game/robot_league.py`: liga de 6 times (calendário, tabela, simulação estatística, premiação)
 - `game/robot_art.py`: arte dos robôs em campo (sprites pré-renderizados e cache); `Game` delega a ele
 - `game/store.py`: armazenamento de texto (`localStorage` no navegador, arquivo em `~` no desktop)
-- `game/prefs.py`: preferências do jogador (`soccerpy_prefs_v1`: torcida ALTA/MEDIA/OFF, tecla T; câmera ESTADIO/PERTO, tecla C, ausente = AUTO), com sanitize e padrão
+- `game/prefs.py`: preferências do jogador (`soccerpy_prefs_v1`: torcida ALTA/MEDIA/OFF, tecla T; câmera ESTADIO/PERTO, tecla C, ausente = AUTO; som `sfx_vol`/`music_vol` 0-3 e `mute`, teclas S/N/M), com sanitize e padrão
+- `game/sfx.py`: efeitos sonoros sintetizados, conversão para o formato do mixer, throttle, volumes/mudo e a música no canal reservado
+- `game/music.py`: trilhas chiptune (menu, partida, jingles de vitória/derrota) escritas como texto e sintetizadas compasso a compasso
 - `game/crowd.py`: torcida (locais, espectadores pré-renderizados, reações, confete/LED/telão, LOD) e a geometria das câmeras PERTO/ESTÁDIO
 - `game/robots_ui.py`: telas do Modo Robôs (hub, garagem, banco, loja, habilidades, mochila, visual, liga)
 - `game/career.py` / `game/career_ui.py`: carreira de clubes (liga, mercado, finanças, save) e suas telas
@@ -301,4 +322,4 @@ Utilitários do harness (`tests/sim_harness.py`): `golden`/`golden-new` com
 - `web/copaaspirador.tmpl` é o template da página (fundo escuro nas laterais, para o jogo parecer ocupar a tela toda; F11 abre tela cheia no navegador). Passe sempre as flags `--template/--width/--height/--title` acima ao gerar o build.
 - Testando em `localhost`, use o servidor do `pygbag .` (porta 8000); um
   `http.server` comum não serve o runtime/wheel do pygame.
-- Na primeira vez o navegador pede um clique na página para liberar o jogo.
+- Na primeira vez o navegador pede um clique na página para liberar o jogo (e o áudio).
