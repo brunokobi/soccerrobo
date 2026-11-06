@@ -38,6 +38,15 @@ pelas habilidades dos robôs.
 
 **Missões secundárias** - 14 missões avulsas com prêmio próprio; as 4 "Fitas do Vô" levam ao final secreto.
 
+**Pós-campanha (Onda D):**
+
+| | |
+|---|---|
+| ![Fim da campanha com Turnê Lendária e Torre do Pó](docs/img/pos-campanha-fim.png) | ![Torre do Pó](docs/img/torre-do-po.png) |
+| **Fim da campanha** - galeria de finais e as portas do pós-jogo: Turnê Lendária (NG+) e Torre do Pó | **Torre do Pó** - 40 andares, modificador de arena a cada 5 e prêmios nos marcos 10/20/30/40 |
+| ![Andar com goleiro gigante](docs/img/torre-goleiro-gigante.png) | ![Peça Mítica na garagem](docs/img/peca-mitica.png) |
+| **Modificador de arena** - goleiro gigante (também bateria curta e bola pesada) | **Peça Mítica** - raridade acima da Lendária, só como prêmio do NG+ e da Torre |
+
 Robôs em campo com cosméticos (câmera PERTO):
 
 ![Partida com robôs personalizados](docs/img/partida-perto.png)
@@ -193,7 +202,7 @@ O jogador controlado troca sozinho (o mais perto da bola).
 | 1 | Robôs com chassis e 8 atributos, bateria, arena tecnológica (neon) | pronta |
 | 2 | Garagem e laboratório: peças, upgrades, XP, evolução, loja e liga (Modo Robôs) | pronta e jogável |
 | 3 | **Campanha** "A Garagem do Vô": história, diálogos, torneios, chefes e treino (escola -> mundial) | pronta e jogável |
-| 4 | **Campanha Expandida**: torcida realista, câmera de estádio e desenhos mais detalhados (Onda A), peças/sets/relíquias/itens/cosméticos e 16 skills dos robôs (Onda B), Atos 2 e 3, missões secundárias e 3 finais (Onda C), NG+ "Turnê Lendária", Torre do Pó e peças Míticas (Onda D) | Ondas A, B e C prontas e publicadas; D (pós-campanha) pronta, ainda não publicada ([docs/roadmap.md](docs/roadmap.md)) |
+| 4 | **Campanha Expandida**: torcida realista, câmera de estádio e desenhos mais detalhados (Onda A), peças/sets/relíquias/itens/cosméticos e 16 skills dos robôs (Onda B), Atos 2 e 3, missões secundárias e 3 finais (Onda C), NG+ "Turnê Lendária", Torre do Pó e peças Míticas (Onda D) | Ondas A, B, C e D (pós-campanha) prontas e publicadas ([docs/roadmap.md](docs/roadmap.md)) |
 | 5 | Editor de firmware (regras da IA em blocos) | planejada |
 
 O planejamento detalhado fica em [`docs/`](docs/INDEX.md).
