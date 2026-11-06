@@ -204,7 +204,16 @@ def test_runtime_build_throttle_and_mute():
         print("   mixer %s: tudo gerado em %.0f ms (%d quadros de 5 ms)"
               % (pygame.mixer.get_init(), (time.perf_counter() - t) * 1000, frames + 1))
         for sid in list(sfx.SFX) + list(music.TRACKS):
+            if sid in ("menu", "match") and all(sfx.S.stream_ok.values()):
+                assert not sfx.ready(sid)                  # trilha vem dos arquivos: nao sintetiza
+                continue
+            if sid in sfx.S.files and sid not in sfx.FILE_LAYER:
+                assert not sfx.ready(sid)                  # efeito gravado substitui o sintetizado
+                continue
             assert sfx.ready(sid), sid
+        for sid in sfx.FILE_SFX:
+            assert sid in sfx.S.files, sid                 # efeitos gravados carregados
+        assert sfx.S.amb is not None
         snd = sfx.S.sounds["kick"]
         assert snd.get_length() > 0.05
         assert sfx.play("kick") is True
@@ -218,22 +227,120 @@ def test_runtime_build_throttle_and_mute():
         assert sfx.toggle_mute() is False and not sfx.muted()
         assert sfx.play("goal") is True
         sfx.music_tick("menu")
-        assert sfx.S.cur == "menu"
+        assert sfx.S.stream == "menu" and sfx.S.cur is None
         sfx.music_tick("match")
-        assert sfx.S.cur == "match"
+        assert sfx.S.stream == "match"                     # torcida em arquivo
         assert sfx.result(3, 1) is True and sfx.S.jingle and sfx.S.cur == "win"
         sfx.music_tick("match")                            # jingle em curso: nao troca
-        assert sfx.S.cur == "win"
+        assert sfx.S.cur == "win" and sfx.S.stream == "match"   # torcida segue por baixo
         clk.t += 5.0
         assert sfx.result(1, 1) is True                    # empate = efeito "draw"
         prefs.set("music_vol", "0")
         sfx._apply_volumes()
         sfx.S.chan.stop()
         sfx.music_tick("menu")
-        assert sfx.S.cur is None                           # musica desligada
+        assert sfx.S.cur is None and sfx.S.stream is None  # musica desligada
         prefs.set("music_vol", "2")
         sfx.music_tick("menu")
-        assert sfx.S.cur == "menu"
+        assert sfx.S.stream == "menu"
+    finally:
+        sfx.clock = time.perf_counter
+        sfx.shutdown()
+        reset_prefs()
+
+
+def test_audio_files_present_and_light():
+    names = [f for fs in sfx.STREAMS.values() for f in fs] + [v[0] for v in sfx.FILE_SFX.values()]
+    for f in names + [sfx.AMB_FILE]:
+        p = os.path.join(sfx.AUDIO_DIR, f)
+        assert os.path.isfile(p), f
+        assert f.endswith(".ogg"), f                       # pygbag/navegador: OGG
+        assert os.path.getsize(p) < 3_000_000, f
+    total = sum(os.path.getsize(os.path.join(sfx.AUDIO_DIR, f)) for f in os.listdir(sfx.AUDIO_DIR))
+    assert total < 8_000_000, total                        # download do jogo continua razoavel
+
+
+def test_streams_cycle_and_fall_back():
+    """Trilhas em arquivo: menu1/menu2 alternando; troca de trilha por tela; sem arquivos, sintetizado."""
+    reset_prefs()
+    try:
+        if not _init_or_skip():
+            return
+        assert all(sfx.S.stream_ok.values()), sfx.S.stream_ok
+        real_fadeout = pygame.mixer.music.fadeout
+
+        def no_fadeout(*a):                                # trava o navegador (SDL_mixer espera o fade)
+            raise AssertionError("pygame.mixer.music.fadeout nao pode ser usado")
+        pygame.mixer.music.fadeout = no_fadeout
+        sfx._mixer.music.fadeout = no_fadeout
+        sfx.music_tick("menu")
+        assert sfx.S.stream == "menu" and sfx.S.pl_idx["menu"] == 1
+        sfx.music_tick("menu")                             # mesma faixa tocando: nada muda
+        assert sfx.S.pl_idx["menu"] == 1
+        pygame.mixer.music.stop()                          # simula o fim da faixa 1
+        sfx.music_tick("menu")
+        assert sfx.S.stream == "menu" and sfx.S.pl_idx["menu"] == 2   # emendou a faixa 2
+        sfx.music_tick("sub")
+        assert sfx.S.stream == "sub"
+        sfx.music_tick("cups")
+        assert sfx.S.stream == "cups"
+        sfx.music_tick("menu")
+        assert sfx.S.pl_idx["menu"] == 3                   # volta ao menu na faixa seguinte (3 % 2 = 1)
+        sfx.music_tick(None)
+        assert sfx.S.stream is None
+        sfx.music_tick("menu")
+        sfx.toggle_mute()
+        assert sfx.S.stream is None                        # mudo corta a trilha
+        sfx.toggle_mute()
+        for tr in ("match", "menu", "sub", None, "cups", "menu"):   # todas as trocas, sem fadeout
+            sfx.music_tick(tr)
+            assert sfx.S.stream == tr
+        pygame.mixer.music.fadeout = real_fadeout
+        sfx.shutdown()
+        old = sfx.AUDIO_DIR
+        sfx.AUDIO_DIR = os.path.join(old, "nao_existe")
+        try:
+            assert sfx.init() and not any(sfx.S.stream_ok.values())
+            while not sfx.pump(50.0):
+                pass
+            assert sfx.ready("menu") and sfx.ready("match") and not sfx.S.files and sfx.S.amb is None
+            sfx.music_tick("cups")
+            assert sfx.S.cur == "menu" and sfx.S.stream is None   # sintetizado no lugar
+            sfx.music_tick("match")
+            assert sfx.S.cur == "match"
+            assert sfx.play("goal") is True                # sem arquivo: grito sintetizado
+            assert sfx.play("robot_off") is False          # so existe em arquivo
+        finally:
+            sfx.AUDIO_DIR = old
+    finally:
+        sfx.shutdown()
+        reset_prefs()
+
+
+def test_file_effects_and_motor():
+    reset_prefs()
+    clk = FakeClock()
+    sfx.clock = clk
+    try:
+        if not _init_or_skip():
+            return
+        while not sfx.pump(50.0):
+            pass
+        assert sfx.play("goal") is True and "goal" not in sfx.S.sounds   # gravado substitui o sintetizado
+        assert sfx.play("post") is True and "post" in sfx.S.sounds       # trave: CLANG + torcida
+        assert sfx.play("robot_off") is True
+        sfx.amb_tick(True)
+        assert sfx.S.amb_on and sfx.S.amb_chan.get_busy()
+        sfx.amb_tick(True)                                 # segue tocando, nao reinicia
+        assert sfx.S.amb_on
+        sfx.amb_tick(False)
+        assert not sfx.S.amb_on
+        sfx.amb_tick(True)
+        prefs.set("sfx_vol", "0")
+        sfx._apply_volumes()
+        assert not sfx.S.amb_on                            # efeitos desligados: motor para
+        sfx.amb_tick(True)
+        assert not sfx.S.amb_on
     finally:
         sfx.clock = time.perf_counter
         sfx.shutdown()
@@ -305,9 +412,17 @@ def test_game_hooks_and_keys():
         assert g.music_track() == "match"
         g.state = "menu"
         assert g.music_track() == "menu"
-        for st in ("career", "robots", "campaign"):
+        for st, tr in (("career", "cups"), ("robots", "sub"), ("campaign", "cups")):
             g.state = st
-            assert g.music_track() == "menu"
+            assert g.music_track() == tr
+        for st in ("kickoff", "play", "goal"):
+            g.state = st
+            assert g.ambience_on()
+            g.paused = True
+            assert not g.ambience_on()                     # pausa: motor para
+            g.paused = False
+        g.state = "over"
+        assert not g.ambience_on()
         g.state = "menu"
         assert g.audio_key(pygame.K_m) is True and prefs.get("mute") == "1"
         assert g.audio_key(pygame.K_m) is True and prefs.get("mute") == "0"

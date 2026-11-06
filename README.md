@@ -71,8 +71,17 @@ cheia). Tecla **C** no menu gira AUTO / ESTÁDIO / PERTO e na pausa troca a câm
 partida (fica gravado). **F11** abre a tela cheia.
 
 ## Som
-Efeitos sonoros e música **sintetizados por código** (nenhum arquivo de áudio: `game/sfx.py` e
-`game/music.py` geram tudo com `math`/`array` no início do jogo, aos poucos, em ~0,4 s no desktop).
+Efeitos sintetizados por código (`game/sfx.py` e `game/music.py`, gerados com `math`/`array` no
+início do jogo, aos poucos) somados a sons gravados em `game/audio/` (OGG, ~7 MB no total):
+
+- **Músicas (stream, uma faixa depois da outra):** menu principal = `menu1.ogg` e `menu2.ogg`
+  alternando, desde o clique da tela de carregamento; tela de robôs = `submenus.ogg`; carreira e
+  campanha = `copas.ogg`; partida = torcida ao fundo (`torcida.ogg`).
+- **Efeitos gravados:** grito de gol (`gol.ogg`), apito final (`apito_final.ogg`), torcida na trave
+  (`trave_torcida.ogg`, junto do CLANG sintetizado) e os robôs desligando no fim (`robo_desligar.ogg`).
+- **Motor dos robôs:** `robo_motor.ogg` em loop, baixo, enquanto a bola rola (para na pausa e no MAX).
+- Se algum arquivo faltar ou não abrir, entra o som sintetizado equivalente.
+
 Ligados por padrão em volume médio.
 
 - **Efeitos:** chute e toque na bola, roubo e drible, trave (CLANG), apito de início e de fim, gol
@@ -266,8 +275,9 @@ export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy
 .venv/bin/python tests/test_campaign_ui.py             # telas da campanha (menu, mapa por Ato, missões, diálogo, torneio, fim e galeria)
 .venv/bin/python tests/test_portraits.py               # retratos e cenários desenhados por código
 .venv/bin/python tests/test_prefs.py                   # preferências do jogador (store, valor inválido -> padrão)
-.venv/bin/python tests/test_sfx.py                     # som: buffers sintetizados, formato do mixer, throttle, mudo, no-op sem mixer
+.venv/bin/python tests/test_sfx.py                     # som: buffers sintetizados, arquivos OGG (trilhas, efeitos, motor), throttle, mudo
 .venv/bin/python tests/test_crowd.py                   # torcida: locais, reações, extras, LOD, zero Surface por quadro
+.venv/bin/python tests/test_fireworks.py                # fogos do gol/vitória, tetos, determinismo, nomes dos times em caixa alta
 .venv/bin/python tests/test_camera.py                  # câmera de estádio: prefs/tecla C, layout largo, LOD, zero Surface
 .venv/bin/python tests/test_robot_art.py               # robôs: chassis, peças visíveis, cache, FX, local da torcida por modo
 .venv/bin/python tests/test_arena.py                   # modificadores de arena da Torre do Pó (desligados fora dela, efeito, zero Surface)
@@ -305,7 +315,7 @@ Utilitários do harness (`tests/sim_harness.py`): `golden`/`golden-new` com
 - `game/robot_art.py`: arte dos robôs em campo (sprites pré-renderizados e cache); `Game` delega a ele
 - `game/store.py`: armazenamento de texto (`localStorage` no navegador, arquivo em `~` no desktop)
 - `game/prefs.py`: preferências do jogador (`soccerpy_prefs_v1`: torcida ALTA/MEDIA/OFF, tecla T; câmera ESTADIO/PERTO, tecla C, ausente = AUTO; som `sfx_vol`/`music_vol` 0-3 e `mute`, teclas S/N/M), com sanitize e padrão
-- `game/sfx.py`: efeitos sonoros sintetizados, conversão para o formato do mixer, throttle, volumes/mudo e a música no canal reservado
+- `game/sfx.py`: efeitos sonoros sintetizados, conversão para o formato do mixer, throttle, volumes/mudo, a música no canal reservado e a playlist do menu (`game/audio/*.ogg`, via `pygame.mixer.music`)
 - `game/music.py`: trilhas chiptune (menu, partida, jingles de vitória/derrota) escritas como texto e sintetizadas compasso a compasso
 - `game/crowd.py`: torcida (locais, espectadores pré-renderizados, reações, confete/LED/telão, LOD) e a geometria das câmeras PERTO/ESTÁDIO
 - `game/robots_ui.py`: telas do Modo Robôs (hub, garagem, banco, loja, habilidades, mochila, visual, liga)

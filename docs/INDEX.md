@@ -41,4 +41,4 @@ Planejamento e especificações do jogo. O código e os comandos do dia a dia es
     [specs/plano-de-implementacao.md](specs/plano-de-implementacao.md)).
 - Fase 5 (Editor de firmware): planejada
 - Fase 6 (Som): **pronta** — efeitos e música sintetizados por código (`game/sfx.py`, `game/music.py`),
-  mudo (M) e volumes (S/N) nas prefs, testado no desktop e no navegador (pygbag); ainda não publicada
+  sons gravados em `game/audio/` (músicas de menu/robôs/copas, torcida, gol, apito, trave, motor e desligar dos robôs), mudo (M) e volumes (S/N) nas prefs, testado no desktop e no navegador (pygbag); ainda não publicada

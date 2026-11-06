@@ -217,7 +217,7 @@ class CareerUI:
                 hover = r.collidepoint(pygame.mouse.get_pos())
                 self.panel(r, (20, 60, 90) if hover else PANEL)
                 pygame.draw.rect(self.g.screen, tuple(club["color"]), (r.x + 8, r.y + 8, 12, 38), border_radius=4)
-                self.text(club["name"], 28, TEXT, midleft=(r.x + 34, r.centery - 8))
+                self.text(club["name"].upper(), 28, TEXT, midleft=(r.x + 34, r.centery - 8))
                 self.text("Força %d   Caixa %s" % (c.rating(club), C.fmt_money(club["money"])),
                           21, DIM, midleft=(r.x + 34, r.centery + 14))
                 self.hit(r, lambda i=idx: self.choose(i))
@@ -230,7 +230,7 @@ class CareerUI:
         scr = self.g.screen
         pygame.draw.rect(scr, PANEL, (0, 0, W, 74))
         pygame.draw.rect(scr, tuple(club["color"]), (0, 0, 12, 74))
-        self.text(club["name"], 46, TEXT, midleft=(28, 26), shadow=True)
+        self.text(club["name"].upper(), 46, TEXT, midleft=(28, 26), shadow=True)
         self.text("%s   |   Temporada %d   |   Rodada %d/%d" % (
             C.DIV_NAMES[club["div"]], c.season, min(c.round + 1, C.ROUNDS), C.ROUNDS),
             24, DIM, midleft=(30, 55))
@@ -250,9 +250,9 @@ class CareerUI:
         ch, ca = c.clubs[h], c.clubs[a]
         self.panel((20, 135, 540, 400))
         self.text("PRÓXIMA PARTIDA  -  Rodada %d" % (c.round + 1), 30, GOLD, topleft=(42, 150))
-        self.text(ch["name"], 46, vis(ch["color"]), center=(290, 225), shadow=True)
+        self.text(ch["name"].upper(), 46, vis(ch["color"]), center=(290, 225), shadow=True)
         self.text("x", 34, DIM, center=(290, 272))
-        self.text(ca["name"], 46, vis(ca["color"]), center=(290, 319), shadow=True)
+        self.text(ca["name"].upper(), 46, vis(ca["color"]), center=(290, 319), shadow=True)
         self.text("Você joga %s" % ("em CASA (bilheteria!)" if h == c.user else "FORA de casa"), 26, TEXT,
                   center=(290, 370))
         self.text("Força:  %d  x  %d" % (c.rating(ch), c.rating(ca)), 26, DIM, center=(290, 400))
@@ -309,7 +309,7 @@ class CareerUI:
                 pygame.draw.rect(self.g.screen, GOLD, r, 3, border_radius=8)
             self.text(str(k + 1), 28, TEXT, center=(50, r.centery))
             pygame.draw.rect(self.g.screen, tuple(club["color"]), (80, r.y + 8, 12, 26), border_radius=3)
-            self.text(club["name"], 28, TEXT, midleft=(105, r.centery))
+            self.text(club["name"].upper(), 28, TEXT, midleft=(105, r.centery))
             vals = [s["j"], s["v"], s["e"], s["d"], "%+d" % (s["gp"] - s["gc"]), s["pts"]]
             for (lab, x), v in zip(cols, vals):
                 self.text(str(v), 28 if lab != "PTS" else 32, GOLD if lab == "PTS" else TEXT,
@@ -422,7 +422,7 @@ class CareerUI:
             price = c.buy_price(e)
             same = [q["ovr"] for q in starters if q["pos"] == p["pos"]]
             delta = p["ovr"] - min(same) if same else 0
-            self.text("Sem clube" if e["club"] < 0 else c.clubs[e["club"]]["name"], 22,
+            self.text("Sem clube" if e["club"] < 0 else c.clubs[e["club"]]["name"].upper(), 22,
                       DIM if e["club"] < 0 else TEXT, midleft=(40, y + 13))
             self.text(p["name"], 22, TEXT, midleft=(290, y + 13))
             self.text(C.POS_PT[p["pos"]], 22, DIM, midright=(590, y + 13))
@@ -462,9 +462,9 @@ class CareerUI:
         self.text("RODADA %d  -  RESULTADOS" % info["round"], 46, TEXT, center=(W // 2, 40), shadow=True)
         ch, ca = c.clubs[res["h"]], c.clubs[res["a"]]
         self.panel((20, 75, 1060, 170))
-        self.text(ch["name"], 40, vis(ch["color"]), midright=(430, 130), shadow=True)
+        self.text(ch["name"].upper(), 40, vis(ch["color"]), midright=(430, 130), shadow=True)
         self.text("%d x %d" % (res["hg"], res["ag"]), 68, TEXT, center=(W // 2, 130), shadow=True)
-        self.text(ca["name"], 40, vis(ca["color"]), midleft=(670, 130), shadow=True)
+        self.text(ca["name"].upper(), 40, vis(ca["color"]), midleft=(670, 130), shadow=True)
         for team, x, anchor in ((0, 430, "midright"), (1, 670, "midleft")):
             evs = [e for e in info["events"] if e["team"] == team][:4]
             for k, e in enumerate(evs):
@@ -482,17 +482,17 @@ class CareerUI:
             me = c.user in (r["h"], r["a"])
             if me:
                 pygame.draw.rect(self.g.screen, (20, 60, 90), (20, y - 4, 560, 36), border_radius=6)
-            self.text(c.clubs[r["h"]]["name"], 26, TEXT, midright=(270, y + 14))
+            self.text(c.clubs[r["h"]]["name"].upper(), 26, TEXT, midright=(270, y + 14))
             self.text("%d x %d" % (r["hg"], r["ag"]), 28, GOLD, center=(310, y + 14))
-            self.text(c.clubs[r["a"]]["name"], 26, TEXT, midleft=(355, y + 14))
+            self.text(c.clubs[r["a"]]["name"].upper(), 26, TEXT, midleft=(355, y + 14))
         y0 = 262
         for d2 in range(3):
             if d2 == d:
                 continue
             self.text(C.DIV_NAMES[d2].upper(), 22, GOLD, topleft=(610, y0))
             for k, r in enumerate([r for r in c.last_results if r["div"] == d2]):
-                self.text("%s %d x %d %s" % (self.fit(c.clubs[r["h"]]["name"], 20, 150), r["hg"], r["ag"],
-                                              self.fit(c.clubs[r["a"]]["name"], 20, 150)),
+                self.text("%s %d x %d %s" % (self.fit(c.clubs[r["h"]]["name"].upper(), 20, 150), r["hg"], r["ag"],
+                                              self.fit(c.clubs[r["a"]]["name"].upper(), 20, 150)),
                           20, DIM, topleft=(610, y0 + 26 + k * 22))
             y0 += 130
         fin = info["fin"]

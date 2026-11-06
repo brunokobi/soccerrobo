@@ -306,12 +306,15 @@ def test_goal_poses_by_fidelity_frames():
         t0 = clk.t
         cr.event("goal", team)
         poses = {}
-        for f in (0, 30, 90, 200):
+        for f in (0, 30, 90, 200, 300, 480):
             h, a = _at_frame(cr, clk, t0, f)
             poses[f] = {"home": h, "away": a}
         assert poses[30][mine] == crowd.UP and poses[90][mine] == crowd.UP, poses
+        assert poses[200][mine] == crowd.UP, poses                          # ainda pulando (festa)
+        assert poses[300][mine] in (crowd.FLAG_A, crowd.FLAG_B), poses      # depois agita as bandeiras
         assert poses[0][other] == crowd.SAD and poses[90][other] == crowd.SAD, poses
-        assert poses[200][mine] == crowd.SIT and poses[200][other] == crowd.SIT, poses
+        assert poses[200][other] == crowd.SIT, poses
+        assert poses[480][mine] == crowd.SIT and poses[480][other] == crowd.SIT, poses
         # pulo: a torcida que marcou sobe (deslocamento) em algum quadro da comemoracao
         jumped = False
         for f in range(10, 120, 3):

@@ -12,6 +12,7 @@ import pygame
 from pygame import Vector2 as V
 
 import crowd
+import fireworks
 import prefs
 import robot_art
 import robots
@@ -44,6 +45,10 @@ BATTERY_ON = True                      # bateria ligada (False so no modo legado
 FX_MAX = 120                           # teto de particulas
 TEXT_CACHE_MAX = 600
 CROWD_CYCLE = ("ALTA", "MEDIA", "OFF")    # opcao TORCIDA (prefs "crowd"), tecla T no menu e na pausa
+MUSIC_BY_STATE = {"menu": "menu", "robots": "sub", "career": "cups", "campaign": "cups"}
+GOAL_PAUSE_S = 2.4                     # comemoracao do gol (tempo de jogo) antes do novo pontape
+GOAL_FLASH_S = 0.35
+GOAL_ROCKETS, WIN_ROCKETS = 7, 10
 EVENT_SFX = {"kickoff": "whistle", "chance": "ooh", "save": "save", "goal": "goal", "post": "post",
              "end": "whistle_end"}
 CROWD_LABELS = {"ALTA": "ALTA", "MEDIA": "MÉDIA", "OFF": "DESLIGADA"}
@@ -290,6 +295,7 @@ class Game:
         self.fx_rng = random.Random(20260)        # RNG proprio: nunca toca o random global
         self.fx_pairs = {}
         self.fx_last = time.perf_counter()
+        self.fw = fireworks.Fireworks()           # fogos do gol/vitoria (RNG proprio, so desenho)
         self.trail = deque(maxlen=10)
         self.trail_players = []                   # B13: jogadores com rastro cosmetico (warm_sprites)
         self.sprites = robot_art.SpriteCache()   # sprites dos robos (LRU por bytes; ver robot_art)
@@ -325,6 +331,8 @@ class Game:
         self.glows = self.build_glows()
         self.hud_panel = self.build_hud_panel()
         self.banner_veil = self.build_banner_veil()
+        self.goal_flash = pygame.Surface((W, H)).convert()   # clarao branco do gol (alpha por quadro)
+        self.goal_flash.fill((255, 255, 255))
         self.menu_bg = self.build_menu_bg()
         self.state = "menu"
         self.mode = 1
@@ -448,6 +456,7 @@ class Game:
         self.arena = None
         self.crowd = None
         self.fx.clear()
+        self.fw.clear()
         sink, self.match_sink = self.match_sink, None
         if sink:
             return_state, fn = sink
@@ -946,8 +955,9 @@ class Game:
         if lo is not None and lo.team.idx == team_idx and lo.vis:
             self.fx_celebrate((lo.vis.get("look") or {}).get("celebration"), self.ball.pos)
         self.state = "goal"
-        self.timer = 2.4
+        self.timer = GOAL_PAUSE_S
         self.crowd_event("goal", team_idx)
+        self.fireworks_show(GOAL_ROCKETS, self.teams[team_idx].color)
 
     # ---------------------------------------------------------- movement
     def tick_battery(self, p, dt):
@@ -1565,6 +1575,7 @@ class Game:
     # ------------------------------------------------------------------ fx
     def reset_fx(self):
         self.fx.clear()
+        self.fw.clear()
         self.fx_amb = 0
         self.fx_pairs.clear()
         self.trail.clear()
@@ -1815,9 +1826,21 @@ class Game:
         if self.crowd is not None:
             self.crowd.event(kind, team)
 
+    def fireworks_show(self, n, color):
+        """Fogos sobre o campo (gol/vitoria). So desenho, relogio real; nada em MAX."""
+        if self.speed_idx == 3:
+            return
+        cam = self.crowd is not None and self.crowd.b.camera == "ESTADIO"
+        self.fw.show(time.perf_counter(), n, (led_color(color), (255, 210, 60), (255, 255, 255)),
+                     crowd.CAM_PITCH if cam else PITCH)
+
     def crowd_end(self):
         a, c = self.score
         self.crowd_event("end", None if a == c else (0 if a > c else 1))
+        if a != c:
+            self.fireworks_show(WIN_ROCKETS, self.teams[0 if a > c else 1].color)
+        if self.speed_idx != 3:
+            sfx.play("robot_off")                       # apito final: os robos desligam
         if not self.career_match and self.speed_idx != 3:   # amistoso: jingle (modo 1 = visao do humano)
             if self.mode == 1:
                 sfx.result(a, c)
@@ -1832,8 +1855,14 @@ class Game:
             sfx.play(sid)
 
     def music_track(self):
-        """Trilha do quadro: menus/telas = "menu"; partida (inclusive pausa e fim) = "match"."""
-        return "menu" if self.state in ("menu", "career", "robots", "campaign") else "match"
+        """Trilha do quadro: menu principal = "menu"; robos = "sub"; carreira/campanha (copas e finais)
+        = "cups"; partida (inclusive pausa e fim) = "match" (torcida)."""
+        return MUSIC_BY_STATE.get(self.state, "match")
+
+    def ambience_on(self):
+        """Motor dos robos: so com a bola rolando (sem pausa e fora do MAX)."""
+        return (self.state in ("kickoff", "play", "goal") and not self.paused
+                and self.speed_idx != 3)
 
     def audio_key(self, key):
         """M (em qualquer tela), S/N (menu e pausa): som. True se a tecla foi usada."""
@@ -2118,6 +2147,11 @@ class Game:
             scr.blit(self.world_dst, crowd.CAM_POS)
         if cr is not None:
             cr.draw_over(scr, self.paused)
+        if self.fw.active:
+            if self.speed_idx == 3:
+                self.fw.clear()
+            else:
+                self.fw.draw(scr, time.perf_counter(), self.paused)
         self.draw_hud()
 
         if self.paused:
@@ -2131,15 +2165,25 @@ class Game:
         elif self.state == "goal":
             col = self.teams[self.scorer].color
             ev = self.events[-1]
-            who = ev["name"] + (" (contra)" if ev["own"] else "") if ev["name"] else self.teams[self.scorer].name
-            self.banner("GOOOOL!", who + "  " + str(ev["min"]) + "'", col)
+            who = ev["name"] + (" (contra)" if ev["own"] else "") if ev["name"] else self.teams[self.scorer].name.upper()
+            el = GOAL_PAUSE_S - self.timer
+            if el < GOAL_FLASH_S and self.speed_idx != 3:      # clarao branco que some
+                self.goal_flash.set_alpha(int(170 * (1 - el / GOAL_FLASH_S)))
+                scr.blit(self.goal_flash, (0, 0))
+            if el < 0.3:                                        # GOOOOL! entra grande e encolhe
+                size = 84 + int((0.3 - el) / 0.3 * 5) * 12
+            else:                                               # depois pulsa
+                size = 90 if int(el / 0.15) % 2 else 84
+            tcol = col if int(el / 0.12) % 2 == 0 else (255, 210, 60)
+            off = (int(round(5 * math.sin(el * 70))), int(round(3 * math.cos(el * 55)))) if el < 0.8 else (0, 0)
+            self.banner("GOOOOL!", who + "  " + str(ev["min"]) + "'", tcol, size=size, off=off)
         elif self.state == "over":
             a, c = self.score
             if a == c:
                 title, col = "EMPATE!", (255, 255, 255)
             else:
                 w = self.teams[0 if a > c else 1]
-                title, col = "VITÓRIA: " + w.name, w.color
+                title, col = "VITÓRIA: " + w.name.upper(), w.color
             if self.career_match:
                 self.banner(title, "ENTER ou clique = continuar", col)
                 self.draw_scorers()
@@ -2406,8 +2450,8 @@ class Game:
         scr = self.screen
         scr.blit(self.hud_panel, (0, 0))
         t0, t1 = self.teams
-        self.text(t0.name, 44, led_color(t0.color), center=(W // 2 - 270, 36))
-        self.text(t1.name, 44, led_color(t1.color), center=(W // 2 + 270, 36))
+        self.text(t0.name.upper(), 44, led_color(t0.color), center=(W // 2 - 270, 36))
+        self.text(t1.name.upper(), 44, led_color(t1.color), center=(W // 2 + 270, 36))
         self.text("%d  x  %d" % tuple(self.score), 64, (255, 255, 255), center=(W // 2, 30))
         if self.career_match:
             self.text("%d'" % self.minute(), 30, (255, 230, 120), center=(W // 2, 62))
@@ -2432,9 +2476,9 @@ class Game:
             self.text(lab, 24, (255, 255, 255), center=r.center, shadow=False)
         self.text("P: pausa", 24, (190, 225, 235), midleft=(24, H - 22), shadow=False)
 
-    def banner(self, title, sub, color=(255, 255, 255)):
+    def banner(self, title, sub, color=(255, 255, 255), size=84, off=(0, 0)):
         self.screen.blit(self.banner_veil, (0, CY - 75))
-        self.text(title, 84, led_color(color), center=(W // 2, CY - (15 if sub else 0)))
+        self.text(title, size, led_color(color), center=(W // 2 + off[0], CY - (15 if sub else 0) + off[1]))
         if sub:
             self.text(sub, 32, (230, 240, 245), center=(W // 2, CY + 42))
 
@@ -2500,7 +2544,7 @@ async def main():
                 return
             game.handle_event(e)
         game.update(dt)
-        sfx.tick(game.music_track())
+        sfx.tick(game.music_track(), game.ambience_on())
         game.draw()
         pygame.display.flip()
         await asyncio.sleep(0)

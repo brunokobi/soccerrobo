@@ -1,15 +1,22 @@
 # -*- coding: utf-8 -*-
-"""Audio do jogo: efeitos sonoros e musica 100% sintetizados por codigo (stdlib: math/array).
+"""Audio do jogo: efeitos sintetizados por codigo (stdlib: math/array) + sons gravados em game/audio/.
 
-Sem numpy, sem arquivos de audio: cada som nasce de uma receita aqui (efeitos) ou em music.py
-(trilhas), em SR = 22050 Hz mono 16-bit, e e convertido UMA vez para o formato real do mixer
-(pygame.mixer.get_init(): taxa, canais, int16 ou float32) antes de virar pygame.mixer.Sound(buffer=...).
+Trilhas em arquivo (STREAMS, tocadas em stream por pygame.mixer.music, uma faixa depois da outra):
+"menu" = menu1/menu2 alternando (comeca logo apos o clique da tela de carregamento), "sub" = tela de
+robos, "cups" = carreira e campanha, "match" = torcida durante a partida. Efeitos em arquivo
+(FILE_SFX): grito de gol, apito final, torcida na trave (soma ao CLANG sintetizado) e o robo
+desligando; o motor dos robos (AMB_FILE) roda em loop num canal proprio enquanto a bola rola.
+Faltou arquivo ou nao abriu -> volta o som sintetizado equivalente (music.py / receitas daqui).
+Cada som sintetizado nasce em
+SR = 22050 Hz mono 16-bit e e convertido UMA vez para o formato real do mixer (pygame.mixer.get_init():
+taxa, canais, int16 ou float32) antes de virar pygame.mixer.Sound(buffer=...).
 
 Uso pelo jogo (soccer.py / *_ui.py):
     sfx.pre_init()            antes de pygame.init() (pede 22050 Hz estereo ao mixer)
     sfx.init()                depois de criar o Game: abre o mixer (falhou -> tudo vira no-op)
-    sfx.tick(track)           1x por quadro: gera os buffers aos poucos (orcamento de ms) e troca a
-                              trilha ("menu", "match" ou None) no canal reservado
+    sfx.tick(track, amb)      1x por quadro: gera/carrega os buffers aos poucos (orcamento de ms),
+                              troca a trilha ("menu", "sub", "cups", "match" ou None) e liga/desliga
+                              o motor dos robos (amb)
     sfx.play(id)              efeito (com throttle por id e limite de vozes); id desconhecido = nada
     sfx.result(meus, deles)   jingle de vitoria/derrota (empate = efeito curto)
     sfx.toggle_mute() / cycle("sfx_vol" | "music_vol")   prefs gravadas (tecla M / S / N)
@@ -19,6 +26,7 @@ proprio por som); nenhum pygame.Surface; antes de init() (testes, goldens, harne
 retornam na primeira linha. Qualquer erro do mixer desliga o audio em silencio.
 """
 import math
+import os
 import random
 import sys
 import time
@@ -31,10 +39,26 @@ TWO_PI = 2.0 * math.pi
 LEVEL_GAIN = {"0": 0.0, "1": 0.35, "2": 0.65, "3": 1.0}
 LEVEL_NAMES = {"0": "DESL.", "1": "BAIXO", "2": "MÉDIO", "3": "ALTO"}
 MATCH_MUSIC_GAIN = 0.55                      # musica da partida fica por baixo dos efeitos
-N_CHANNELS = 16                              # canal 0 = musica (reservado); 15 vozes de efeito
+N_CHANNELS = 16                              # canal 0 = musica, 1 = motor dos robos; 14 vozes de efeito
 MUSIC_FADE_MS = 400
 PUMP_MS = 5.0                                # orcamento de geracao por quadro (ms de relogio)
 WEB = sys.platform == "emscripten"
+AUDIO_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "audio")
+STREAMS = {                                  # trilha -> faixas (em ciclo; uma depois da outra)
+    "menu": ("menu1.ogg", "menu2.ogg"),
+    "sub": ("submenus.ogg",),
+    "cups": ("copas.ogg",),
+    "match": ("torcida.ogg",),
+}
+SYNTH_TRACK = {"menu": "menu", "sub": "menu", "cups": "menu", "match": "match"}   # sem arquivo
+FILE_SFX = {                                 # id -> (arquivo, throttle s, vozes max, volume)
+    "goal": ("gol.ogg", 1.5, 1, 1.0),
+    "whistle_end": ("apito_final.ogg", 1.5, 1, 0.8),
+    "post": ("trave_torcida.ogg", 0.4, 1, 0.85),
+    "robot_off": ("robo_desligar.ogg", 3.0, 1, 0.7),
+}
+FILE_LAYER = ("post",)                       # o arquivo soma ao sintetizado; os outros substituem
+AMB_FILE, AMB_VOL, AMB_FADE_MS = "robo_motor.ogg", 0.35, 300
 
 
 # ============================================================ sintese (pura, sem pygame)
@@ -376,6 +400,13 @@ class _State:
         self.err = None
         self.t0 = 0.0                # inicio da geracao (relogio)
         self.done_ms = 0.0           # ms somados de geracao quando tudo ficou pronto
+        self.stream_ok = {}          # trilha -> faixas em arquivo disponiveis
+        self.stream = None           # trilha tocando em stream (pygame.mixer.music)
+        self.pl_idx = {}             # trilha -> proxima faixa
+        self.files = {}              # id -> Sound carregado de arquivo (FILE_SFX)
+        self.amb = None              # Sound do motor dos robos
+        self.amb_chan = None         # canal reservado do motor
+        self.amb_on = False
 
 
 S = _State()
@@ -469,10 +500,12 @@ def init():
         else:
             raise RuntimeError("formato de audio nao suportado: %r" % (size,))
         mx.set_num_channels(N_CHANNELS)
-        mx.set_reserved(1)
+        mx.set_reserved(2)
         S.chan = mx.Channel(0)
+        S.amb_chan = mx.Channel(1)
         S.fmt = (int(rate), max(1, int(chans)), kind)
         _mixer = mx
+        S.stream_ok = {t: _stream_ok(t) for t in STREAMS}
         S.gen = _builder()
         S.t0 = time.perf_counter()
         S.ok = True
@@ -486,7 +519,83 @@ def init():
 
 def shutdown():
     """Volta ao estado inicial (testes)."""
+    _stream_stop()
+    try:
+        if S.amb_chan is not None:
+            S.amb_chan.stop()
+    except Exception:  # noqa: BLE001
+        pass
     S.__init__()
+
+
+def _path(name):
+    return os.path.join(AUDIO_DIR, name)
+
+
+def _stream_ok(track):
+    """True se as faixas da trilha existem e a primeira abre no mixer (formato suportado)."""
+    try:
+        names = STREAMS[track]
+        if not all(os.path.isfile(_path(f)) for f in names):
+            return False
+        _mixer.music.load(_path(names[0]))
+        return True
+    except Exception as e:  # noqa: BLE001
+        _log("[som] trilha %s em arquivo indisponivel: %r" % (track, e))
+        return False
+
+
+def _stream_next(track, gain):
+    """Toca a proxima faixa da trilha (uma vez; music_tick emenda a seguinte quando acabar)."""
+    names = STREAMS[track]
+    i = S.pl_idx.get(track, 0)
+    name = names[i % len(names)]
+    S.pl_idx[track] = i + 1
+    try:
+        _mixer.music.load(_path(name))
+        _mixer.music.set_volume(gain)
+        _mixer.music.play(fade_ms=MUSIC_FADE_MS)
+        S.stream = track
+        return True
+    except Exception as e:  # noqa: BLE001  (arquivo nao abriu: cai para a trilha sintetizada)
+        _log("[som] trilha %s falhou (%s): %r" % (track, name, e))
+        S.stream_ok[track] = False
+        S.stream = None
+        return False
+
+
+def _stream_stop():
+    """Para a trilha em stream NA HORA. Nunca usa music.fadeout: o SDL_mixer espera o fade terminar
+    (laco com SDL_Delay) ao carregar/tocar a proxima faixa, e no navegador (sem thread de audio) essa
+    espera nunca acaba e trava o jogo. A faixa seguinte entra com fade-in (MUSIC_FADE_MS)."""
+    if not S.stream or _mixer is None:
+        S.stream = None
+        return
+    try:
+        _mixer.music.stop()
+    except Exception:  # noqa: BLE001
+        pass
+    S.stream = None
+
+
+def _load_file(sid):
+    """Carrega o efeito em arquivo `sid` (FILE_SFX). Falhou -> fica o sintetizado."""
+    name, _thr, _voices, vol = FILE_SFX[sid]
+    try:
+        if os.path.isfile(_path(name)):
+            snd = _mixer.Sound(_path(name))
+            snd.set_volume(vol * sfx_gain())
+            S.files[sid] = snd
+    except Exception as e:  # noqa: BLE001
+        _log("[som] efeito %s em arquivo falhou: %r" % (name, e))
+
+
+def _load_amb():
+    try:
+        if os.path.isfile(_path(AMB_FILE)):
+            S.amb = _mixer.Sound(_path(AMB_FILE))
+    except Exception as e:  # noqa: BLE001
+        _log("[som] motor dos robos falhou: %r" % (e,))
 
 
 def _build_sfx(sid):
@@ -505,7 +614,16 @@ def _builder():
         if sid not in S.sounds:
             _build_sfx(sid)
             yield
-    order = ["menu"] + [k for k in SFX if k not in UI_FIRST] + ["match", "win", "lose"]
+    for sid in FILE_SFX:
+        _load_file(sid)
+        yield
+    _load_amb()
+    yield
+    need = {SYNTH_TRACK[t] for t in STREAMS if not S.stream_ok.get(t)}   # so as trilhas sem arquivo
+    replaced = {k for k in S.files if k not in FILE_LAYER}              # gravado substitui
+    order = ([t for t in ("menu",) if t in need]
+             + [k for k in SFX if k not in UI_FIRST and k not in replaced]
+             + [t for t in ("match",) if t in need] + ["win", "lose"])
     for sid in order:
         if sid in S.sounds:
             continue
@@ -562,22 +680,29 @@ def play(sid):
     if not S.ok:
         return False
     spec = SFX.get(sid)
-    if spec is None:
+    fsnd = S.files.get(sid)
+    if spec is None and fsnd is None:
         return False
     try:
         now = clock()
         last = S.last.get(sid)
-        if last is not None and now - last < spec[2]:
+        thr = FILE_SFX[sid][1] if fsnd is not None else spec[2]
+        if last is not None and now - last < thr:
             return False
         if sfx_gain() <= 0.0:
             return False
-        snd = S.sounds.get(sid)
-        if snd is None:
-            snd = _build_sfx(sid)               # ainda nao gerado: gera agora (poucos ms)
-        if snd.get_num_channels() >= spec[3]:
-            return False
-        S.last[sid] = now
-        return snd.play() is not None
+        ok = False
+        if fsnd is not None and fsnd.get_num_channels() < FILE_SFX[sid][2]:
+            ok = fsnd.play() is not None
+        if spec is not None and (fsnd is None or sid in FILE_LAYER):
+            snd = S.sounds.get(sid)
+            if snd is None:
+                snd = _build_sfx(sid)           # ainda nao gerado: gera agora (poucos ms)
+            if snd.get_num_channels() < spec[3]:
+                ok = (snd.play() is not None) or ok
+        if ok:
+            S.last[sid] = now
+        return ok
     except Exception as e:  # noqa: BLE001
         S.err = repr(e)
         return False
@@ -623,6 +748,20 @@ def _apply_volumes():
             snd = S.sounds.get(sid)
             if snd is not None:
                 snd.set_volume(spec[4] * g)
+        for sid, snd in S.files.items():
+            snd.set_volume(FILE_SFX[sid][3] * g)
+        if S.amb_chan is not None:
+            if g <= 0.0:
+                S.amb_chan.stop()
+                S.amb_on = False
+            else:
+                S.amb_chan.set_volume(AMB_VOL * g)
+        if S.stream:
+            mg = music_gain(S.stream)
+            if mg <= 0.0:
+                _stream_stop()
+            else:
+                _mixer.music.set_volume(mg)
         if S.chan is not None and not S.jingle:
             mg = music_gain()
             if mg <= 0.0 and S.cur is not None:
@@ -635,36 +774,65 @@ def _apply_volumes():
 
 
 def music_tick(track):
-    """Trilha pedida neste quadro ("menu", "match" ou None). Troca so quando muda (ou acaba o jingle)."""
+    """Trilha pedida neste quadro ("menu", "sub", "cups", "match" ou None). Em arquivo: stream com as
+    faixas em ciclo; sem arquivo: a trilha sintetizada equivalente no canal 0. Troca so quando muda."""
     S.want = track
+    mg = music_gain(track) if track else 0.0
+    want_stream = track if (track in STREAMS and S.stream_ok.get(track)) else None
+    want_synth = None if (want_stream or not track) else SYNTH_TRACK.get(track, track)
+    if mg <= 0.0 or S.stream != want_stream:
+        if S.stream:
+            _stream_stop()
+        if want_stream and mg > 0.0 and not _stream_next(want_stream, mg):
+            want_synth = SYNTH_TRACK.get(track, track)          # arquivo nao abriu agora
+    elif S.stream and not _mixer.music.get_busy():
+        _stream_next(S.stream, mg)                  # faixa acabou: emenda a proxima
     if S.jingle:
         if S.chan.get_busy():
             return
         S.jingle = False
         S.cur = None
-    if track == S.cur:
+    if want_synth == S.cur:
         return
-    snd = S.sounds.get(track) if track else None
-    if track and snd is None:
-        return                                  # ainda gerando: entra quando ficar pronta
-    mg = music_gain(track)
-    if track is None or mg <= 0.0:
+    snd = S.sounds.get(want_synth) if want_synth else None
+    if want_synth and snd is None:
+        if S.cur is not None:                       # ainda gerando: a anterior nao fica tocando
+            S.chan.fadeout(MUSIC_FADE_MS)
+            S.cur = None
+        return
+    if want_synth is None or mg <= 0.0:
         if S.cur is not None:
             S.chan.fadeout(MUSIC_FADE_MS)
             S.cur = None
         return
     S.chan.set_volume(mg)
     S.chan.play(snd, loops=-1, fade_ms=MUSIC_FADE_MS)
-    S.cur = track
+    S.cur = want_synth
 
 
-def tick(track):
-    """1x por quadro (loop principal): geracao em segundo plano + musica. Nunca levanta."""
+def amb_tick(on):
+    """Motor dos robos em loop no canal 1 enquanto `on` (bola rolando); fade ao parar."""
+    if S.amb is None or S.amb_chan is None:
+        return
+    g = sfx_gain()
+    if on and g > 0.0:
+        if not S.amb_on:
+            S.amb_chan.set_volume(AMB_VOL * g)
+            S.amb_chan.play(S.amb, loops=-1, fade_ms=AMB_FADE_MS)
+            S.amb_on = True
+    elif S.amb_on:
+        S.amb_chan.fadeout(AMB_FADE_MS)
+        S.amb_on = False
+
+
+def tick(track, amb=False):
+    """1x por quadro (loop principal): geracao em segundo plano + musica + motor. Nunca levanta."""
     if not S.ok:
         return
     try:
         if S.gen is not None:
             pump()
         music_tick(track)
+        amb_tick(amb)
     except Exception as e:  # noqa: BLE001
         S.err = repr(e)

@@ -1396,6 +1396,10 @@ FIDS = ("home", "away", "neutral")
 WAVE_S_PER_PX = 0.001           # defasagem da ola/onda: ~0,12 s por faixa de ~120 px
 GOAL_S_PER_PX = 0.00045         # onda do gol: sai do gol e cruza a torcida em <= 0,5 s
 OLA_EVERY, OLA_QUIET = 25.0, 10.0
+IDLE_MAX = {"ALTA": 6, "MEDIA": 3}  # calmaria: faixas acenando/levantando/pulando ao mesmo tempo
+IDLE_GAP = (0.18, 0.6)          # intervalo entre novas faixas animadas na calmaria (s)
+BOB_HZ, BOB_TH = 1.4, 0.55      # sentados balancam 1 px (fase por faixa) quando a torcida esta viva
+PARTY_S, PARTY_JUMP_S = 6.5, 3.8   # gol: a torcida que marcou pula e depois agita as bandeiras
 
 
 class Crowd:
@@ -1421,7 +1425,8 @@ class Crowd:
         now = self.clock()
         self.react = {}             # fid -> (tipo, inicio, duracao, prioridade, origem_x)
         self.ola = None             # (inicio, fids ou None)
-        self.idle = None            # (indice da faixa, pose, fim)
+        self.idle = None            # ultima faixa animada da calmaria (indice, pose, fim)
+        self.idles = []             # calmaria: [(indice, pose, fim)] (ate IDLE_MAX)
         self.next_idle = now + 1.5
         self.last_react = now
         self.last_ola = now
@@ -1507,21 +1512,21 @@ class Crowd:
         ex = self.ex
         if kind == "goal" and mine:
             origin = self.lay.goal_x[1] if team == 0 else self.lay.goal_x[0]
-            self._set(mine, "jump", 3.0, 3, now, origin)
-            self._set(other, "sad", 2.5, 3, now)
-            self._set("neutral", "up", 1.5, 3, now, origin)
+            self._set(mine, "party", PARTY_S, 3, now, origin)
+            self._set(other, "sad", 3.0, 3, now)
+            self._set("neutral", "jump", 2.2, 3, now, origin)
             self._ono("goal", mine, now)
             self._ono("no", other, now)
             if ex["confetti"] and self.lod >= 2:
-                self._confetti(mine, 45)
-                self.conf_until[mine] = now + 2.0
-            self.flash_until = now + 2.0
+                self._confetti(mine, 70)
+                self.conf_until[mine] = now + 3.5
+            self.flash_until = now + 3.0
             if ex["flares"] and self.lod >= 1:
-                self.flare_until[mine] = now + 3.5
+                self.flare_until[mine] = now + 5.0
             self.led_goal = (mine, now + LED_GOAL_S)
             self._caption("goal", now)
         elif kind == "chance" and mine:
-            self._set(mine, "up", 0.6, 1, now)
+            self._set(mine, "jump", 0.9, 1, now)
             self._set("neutral", "up", 0.4, 1, now)
             self._ono("go", mine, now)
             self._caption("chance", now)
@@ -1707,6 +1712,7 @@ class Crowd:
             self.flashes.clear()
             self.react.clear()
             self.ola = self.idle = None
+            self.idles = []
             bl = self.blits
             bl.clear()
             for i, s in enumerate(self.segs):
@@ -1727,6 +1733,8 @@ class Crowd:
             if el >= 0:
                 if kind == "win":
                     kind = "jump" if el < 3.0 else "mosaic"
+                elif kind == "party":
+                    kind = "jump" if el < PARTY_JUMP_S else "flags"
                 if kind == "jump":
                     if int((el + s.ph) / 0.18) % 2 == 0:
                         return UP, s.jump[0], s.jump[1]
@@ -1748,12 +1756,18 @@ class Crowd:
                 if el < 0.25:
                     return UP, s.jump[0], s.jump[1]
                 return UP, 0, 0
-        idle = self.idle
-        if idle is not None and idle[0] == i and now < idle[2]:
-            pose = idle[1]
-            if pose == FLAG_A and int(now / 0.25) % 2:
-                pose = FLAG_B
-            return pose, 0, 0
+        for idle in self.idles:
+            if idle[0] == i and now < idle[2]:
+                pose = idle[1]
+                if pose == FLAG_A and int((now + s.ph) / 0.25) % 2:
+                    pose = FLAG_B
+                elif pose == "hop":                        # pulinho isolado na arquibancada
+                    if int((now + s.ph) / 0.18) % 2 == 0:
+                        return UP, s.jump[0], s.jump[1]
+                    return UP, 0, 0
+                return pose, 0, 0
+        if self.waves and self.lod >= 2 and math.sin(now * BOB_HZ * 6.2832 + s.ph * 6.2832) > BOB_TH:
+            return SIT, 0, -1                              # balanco dos sentados
         return SIT, 0, 0
 
     def update(self, now=None):
@@ -1768,10 +1782,16 @@ class Crowd:
                     and now - self.last_ola >= OLA_EVERY):
                 self.ola = (now, None)
                 self.last_ola = now
-            if now >= self.next_idle:                      # calmaria: uma faixa acena/levanta
+            if self.idles:
+                self.idles = [d for d in self.idles if d[2] > now]
+            if now >= self.next_idle:                      # calmaria: varias faixas acenam/levantam/pulam
                 rng = self.rng
-                self.idle = (rng.randrange(n), FLAG_A if rng.random() < 0.6 else UP, now + rng.uniform(0.5, 0.9))
-                self.next_idle = now + rng.uniform(0.6, 1.8)
+                if len(self.idles) < IDLE_MAX[self.level]:
+                    u = rng.random()
+                    pose = FLAG_A if u < 0.45 else UP if u < 0.75 else "hop"
+                    self.idle = (rng.randrange(n), pose, now + rng.uniform(0.6, 1.4))
+                    self.idles.append(self.idle)
+                self.next_idle = now + rng.uniform(*IDLE_GAP)
         bl = self.blits
         bl.clear()
         poses, offs, segs = self.poses, self.offs, self.segs
