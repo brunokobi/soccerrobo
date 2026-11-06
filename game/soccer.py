@@ -54,6 +54,7 @@ DEMO_TEAMS = (("ASPIRADORES FC", "VASSOURAS UNIDAS"), ("POEIRA ZERO", "RODO DE O
               ("FAXINA TOTAL", "PANO DE CHÃO EC"), ("TURBO ASPIRA", "CERA BRILHANTE"))
 INPUT_EVENTS = (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN, pygame.MOUSEWHEEL, pygame.FINGERDOWN,
                 pygame.FINGERMOTION, pygame.JOYBUTTONDOWN)
+GOAL_SFX = ("goal", "goal_opp", "boo", "crowd_cheer")   # sons do gol cortados (fade) no reinicio
 GOAL_PAUSE_S = 2.4                     # comemoracao do gol (tempo de jogo) antes do novo pontape
 GOAL_FLASH_S = 0.35
 GOAL_ROCKETS, WIN_ROCKETS = 7, 10
@@ -776,6 +777,8 @@ class Game:
                 self.state = "over"
                 self.crowd_end()
             else:
+                if self.speed_idx != 3:
+                    sfx.stop(GOAL_SFX)                  # o grito do gol vai so ate o reinicio do jogo
                 self.kickoff(1 - self.scorer)
 
     # --------------------------------------------------------- human control

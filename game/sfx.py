@@ -48,7 +48,7 @@ STREAMS = {                                  # trilha -> faixas (em ciclo; uma d
     "menu": ("menu1.ogg", "menu2.ogg", "menu3.ogg"),            # menu principal
     "sub": ("interno1.ogg", "interno2.ogg", "submenus.ogg"),     # robos
     "cups": ("copas.ogg", "interno1.ogg", "interno2.ogg"),       # carreira e campanha
-    "match": ("torcida.ogg",),
+    "match": ("torcida.ogg", "torcida_boca.ogg", "torcida_estadio.ogg"),   # torcida de fundo, alternando
 }
 SYNTH_TRACK = {"menu": "menu", "sub": "menu", "cups": "menu", "match": "match"}   # sem arquivo
 FILE_SFX = {          # id -> (variacoes, throttle s, vozes max, volume); sorteia sem repetir a anterior
@@ -62,7 +62,7 @@ FILE_SFX = {          # id -> (variacoes, throttle s, vozes max, volume); sortei
     "crowd_chant": (("palmas.ogg",), 6.0, 1, 0.5),         # coro/ola da torcida (palmas no ritmo)
     # reacoes da torcida gravadas (sorteadas sem repetir): "uuuh" da chance no lugar do sintetizado,
     # palmas junto da defesa e a torcida aplaudindo o pontape inicial e o gol do jogador
-    "ooh": (("trave_torcida.ogg", "quase_uh.ogg", "uhhh_torcida.ogg"), 1.6, 1, 0.75),
+    "ooh": (("uhhh_torcida.ogg", "quase_uh.ogg"), 1.6, 1, 0.75),   # 2 opcoes: sempre intercala
     "ole": (("ole.ogg",), 3.0, 1, 0.8),                     # "olé!" da torcida (drible/defesa do jogador)
     "boo": (("vaias.ogg",), 6.0, 1, 0.6),                   # vaia: gol do rival / derrota do jogador
     "save": (("palmas.ogg",), 2.5, 1, 0.45),
@@ -539,7 +539,9 @@ def shutdown():
     """Volta ao estado inicial (testes)."""
     _stream_stop()
     try:
-        if S.amb_chan is not None:
+        if S.ok and _mixer is not None:
+            _mixer.stop()                       # efeitos longos (gritos, vaias) nao seguram canais
+        elif S.amb_chan is not None:
             S.amb_chan.stop()
     except Exception:  # noqa: BLE001
         pass
@@ -746,6 +748,27 @@ def play(sid):
     except Exception as e:  # noqa: BLE001
         S.err = repr(e)
         return False
+
+
+def stop(sids, fade_ms=250):
+    """Corta (fade curto) os efeitos `sids` que ainda estejam tocando (ex.: grito de gol no reinicio).
+    Sound.fadeout e por canal e nao bloqueia (diferente de music.fadeout). Nunca levanta."""
+    if not S.ok:
+        return 0
+    n = 0
+    try:
+        for sid in sids:
+            for snd in S.files.get(sid, ()):
+                if snd.get_num_channels():
+                    snd.fadeout(fade_ms)
+                    n += 1
+            snd = S.sounds.get(sid)
+            if snd is not None and snd.get_num_channels():
+                snd.fadeout(fade_ms)
+                n += 1
+    except Exception as e:  # noqa: BLE001
+        S.err = repr(e)
+    return n
 
 
 def jingle(jid):
