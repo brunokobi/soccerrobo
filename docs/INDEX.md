@@ -15,28 +15,23 @@ Planejamento e especificações do jogo. O código e os comandos do dia a dia es
 
 ## Estado
 - Fases 1, 2 e 3: prontas e publicadas em https://copaaspirador.brunokobi.tech
-- Fase 4 (Campanha Expandida): **Onda A (torcida, robôs detalhados, retratos, cenários e câmera de
-  estádio) e Onda B (peças novas, sets, relíquias, slot Módulo, 16 skills, itens de partida, Mochila e
-  cosméticos) prontas**. Onda C (Atos 2 e 3) em andamento na branch `feat/fase4-onda-c-estrutura`:
-  C1-C8 prontos: estrutura (fachada do `story.py`, save v2 com migração, torneios de liga e série,
-  nós condicionais, finais, missões, mapa por Ato, recompensas com variante) e o **Ato 2 inteiro
-  jogável** (caps. 6-9: Taça de Acesso, Superliga, Playoffs e O Clone, com as escolhas B1, B2 e B3,
-  Vô Nestor, Dra. Valquíria, Gabi Trovão, Dona Odete, Mestre Ogawa e Zé Perfeito). O Ato 3 (caps.
-  10-13) aparece como "em breve"; quem termina o conteúdo fica esperando no primeiro rascunho
-  (posição válida de save). C9 pronto: economia do Ato 2 (tiers 4-6, loja, XP até o nível 15, bônus
-  da escolha B2) e calibração no motor (tabela em `tests/calib_campaign.py`); a Força real do Ato 2 é
-  74 → 83,5, ~8 pontos acima da spec, por causa das skills. **Ponto de atenção:** quem nunca evolui o
-  time (não gasta sucata nem PH) trava no Ato 2; ideias em aberto: equipar sozinhas as skills de
-  história ou pity maior no Ato 2. C10 pronto: caps. 10 (Intercâmbio) e 11 (A Fábrica, em duas
-  versões pela escolha B2, com a escolha B4) jogáveis e o X-Ômega. C11 pronto: caps. 12 (Copa dos
-  Campeões) e 13 (O Chip Zero) e os **3 finais** (Garagem Livre, Contrato Dourado e o secreto O
-  Chinelo Estrutural, que depende das 4 Fitas do Vô do C13). **A campanha tem começo, meio e fim**
-  (P-13, 132 cenas). C12 pronto: Ato 3 calibrado no motor (Força 85 → 94; acima de ~85 o motor
-  "achata", então os adversários do Ato 3 ficam quase planos e o SIMULAR ganhou uma correção para Força
-  alta; tabela em `tests/calib_campaign.py`). O ponto de atenção do Ato 2 piora no Ato 3: quem nunca
-  evolui o time não termina a campanha. C13 pronto: as **14 missões secundárias** (aba MISSÕES; as 4
-  Fitas do Vô liberam o final secreto; recompensas incluem peças, relíquias, skills e cosméticos).
-  Próximos: C14-C18 (revisão de recompensas, rivais recorrentes, torcida por capítulo, autoplay
-  completo e fechamento). Deploy pendente: falta saber onde o site é hospedado.
-  Onda D (pós-campanha) planejada. Passos em [specs/plano-de-implementacao.md](specs/plano-de-implementacao.md)
+- Fase 4 (Campanha Expandida): **Ondas A (torcida, robôs detalhados, retratos, cenários, câmera de
+  estádio), B (peças, sets, relíquias, slot Módulo, 16 skills, itens, Mochila, cosméticos) e C (Atos 2
+  e 3) prontas.** A Onda C está na branch `feat/fase4-onda-c-estrutura` (ainda não publicada):
+  - campanha completa: Prólogo + 13 capítulos em 3 Atos, 161 cenas, 4 escolhas grandes (B1-B4) que
+    mudam adversários, falas e recompensas, **3 finais** (Garagem Livre, Contrato Dourado e o secreto
+    O Chinelo Estrutural) com galeria e recompensa própria, e **14 missões secundárias** (as 4 Fitas do
+    Vô levam ao final secreto);
+  - estrutura: `story.py` como fachada de `story_a2/a3/side.py`, save **v2** com migração dos saves v1
+    (sem rewind do Ato 1), torneios de liga e série, nós condicionais, variantes de adversário e de
+    recompensa, mapa por Ato, tela de missões, torcida por torneio (`venue`);
+  - economia do Ato 2/3 (tiers 4-6, loja, XP até o nível 15, bônus da escolha B2) e calibração dos 3
+    Atos no motor real (tabelas em `tests/calib_campaign.py`; acima de Força ~85 o motor achata e o
+    SIMULAR ganhou uma correção para Força alta);
+  - **pontos de atenção (decisão do dev):** quem nunca evolui o time (não gasta sucata nem PH) trava no
+    Ato 2 e não termina o Ato 3 — ideias: equipar sozinhas as skills de história ou pity maior a
+    partir do Ato 2; dois testes sensíveis à carga da máquina (`test_camera`, limite de tempo do
+    `test_skills_engine`).
+  - **deploy pendente:** falta saber onde o site é hospedado (o build web não fica no repositório).
+  - Onda D (NG+, Torre do Pó, peças Míticas): planejada.
 - Fase 5 (Editor de firmware): planejada
