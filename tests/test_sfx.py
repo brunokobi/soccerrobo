@@ -257,7 +257,7 @@ def test_audio_files_present_and_light():
         assert f.endswith(".ogg"), f                       # pygbag/navegador: OGG
         assert os.path.getsize(p) < 3_000_000, f
     total = sum(os.path.getsize(os.path.join(sfx.AUDIO_DIR, f)) for f in os.listdir(sfx.AUDIO_DIR))
-    assert total < 14_000_000, total                       # download do jogo continua razoavel
+    assert total < 15_000_000, total                       # download do jogo continua razoavel
     assert len(sfx.STREAMS["menu"]) == 3                   # 3 musicas no menu principal
     assert len(sfx.FILE_SFX["goal"][0]) >= 5 and len(sfx.FILE_SFX["goal_opp"][0]) >= 3
 
@@ -374,6 +374,37 @@ def test_goal_variants_never_repeat_in_a_row():
                     "ole", "boo"):
             clk.t += 20.0
             assert sfx.play(sid) is True, sid
+    finally:
+        sfx.clock = time.perf_counter
+        sfx.shutdown()
+        reset_prefs()
+
+
+def test_goal_sounds_cut_at_restart():
+    reset_prefs()
+    clk = FakeClock()
+    sfx.clock = clk
+    try:
+        if not _init_or_skip():
+            return
+        while not sfx.pump(50.0):
+            pass
+        g = soccer.Game(screen)
+        g.new_match(1, None)
+        g.speed_idx = 0
+        clk.t += 20
+        long_ = sfx.S.files["goal"].index(max(sfx.S.files["goal"], key=lambda x: x.get_length()))
+        sfx.S.var_last["goal"] = None
+        sfx.S.vrng = type("R", (), {"randrange": staticmethod(lambda n: long_)})()   # o grito mais longo
+        g.goal(0)
+        assert any(v.get_num_channels() for v in sfx.S.files["goal"])
+        for _ in range(int(soccer.GOAL_PAUSE_S * 60) + 5):
+            g.step(1 / 60)
+        assert g.state == "kickoff"                        # reinicio do jogo
+        for _ in range(30):                                # fade de 250 ms
+            pygame.time.wait(10)
+        assert not any(v.get_num_channels() for v in sfx.S.files["goal"])   # grito cortado
+        assert sfx.stop(("goal",)) == 0
     finally:
         sfx.clock = time.perf_counter
         sfx.shutdown()

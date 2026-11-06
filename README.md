@@ -85,19 +85,20 @@ partida (fica gravado). **F11** abre a tela cheia.
 
 ## Som
 Efeitos sintetizados por código (`game/sfx.py` e `game/music.py`, gerados com `math`/`array` no
-início do jogo, aos poucos) somados a sons gravados em `game/audio/` (OGG, ~13 MB no total):
+início do jogo, aos poucos) somados a sons gravados em `game/audio/` (OGG, ~14 MB no total):
 
 - **Músicas (stream, uma faixa depois da outra, em loop):** menu principal = `menu1/2/3.ogg`
   (desde o clique da tela de carregamento); tela de robôs = `interno1/2.ogg` + `submenus.ogg`;
-  carreira e campanha = `copas.ogg` + `interno1/2.ogg`; partida = torcida ao fundo (`torcida.ogg`).
+  carreira e campanha = `copas.ogg` + `interno1/2.ogg`; partida = torcida ao fundo, alternando 3 gravações (`torcida.ogg`, `torcida_boca.ogg` e
+  `torcida_estadio.ogg`, com o volume igualado).
 - **Gritos de gol sorteados (nunca o mesmo duas vezes seguidas):** 6 gritos para o gol do jogador
   (`gol*.ogg`; no 2 jogadores, para os dois) e 4 lamentos para o gol do adversário (`gol_adv*.ogg`).
 - **Outros efeitos gravados:** quase gol do jogador (`quase_uh.ogg`) e "quase leva um gol"
   (`quase_nao.ogg`) na defesa do goleiro e na trave, "começou!" no 1º pontapé (`comecou.ogg`), apito
   final, palmas e robôs desligando no fim, torcida na trave (junto do CLANG), palmas nos cânticos e
   na ola da torcida e o clique dos menus.
-- **Reações da torcida gravadas:** o "uuuh" de chance sorteia entre `trave_torcida.ogg`,
-  `quase_uh.ogg` e `uhhh_torcida.ogg` (no lugar do sintetizado); "olé!" (`ole.ogg`) no drible e na
+- **Reações da torcida gravadas:** o "uuuh" de chance intercala `uhhh_torcida.ogg` e
+  `quase_uh.ogg` (no lugar do sintetizado; a trave segue com `trave_torcida.ogg`); "olé!" (`ole.ogg`) no drible e na
   defesa do jogador; vaia (`vaias.ogg`) no gol do adversário e na derrota; palmas no 1º pontapé, no
   gol do jogador e nas defesas (`palmas.ogg`).
 - **Motor dos robôs:** `robo_motor.ogg` em loop, baixo, enquanto a bola rola (para na pausa e no MAX).
