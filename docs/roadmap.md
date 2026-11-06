@@ -9,7 +9,7 @@ Tabela original do planejamento (HEAD fd5e17b); a linha da Fase 4 está atualiza
 | 1 | 6 chassis, 8 atributos, bateria, arena neon | pronta |
 | 2 | Garagem: 14 peças (7 slots x 2 modelos, 4 raridades, upgrade 0-5), XP/nível até 10, loja, liga de 6 times (Modo Robôs) | pronta |
 | 3 | Campanha "A Garagem do Vô": Prólogo + 5 capítulos + epílogo, 53 cenas / 626 falas, 27 times, 12 personagens, 6 escolhas, torneios (grupo de 4 + mata-mata), chefes com pity, treino, save próprio `soccerpy_campaign_v1` (v1, sv1) | pronta e jogável |
-| 4 (nova) | **Campanha Expandida**: torcida + desenhos detalhados, itens/skills, campanha 3 atos | Ondas A (visual, torcida, câmera de estádio), B (peças, sets, módulo, 16 skills, itens, cosméticos) e C (campanha Prólogo + 13 capítulos em 3 Atos, 3 finais, 14 missões, calibrada no motor) prontas e publicadas; Onda D planejada |
+| 4 (nova) | **Campanha Expandida**: torcida + desenhos detalhados, itens/skills, campanha 3 atos | Ondas A (visual, torcida, câmera de estádio), B (peças, sets, módulo, 16 skills, itens, cosméticos) e C (campanha Prólogo + 13 capítulos em 3 Atos, 3 finais, 14 missões, calibrada no motor) prontas e publicadas; Onda D (NG+ "Turnê Lendária", Torre do Pó, peças Míticas) pronta, ainda não publicada |
 | 5 | Editor de firmware (regras da IA em blocos) | planejada (era a antiga Fase 4) |
 
 Números do código hoje:
@@ -26,7 +26,8 @@ Quatro frentes entregues em ondas jogáveis:
 1. **Onda A - Visual e torcida.** Arquibancadas, multidão pré-renderizada com reações por evento, placas de LED, telão com locutores, onomatopeias. Robôs com peças visíveis, Orbital/Titã redesenhados, animações. Retratos e cenários com mais expressões, camadas e luz.
 2. **Onda B - Itens e Skills.** Catálogo de peças de 14 para ~36 modelos, sets, relíquias únicas, 8º slot "Módulo", consumáveis de partida, cosméticos, nível máximo 15 na campanha. 16 skills de robô (passivas, ativas acionadas pela IA, condicionais), com FX. Garage v2 com migração.
 3. **Onda C - Campanha maior.** A campanha atual vira o **Ato 1**, sem reescrever. Entram o Ato 2 (Superliga, caps. 6-9) e o Ato 3 (Copa dos Campeões, caps. 10-13), 3 finais, missões secundárias, rivais recorrentes, formatos novos de torneio (liga e série de duelos), mapa por Ato, NG+ e Torre.
-4. **Onda D (opcional) - Pós-campanha.** NG+ "Turnê Lendária" e Torre do Pó.
+4. **Onda D (opcional) - Pós-campanha.** NG+ "Turnê Lendária" e Torre do Pó. **Pronta** (D1-D3; save v3;
+   modificadores de arena atrás de `arena=None` no motor, goldens 80/80).
 
 ## 3. Objetivos mensuráveis
 - Duração da campanha: de ~6 unidades (~5-6 h) para 14 unidades + 14 missões secundárias (~14-18 h).
@@ -69,7 +70,7 @@ Quatro frentes entregues em ondas jogáveis:
 - **M2 (fim da Onda B)**: peças novas, módulos, skills e consumáveis jogáveis no Modo Robôs e na campanha (Ato 1 inalterado em dificuldade); garage v2.
 - **M3 (Onda C parcial)**: Ato 2 jogável (caps. 6-9), mapa por Ato, missões secundárias.
 - **M4**: Ato 3 + 3 finais; campanha completa.
-- **M5 (opcional)**: NG+ e Torre.
+- **M5 (opcional)**: NG+ e Torre. Atingido (Onda D, ainda não publicada).
 
 ## 8. Definição de pronto de cada onda
 Suíte inteira verde, `golden` e `golden-new` 80/80, `test_*_ui` com zero Surface por frame, `draw_ms` dentro do orçamento, README e `docs/` atualizados, `calib_campaign` com as metas na tolerância.

@@ -32,5 +32,10 @@ Planejamento e especificações do jogo. O código e os comandos do dia a dia es
     Ato 2 e não termina o Ato 3 — ideias: equipar sozinhas as skills de história ou pity maior a
     partir do Ato 2; dois testes sensíveis à carga da máquina (`test_camera`, limite de tempo do
     `test_skills_engine`).
-  - Onda D (NG+, Torre do Pó, peças Míticas): planejada.
+  - **Onda D (pós-campanha) pronta no `main` local, ainda não publicada:** NG+ "Turnê Lendária" (3 voltas
+    de revanches com rivais +20/+26/+30, teto 90, cenas curtas, sucata, peças Míticas e cosméticos), Torre
+    do Pó (40 andares, modificadores de arena opt-in no motor, marcos 10/20/30/40) e peças Míticas +
+    7 cosméticos de recompensa; save da campanha **v3** com migração do v2; calibração no motor em
+    `tests/calib_campaign.py --post` (detalhes e desvios em
+    [specs/plano-de-implementacao.md](specs/plano-de-implementacao.md)).
 - Fase 5 (Editor de firmware): planejada

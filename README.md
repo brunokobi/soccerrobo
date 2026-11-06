@@ -156,8 +156,25 @@ No menu (teclas 1-6): `1 - AMISTOSO`, `2 - AMISTOSO`, `3 - NOVA CARREIRA`, `4 - 
      `.bad`. Um save com pequenos defeitos é reparado automaticamente, voltando ao início
      do capítulo. Desde a Onda C o save da campanha é **v2**: saves v1 são migrados ao
      carregar (quem já estava no epílogo ou tinha terminado vai para o Capítulo 6, sem
-     refazer nada do Ato 1). Um build antigo (em cache no navegador) que abra um save v2
-     o trata como inválido e o preserva em `.bad`, sem apagar.
+     refazer nada do Ato 1). Desde a Onda D o save é **v3** (NG+, Torre do Pó e peças
+     Míticas): saves v2 são migrados ao carregar, sem rewind (quem terminou a campanha
+     continua no fim, com o NG+ e a Torre liberados). Um build antigo (em cache no navegador)
+     que abra um save mais novo o trata como inválido e o preserva em `.bad`, sem apagar.
+   - **Pós-campanha (Onda D)**, liberado ao terminar o Capítulo 13 (qualquer final):
+     - **Turnê Lendária (NG+)**: botão TURNÊ LENDÁRIA na tela de fim. Recomeça no Capítulo 1
+       com a mesma garagem (robôs, peças, níveis, escolhas); os torneios viram revanches com uma
+       cena curta por capítulo (sem repetir os diálogos) e os rivais ganham +20, +26 e +30 de Força
+       nas voltas I, II e III (teto 90). Cada capítulo fechado dá sucata; o fim de cada Ato dá uma
+       **peça Mítica** e cada volta concluída dá um cosmético exclusivo.
+     - **Torre do Pó**: botão TORRE DO PÓ no mapa. 40 andares, uma partida por andar, rival de
+       Força 54 + 0,9 por andar (55 a 90); a cada 5 andares a arena muda (**bola pesada**, **bateria
+       curta** ou **goleiro gigante** do rival). ASSISTIR joga com o modificador; SIMULAR desconta da sua
+       Força o efeito medido no motor. Empate vai aos pênaltis; perder só repete o andar. Os andares
+       10, 20, 30 e 40 dão cosméticos (e 20 e 40, uma peça Mítica); no topo dá para recomeçar a subida.
+     - **Peças Míticas**: uma raridade acima da Lendária (+2 de potência, cor rosa), só como prêmio
+       do NG+ e da Torre (a loja e os drops nunca sorteiam). Sete cosméticos novos (antenas Para-raios,
+       Coroa do Pó e Auréola; rastros Poeira Dourada e Cometa; comemorações Troféu e Relâmpagos) aparecem
+       na loja como "prêmio" e não se compram.
 
 ### Controles (modos 1 e 2)
 | Ação | Modo 1 jogador | J1 | J2 |
@@ -176,7 +193,7 @@ O jogador controlado troca sozinho (o mais perto da bola).
 | 1 | Robôs com chassis e 8 atributos, bateria, arena tecnológica (neon) | pronta |
 | 2 | Garagem e laboratório: peças, upgrades, XP, evolução, loja e liga (Modo Robôs) | pronta e jogável |
 | 3 | **Campanha** "A Garagem do Vô": história, diálogos, torneios, chefes e treino (escola -> mundial) | pronta e jogável |
-| 4 | **Campanha Expandida**: torcida realista, câmera de estádio e desenhos mais detalhados (Onda A), peças/sets/relíquias/itens/cosméticos e 16 skills dos robôs (Onda B), Atos 2 e 3, missões secundárias e 3 finais (Ondas C e D) | Ondas A, B e C prontas e publicadas; D (pós-campanha) planejada ([docs/roadmap.md](docs/roadmap.md)) |
+| 4 | **Campanha Expandida**: torcida realista, câmera de estádio e desenhos mais detalhados (Onda A), peças/sets/relíquias/itens/cosméticos e 16 skills dos robôs (Onda B), Atos 2 e 3, missões secundárias e 3 finais (Onda C), NG+ "Turnê Lendária", Torre do Pó e peças Míticas (Onda D) | Ondas A, B e C prontas e publicadas; D (pós-campanha) pronta, ainda não publicada ([docs/roadmap.md](docs/roadmap.md)) |
 | 5 | Editor de firmware (regras da IA em blocos) | planejada |
 
 O planejamento detalhado fica em [`docs/`](docs/INDEX.md).
@@ -218,17 +235,21 @@ export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy
 .venv/bin/python tests/test_story.py                   # dados da campanha (cenas, textos, torneios, capítulos, recompensas)
 .venv/bin/python tests/test_campaign.py                # lógica da campanha (torneios, pity, treino, recompensas)
 .venv/bin/python tests/test_campaign_save.py           # save da campanha (validação, reparo, save inválido)
-.venv/bin/python tests/test_campaign_migration.py      # migração v1 -> v2 com 4 saves reais do cap. 5 e build antigo lendo v2
+.venv/bin/python tests/test_campaign_migration.py      # migração v1 -> v2 -> v3 (4 saves reais do cap. 5, save terminado) e builds antigos lendo o save novo
 .venv/bin/python tests/test_campaign_ui.py             # telas da campanha (menu, mapa por Ato, missões, diálogo, torneio, fim e galeria)
 .venv/bin/python tests/test_portraits.py               # retratos e cenários desenhados por código
 .venv/bin/python tests/test_prefs.py                   # preferências do jogador (store, valor inválido -> padrão)
 .venv/bin/python tests/test_crowd.py                   # torcida: locais, reações, extras, LOD, zero Surface por quadro
 .venv/bin/python tests/test_camera.py                  # câmera de estádio: prefs/tecla C, layout largo, LOD, zero Surface
 .venv/bin/python tests/test_robot_art.py               # robôs: chassis, peças visíveis, cache, FX, local da torcida por modo
-.venv/bin/python tests/test_campaign_balance.py        # balanço da campanha por simulação (~1,5 min)
+.venv/bin/python tests/test_arena.py                   # modificadores de arena da Torre do Pó (desligados fora dela, efeito, zero Surface)
+CAMPAIGN_BAL_N=100 .venv/bin/python tests/test_campaign_balance.py   # balanço da campanha por simulação (lento, ver abaixo)
 .venv/bin/python tests/sim_harness.py golden --check   # regressão: 80 placares do modo legado
 .venv/bin/python tests/sim_harness.py golden-new --check  # regressão: 80 placares do balanço novo
 ```
+O `test_campaign_balance.py` joga a campanha inteira (13 capítulos) N vezes por política: com o N
+padrão (300) passa de 20 min nesta máquina; a variável `CAMPAIGN_BAL_N` reduz o N (com 100 roda em
+cerca de um terço do tempo, com mais ruído nos alvos).
 Os testes de garagem, save e UI não tocam nos saves reais (`~/.soccerpy_*.json`).
 Os testes da campanha também não gravam nos saves reais. Os de partida são lentos
 (minutos); rode quando mexer em atributos, peças ou balanço:
@@ -237,6 +258,7 @@ Os testes da campanha também não gravam nos saves reais. Os de partida são le
 .venv/bin/python tests/test_robot_balance.py [-n 70] [--procs 4]  # balanço da equipe (peças/raridades) contra o time base
 .venv/bin/python tests/calib_robots.py [--n 100] [--diffs ...] [--fit] [--skills] [--procs 4]  # calibra a simulação estatística da liga contra o motor
 .venv/bin/python tests/calib_campaign.py [--n 200] [--skills] [--procs 4]  # calibra a simulação da campanha (SIM_BIAS) contra o motor; pesado, opcional
+.venv/bin/python tests/calib_campaign.py --post --n 100  # NG+ e Torre do Pó (com modificadores) no motor x SIMULAR (~20 min)
 .venv/bin/python tests/calib_skills.py               # mede a força de cada skill no motor (tabela SKILL_FORCE); muito pesado
 ```
 Utilitários do harness (`tests/sim_harness.py`): `golden`/`golden-new` com
@@ -246,7 +268,7 @@ Utilitários do harness (`tests/sim_harness.py`): `golden`/`golden-new` com
 
 ## Estrutura
 - `game/main.py`: entrada do pygbag (precisa do `import pygame` explícito)
-- `game/soccer.py`: partida (física, IA), visual neon, menu e HUD
+- `game/soccer.py`: partida (física, IA), visual neon, menu e HUD; modificadores de arena da Torre do Pó (`arena=`, desligados por padrão)
 - `game/robots.py`: chassis, atributos, fatores usados pelo motor e ajustes (`TUNING`, `TUNING_ROBOTS`)
 - `game/garage.py`: Modo Robôs: equipe, robôs, XP/nível, overclock, loja, recompensas e save
 - `game/parts.py`: catálogo de peças (slots, modelos, raridades, upgrades, relíquias, módulos, sets) e cosméticos
@@ -258,9 +280,9 @@ Utilitários do harness (`tests/sim_harness.py`): `golden`/`golden-new` com
 - `game/crowd.py`: torcida (locais, espectadores pré-renderizados, reações, confete/LED/telão, LOD) e a geometria das câmeras PERTO/ESTÁDIO
 - `game/robots_ui.py`: telas do Modo Robôs (hub, garagem, banco, loja, habilidades, mochila, visual, liga)
 - `game/career.py` / `game/career_ui.py`: carreira de clubes (liga, mercado, finanças, save) e suas telas
-- `game/story.py`: dados da campanha (personagens, times, cenas/diálogos, torneios, capítulos, recompensas); módulo puro, sem pygame. É a fachada da campanha: guarda o Ato 1 e junta `story_a2.py` (Ato 2), `story_a3.py` (Ato 3) e `story_side.py` (missões secundárias), com os dados de cada parte
-- `game/campaign.py`: lógica da campanha (progresso, torneios de copa/liga/série, chefes/pity, treino, missões secundárias, finais, recompensas, save v2 com migração do v1)
-- `game/campaign_ui.py`: telas da campanha (menu, mapa com abas por Ato, missões secundárias, diálogo, torneio de copa/liga/série, resultado, fim de capítulo, fim com galeria de finais), reaproveitando garagem/bancada/loja do Modo Robôs
+- `game/story.py`: dados da campanha (personagens, times, cenas/diálogos, torneios, capítulos, recompensas); módulo puro, sem pygame. É a fachada da campanha: guarda o Ato 1 e junta `story_a2.py` (Ato 2), `story_a3.py` (Ato 3) e `story_side.py` (missões secundárias), com os dados de cada parte; `story_post.py` guarda as cenas curtas das revanches do NG+
+- `game/campaign.py`: lógica da campanha (progresso, torneios de copa/liga/série, chefes/pity, treino, missões secundárias, finais, recompensas, NG+ e Torre do Pó, save v3 com migração do v1/v2)
+- `game/campaign_ui.py`: telas da campanha (menu, mapa com abas por Ato, missões secundárias, diálogo, torneio de copa/liga/série, resultado, fim de capítulo, fim com galeria de finais e entrada do NG+, Torre do Pó), reaproveitando garagem/bancada/loja do Modo Robôs
 - `game/portraits.py`: retratos e cenários da campanha, desenhados por código
 - `docs/`: planejamento e especificações (`docs/INDEX.md`); `docs/img/`: capturas de tela do README
 - `tests/`: testes, harness de simulação e baselines (`baseline_golden*.json`) (ficam fora de `game/` para não entrar no pacote do pygbag)

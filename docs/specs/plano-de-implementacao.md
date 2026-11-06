@@ -84,6 +84,40 @@ Comandos de validação padrão (rodar da raiz com `export SDL_VIDEODRIVER=dummy
 | C18 | rotineiro | Fechamento da Onda C: README, calibração final (tabela no docstring), suíte e goldens | `README.md`, `docs/` | tudo verde |
 
 ## Onda D (opcional) - Pós-campanha
+> **Estado (05/11/2026): D1-D3 prontos no `main` local (não publicados).** Commits na ordem D3 -> D1 -> D2 ->
+> docs (as recompensas do NG+ e da Torre usam as Míticas e os cosméticos do D3). Decisões onde a spec era
+> omissa e desvios:
+> - **Save v3** (`campaign.VERSION` 2 -> 3, `MIGRATIONS[("v", 2)]` só sobe a versão e garante `ng`/`tower`):
+>   as chaves novas de `done` (`ng<k>:<cap>`, `ng<k>:end`, `<revanche>#<k>`) e a raridade Mítica (rar 4) seriam
+>   descartadas/rebaixadas em silêncio por um build v2 em cache; com v3 ele trata o save como "bad" (vai para
+>   `.bad`). Saves terminados seguem no nó "end" do cap. 13 e liberam NG+/Torre sem rewind.
+> - **NG+**: libera ao ver um final (`c.endings`); começa no cap. 1 (o Prólogo é só a peneira e fica marcado como
+>   concluído no mapa); garagem, flags e `done` ficam. Na volta as cenas da história e os ganchos dos torneios
+>   são pulados; cada capítulo abre com UMA cena de 3-4 falas (`story_post.POST_SCENES`, fora de `SCENES`, que
+>   exige 8-14 falas; chave `<id>#<volta>`). Rivais `ovr + NG_SHIFT[k]`, teto 90, pity do chefe depois do
+>   teto; tabela do grupo simulada com os ovr deslocados. Recompensas por volta: sucata 800/1000/1200 por
+>   capítulo, peça Mítica no fim de cada Ato (caps. 5, 9, 13) e um cosmético ao fim da volta (Cometa,
+>   Relâmpagos, Auréola); recrutas/chassis/títulos não se repetem. Tier econômico 6 (o mais alto) nas partidas
+>   da volta. "Força recomendada" = a do estágio + o deslocamento aplicado, teto 95.
+> - **Torre do Pó**: liberada por `reward:rw_13`; tela própria no mapa (botão TORRE DO PÓ) e na tela de fim.
+>   Rival genérico determinado por (semente, andar), local `coliseu`; partida única com pênaltis no empate;
+>   perder repete o andar; bônus 100 + 10 x andar ao bater o recorde; marcos 10/20/30/40 = Poeira Dourada,
+>   Para-raios (+ Mítica), Troféu, Coroa do Pó (+ Mítica); no topo, RECOMEÇAR SUBIDA (recorde fica, marcos não
+>   repetem). Ciclo dos modificadores: 5 bateria curta, 10 goleiro gigante, 15 bola pesada, ... 40 goleiro.
+> - **Motor** (`soccer.py`): `start_robot_match(arena=None)`; `bola_pesada` = freio da bola 0,25**dt (o chute
+>   mais fraco, testado junto, quebrava o motor e saiu), `bateria_curta` = dreno x1,8, `goleiro_gigante` =
+>   alcance +10 px só do goleiro rival (anel desenhado com `pygame.draw`) e rótulo no HUD. Goldens 80/80.
+> - **SIMULAR do pós-campanha**: `POST_SIM_RELIEF` = 4 pontos devolvidos ao viés (o motor achata ainda mais
+>   com F 88-94) e `ARENA_SIM_DF` (bola 1, bateria 3,5, goleiro 5) descontado na Torre. Tabela em
+>   `tests/calib_campaign.py` (`--post`, n=100): |SIM - motor| 7,8 -> 5,5. NG+ com F 88-94 contra o teto 90:
+>   27-45 de V+E/2 por partida (alcançável com retentativas e pity; acima de F ~88 quase não melhora); Torre:
+>   andares 1-25 >= 39, 30-40 entre 28 e 50.
+> - **Míticas** (D3): `parts.RARITIES[4]` (potência 21, upgrade 2,0, preço 3000, rosa); `LEGEND` continua 3 e a
+>   loja/drops nunca passam dela; só equipamento (`max_rarity`: relíquia e módulo voltam a Lendária no
+>   sanitize; estoque da loja com Mítica vira Lendária). Modelo sorteado no RNG da campanha.
+> - **Cosméticos finais**: 7 de recompensa (`parts.REWARD_COSMETICS`), completando 6 por tipo (o limite de uma
+>   linha da loja/galeria); aparecem como "prêmio: <origem>" e não se compram. Faixas de torcida novas não
+>   entraram (não eram baratas: o texto das faixas é por local/capítulo).
 | # | Nível | Passo | Arquivos | Validação |
 |---|---|---|---|---|
 | D1 | complexo (sensível: save/migração) | NG+ (`c["ng"]`, `NG_SHIFT`, revanches sem diálogo longo, reset de nós preservando garage) e migração de saves terminados | `game/campaign.py`, `game/story.py` | `test_campaign.py`, `test_campaign_save` |
