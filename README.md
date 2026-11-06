@@ -56,10 +56,23 @@ Tema tecnológico/neon: arena com grade e linhas holográficas, robôs-disco com
 anel de LED e barra de bateria, bola com brilho, rastro e faíscas, e HUD e menu
 novos.
 
+**Pisos do campo:** cada partida sorteia um piso, sem repetir o anterior. Pode ser a arena neon
+original ou um piso de casa: cozinha em xadrez, tacos de madeira, porcelanato, ladrilho hidráulico ou
+cimento queimado (afinal, são aspiradores jogando dentro de casa). Os pisos são desenhados por código
+no início da partida (`game/floors.py`) e escurecidos para a bola e os robôs continuarem legíveis.
+
+**Comemoração:** no gol, a tela dá um clarão, o "GOOOOL!" entra tremendo e pulsando e os fogos de
+artifício estouram sobre o campo nas cores do time (`game/fireworks.py`); a vitória também solta fogos.
+
 **Torcida:** arquibancadas ao redor do campo com espectadores nas cores dos times,
 de uma quadra de escola ao Mundial lotado (o local muda com o capítulo e o modo; no
 Modo Robôs, com o tier da liga: bairro, ginásio, arena e estádio). A torcida ocupa
-primeiro as arquibancadas laterais, que a interface não cobre.
+primeiro as arquibancadas laterais, que a interface não cobre. Cada torcedor tem um visual sorteado:
+6 tons de pele, 14 cabelos, chapéus e bonés, camisas lisas ou listradas, cachecóis e óculos escuros.
+Nas pausas do jogo, uma torcida de cada vez puxa um **cântico**: todos pulam e agitam as bandeiras no
+mesmo compasso, com palmas no áudio. A arquibancada tem **bandeiras e bandeirões** nas laterais e
+**faixas penduradas na grade** (embaixo do campo; na câmera ESTÁDIO, também em cima), com frases da
+torcida e do local.
 Ela reage a gol, chance, defesa e trave (pula, levanta os braços, faz ola e
 mosaico), com confete, flashes, sinalizadores, bandeiras, placas de LED,
 onomatopeias e um telão com os locutores Tonho Vassoura e Cleide. Tecla **T**
@@ -72,13 +85,21 @@ partida (fica gravado). **F11** abre a tela cheia.
 
 ## Som
 Efeitos sintetizados por código (`game/sfx.py` e `game/music.py`, gerados com `math`/`array` no
-início do jogo, aos poucos) somados a sons gravados em `game/audio/` (OGG, ~7 MB no total):
+início do jogo, aos poucos) somados a sons gravados em `game/audio/` (OGG, ~13 MB no total):
 
-- **Músicas (stream, uma faixa depois da outra):** menu principal = `menu1.ogg` e `menu2.ogg`
-  alternando, desde o clique da tela de carregamento; tela de robôs = `submenus.ogg`; carreira e
-  campanha = `copas.ogg`; partida = torcida ao fundo (`torcida.ogg`).
-- **Efeitos gravados:** grito de gol (`gol.ogg`), apito final (`apito_final.ogg`), torcida na trave
-  (`trave_torcida.ogg`, junto do CLANG sintetizado) e os robôs desligando no fim (`robo_desligar.ogg`).
+- **Músicas (stream, uma faixa depois da outra, em loop):** menu principal = `menu1/2/3.ogg`
+  (desde o clique da tela de carregamento); tela de robôs = `interno1/2.ogg` + `submenus.ogg`;
+  carreira e campanha = `copas.ogg` + `interno1/2.ogg`; partida = torcida ao fundo (`torcida.ogg`).
+- **Gritos de gol sorteados (nunca o mesmo duas vezes seguidas):** 6 gritos para o gol do jogador
+  (`gol*.ogg`; no 2 jogadores, para os dois) e 4 lamentos para o gol do adversário (`gol_adv*.ogg`).
+- **Outros efeitos gravados:** quase gol do jogador (`quase_uh.ogg`) e "quase leva um gol"
+  (`quase_nao.ogg`) na defesa do goleiro e na trave, "começou!" no 1º pontapé (`comecou.ogg`), apito
+  final, palmas e robôs desligando no fim, torcida na trave (junto do CLANG), palmas nos cânticos e
+  na ola da torcida e o clique dos menus.
+- **Reações da torcida gravadas:** o "uuuh" de chance sorteia entre `trave_torcida.ogg`,
+  `quase_uh.ogg` e `uhhh_torcida.ogg` (no lugar do sintetizado); "olé!" (`ole.ogg`) no drible e na
+  defesa do jogador; vaia (`vaias.ogg`) no gol do adversário e na derrota; palmas no 1º pontapé, no
+  gol do jogador e nas defesas (`palmas.ogg`).
 - **Motor dos robôs:** `robo_motor.ogg` em loop, baixo, enquanto a bola rola (para na pausa e no MAX).
 - Se algum arquivo faltar ou não abrir, entra o som sintetizado equivalente.
 
@@ -103,6 +124,9 @@ camadas, luz e animação.
 
 ## Modos
 No menu (teclas 1-6): `1 - AMISTOSO`, `2 - AMISTOSO`, `3 - NOVA CARREIRA`, `4 - CONTINUAR CARREIRA`, `5 - MODO ROBÔS` e `6 - CAMPANHA`.
+
+**Modo demo:** com o menu principal parado por 1 minuto, começa uma demonstração (amistoso CPU x CPU com
+torcida, ~1 min) sem trocar a música do menu. Qualquer tecla, clique, toque ou movimento do mouse volta ao menu.
 
 1. **Amistoso: um jogador** contra a CPU (2 min)
 2. **Amistoso: dois jogadores** no mesmo teclado
@@ -222,6 +246,44 @@ No menu (teclas 1-6): `1 - AMISTOSO`, `2 - AMISTOSO`, `3 - NOVA CARREIRA`, `4 - 
 
 O jogador controlado troca sozinho (o mais perto da bola).
 
+## A história da campanha
+*Resumo com spoilers leves; os finais estão no fim.*
+
+**Ato 1 - A Garagem do Vô.** Téo Moreira acha na garagem do avô, o Vô Nestor (que está num
+cruzeiro), o **Zé Poeira**: um Aspiradex Turbo 74 velho, remendado com fita crepe, com uma rodinha que
+cai sozinha e um chinelo preso ("o chinelo é estrutural"). Com ele, Téo entra no clube de robótica do
+Colégio Santa Faísca, que o Prof. Ambrósio tenta salvar: se não ganhar a Copa Interclasses, o
+Diretor Gervásio transforma a sala em depósito de giz. O time cresce a cada torneio: a
+**Bia** (mecânica que conserta tudo com fita), o **Dudu** (que transmite a própria vida para um chat
+de dois espectadores) e, depois, a **Vivi**, ex-presidente do Grêmio, com o robô Majestade. Do outro
+lado está a corporação **Limpex** e o Dr. Augusto Brilhante, um empresário obcecado por limpeza e
+alérgico a pó, com os robôs perfeitos "Imaculados L-9". O time vence a Copa Interclasses, a Taça Vale
+do Pó e o Estadual Limpex Cup. Aí a Limpex rasga o patrocínio e acusa o Zé de adulteração. A Copa
+Brasil vira um julgamento na Federação, com a Dra. Helena e sua samambaia que vota. O Ato fecha no
+Mundial de Aspiradores, em Neo-Tóquio, contra o chip X-9 do Augusto.
+
+**Ato 2 - A Superliga Limpex.** O Vô Nestor volta do cruzeiro e entrega a planta do Aspiradex, que
+ele mesmo inventou ("não tem manual, tem fé"). A Limpex agora é comandada pela irmã do Augusto, a
+sorridente demais **Dra. Valquíria**, que cria a Superliga. Pelo caminho aparecem o rival prodígio
+**Gabi Trovão** ("eu sou o futuro"), a merendeira **Dona Odete** e seu bolo e o **Mestre Ogawa**, de
+provérbios sem sentido. O time passa pela
+Taça de Acesso, pelos pontos corridos e pelos playoffs. No laboratório da Limpex, encontra o **Zé
+Perfeito**: um clone do Zé feito com a planta roubada do Vô, sem rodinha solta e sem chinelo. As
+escolhas pesam: fazer as pazes com o Gabi ou provocá-lo, renovar com a Limpex ou seguir
+independente, poupar ou desligar o clone.
+
+**Ato 3 - A Copa dos Campeões.** O time viaja para o exterior (o chinelo trava a esteira do raio-X),
+treina no dojo do Ogawa e enfrenta seleções do mundo todo. Na fábrica da Limpex, onde milhares de
+Zés Perfeitos saem da esteira, é preciso escolher entre sabotar e denunciar. Na Copa dos Campeões,
+todos os rivais da história voltam, até o time da escola. No fim, um apagão revela o **X-Ômega**, o
+"Chip Zero", que toma o controle de todos os robôs da arena, até o aspirador do bar.
+
+**Os 3 finais.** Dependem das escolhas: **Garagem Livre** (campeões independentes; a garagem vira a
+sede do clube), **Contrato Dourado** (campeões com a marca Limpex em tudo) e o secreto **O Chinelo
+Estrutural**. O secreto exige ficar independente, poupar o Zé Perfeito, manter o chinelo e achar as 4
+Fitas do Vô nas missões secundárias. Depois de qualquer final, abrem a Turnê Lendária (NG+) e a Torre
+do Pó.
+
 ## Roadmap
 | Fase | Conteúdo | Situação |
 |---|---|---|
@@ -277,7 +339,7 @@ export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy
 .venv/bin/python tests/test_prefs.py                   # preferências do jogador (store, valor inválido -> padrão)
 .venv/bin/python tests/test_sfx.py                     # som: buffers sintetizados, arquivos OGG (trilhas, efeitos, motor), throttle, mudo
 .venv/bin/python tests/test_crowd.py                   # torcida: locais, reações, extras, LOD, zero Surface por quadro
-.venv/bin/python tests/test_fireworks.py                # fogos do gol/vitória, tetos, determinismo, nomes dos times em caixa alta
+.venv/bin/python tests/test_fireworks.py                # fogos do gol/vitória, modo demo, pisos do campo, nomes em caixa alta
 .venv/bin/python tests/test_camera.py                  # câmera de estádio: prefs/tecla C, layout largo, LOD, zero Surface
 .venv/bin/python tests/test_robot_art.py               # robôs: chassis, peças visíveis, cache, FX, local da torcida por modo
 .venv/bin/python tests/test_arena.py                   # modificadores de arena da Torre do Pó (desligados fora dela, efeito, zero Surface)

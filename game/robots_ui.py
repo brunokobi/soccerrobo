@@ -877,7 +877,8 @@ class RobotsUI(CareerUI):
         home, away = self.side_cfgs(fx)
         # local da torcida pelo tier da liga (0 bairro, 1 ginasio, 2 arena, 3 estadio)
         venue = crowd.venue_for_tier(lg.get("tier", gg.tier()))
-        self.g.start_robot_match(home, away, on_done=self.match_done, venue=venue)
+        self.g.start_robot_match(home, away, on_done=self.match_done, venue=venue,
+                                 user_side=0 if fx[1] == RL.USER else 1)
 
     def do_sim(self):
         gg = self.garage

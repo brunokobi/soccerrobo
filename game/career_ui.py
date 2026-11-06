@@ -105,7 +105,8 @@ class CareerUI:
         c = self.career
         h, a = c.user_fixture()
         self.g.start_career_match(c.match_cfg(h), c.match_cfg(a),
-                                  venue=crowd.venue_for_div(c.clubs[c.user]["div"]))
+                                  venue=crowd.venue_for_div(c.clubs[c.user]["div"]),
+                                  user_side=0 if h == c.user else 1)
 
     def quick_sim(self):
         self.career.play_round(None)

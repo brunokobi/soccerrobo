@@ -259,29 +259,29 @@ _B = {
     "limpex": "LIMPEX: LIMPA, MAS NÃO GANHA", "po": "SEM POEIRA, SEM PIEDADE",
 }
 EXTRAS = {
-    "bairro":      dict(confetti=False, flashes=False, flares=False, flags=0, mosaic=False,
+    "bairro":      dict(confetti=False, flashes=False, flares=False, flags=2, mosaic=False,
                         banners=(_B["zé"], _B["gol"])),
-    "quadra":      dict(confetti=False, flashes=False, flares=False, flags=0, mosaic=False,
+    "quadra":      dict(confetti=False, flashes=False, flares=False, flags=2, mosaic=False,
                         banners=(_B["zé"], _B["po"])),
-    "ginasio":     dict(confetti=False, flashes=False, flares=False, flags=3, mosaic=False,
+    "ginasio":     dict(confetti=False, flashes=False, flares=False, flags=4, mosaic=False,
                         banners=(_B["sf"], _B["gol"])),
-    "arena":       dict(confetti=True, flashes=True, flares=False, flags=2, mosaic=False,
+    "arena":       dict(confetti=True, flashes=True, flares=False, flags=6, mosaic=False,
                         banners=(_B["zé"], _B["limpex"])),
-    "estadio":     dict(confetti=True, flashes=True, flares=True, flags=4, mosaic=True,
+    "estadio":     dict(confetti=True, flashes=True, flares=True, flags=8, mosaic=True,
                         banners=(_B["zé"], _B["sf"], _B["limpex"])),
-    "superliga":   dict(confetti=True, flashes=True, flares=True, flags=4, mosaic=True,
+    "superliga":   dict(confetti=True, flashes=True, flares=True, flags=8, mosaic=True,
                         banners=(_B["zé"], "SUPERLIGA OU NADA", _B["limpex"])),
     "mundial":     dict(confetti=True, flashes=True, flares=True, flags=8, mosaic=True, nations=True,
                         banners=(_B["zé"], "O MUNDO É NOSSO TAPETE", _B["sf"])),
-    "coliseu":     dict(confetti=True, flashes=True, flares=True, flags=6, mosaic=True, conf="coliseu",
+    "coliseu":     dict(confetti=True, flashes=True, flares=True, flags=8, mosaic=True, conf="coliseu",
                         banners=(_B["zé"], "OMEGA? SÓ SE FOR OMELETE", "NENHUM GRÃO DE PÓ")),
-    "laboratorio": dict(confetti=False, flashes=True, flares=False, flags=0, mosaic=False, alert=True,
+    "laboratorio": dict(confetti=False, flashes=True, flares=False, flags=2, mosaic=False, alert=True,
                         banners=("CIÊNCIA COM CHINELO", "GOL = 1, DERROTA = 0")),
-    "fabrica":     dict(confetti=False, flashes=True, flares=False, flags=0, mosaic=False, alert=True,
+    "fabrica":     dict(confetti=False, flashes=True, flares=False, flags=2, mosaic=False, alert=True,
                         banners=("TURNO DA NOITE APOIA", "MONTADO COM AMOR")),
-    "dojo":        dict(confetti=False, flashes=False, flares=False, flags=0, mosaic=False,
+    "dojo":        dict(confetti=False, flashes=False, flares=False, flags=2, mosaic=False,
                         banners=("GANBARE!", "GANBARE, ZÉ-SAN!")),
-    "aeroporto":   dict(confetti=False, flashes=False, flares=False, flags=0, mosaic=False,
+    "aeroporto":   dict(confetti=False, flashes=False, flares=False, flags=2, mosaic=False,
                         banners=("BEM-VINDOS AO PORTÃO 7", "BAGAGEM DE MÃO: 1 BOLA")),
 }
 # faixas fora da campanha (Modo Robos, Amistoso, Carreira): frases genericas da torcida, sem nomes de
@@ -385,10 +385,14 @@ def resolve_camera(camera):
     return camera if camera in LAYOUTS else "PERTO"
 
 
-SKINS = ((242, 204, 168), (210, 156, 114), (156, 104, 68), (100, 64, 42))
+SKINS = ((242, 204, 168), (226, 178, 140), (210, 156, 114), (156, 104, 68), (128, 84, 56), (100, 64, 42))
 HAIRS = (("curto", (30, 24, 22)), ("longo", (104, 62, 32)), ("afro", (36, 26, 20)),
-         ("curto", (226, 190, 96)), ("bone", None))
-NEUTRAL_SHIRTS = ((214, 216, 222), (236, 196, 64))
+         ("curto", (226, 190, 96)), ("bone", None), ("careca", None), ("rabo", (64, 40, 28)),
+         ("moicano", (220, 60, 60)), ("curto", (160, 160, 166)), ("longo", (210, 90, 160)),
+         ("afro", (92, 52, 30)), ("chapeu", (212, 190, 120)), ("longo", (24, 20, 20)), ("rabo", (200, 120, 40)))
+NEUTRAL_SHIRTS = ((214, 216, 222), (236, 196, 64), (60, 180, 90), (240, 120, 40), (62, 62, 72),
+                  (180, 60, 160), (90, 190, 230))
+ACCS = (None, None, None, "listra", "cachecol", "oculos")   # extra do torcedor (camisa listrada etc.)
 ROBOT_METAL = ((120, 130, 146), (150, 140, 120), (96, 110, 120))
 
 _CACHE = OrderedDict()          # (venue, home, away, level) -> _Bundle
@@ -477,8 +481,10 @@ def _arm(s, a, b, c, w=2):
 
 
 def draw_person(s, ox, oy, look, pose, back):
-    """Espectador 14x18 em (ox, oy). look = (pele, cabelo, camiseta, bandeira)."""
-    skin, hair, shirt, flag = look
+    """Espectador 14x18 em (ox, oy). look = (pele, cabelo, camiseta, bandeira[, extra]); extra em ACCS:
+    "listra" (camisa listrada), "cachecol" (na cor clara do time), "oculos" (escuros, so de frente)."""
+    skin, hair, shirt, flag = look[:4]
+    acc = look[4] if len(look) > 4 else None
     style, hcol = hair
     sh_d = scale(shirt, 0.66)
     sk_d = scale(skin, 0.8)
@@ -490,7 +496,10 @@ def draw_person(s, ox, oy, look, pose, back):
     pygame.draw.rect(s, shirt, (x + 3, ty + 1, 8, oy + AH - ty - 1))
     pygame.draw.rect(s, shirt, (x + 4, ty, 6, 1))
     pygame.draw.line(s, sh_d, (x + 10, ty + 1), (x + 10, oy + AH - 1))
-    if back:                                             # costas: faixa clara (numero/listra)
+    if acc == "listra":                                  # camisa listrada (vertical, branca)
+        for lx in (x + 5, x + 8):
+            pygame.draw.line(s, mix(shirt, (245, 245, 245), 0.7), (lx, ty + 1), (lx, oy + AH - 1))
+    elif back:                                           # costas: faixa clara (numero/listra)
         pygame.draw.line(s, scale(shirt, 1.25), (x + 6, ty + 3), (x + 7, ty + 3))
         pygame.draw.line(s, scale(shirt, 1.25), (x + 6, ty + 5), (x + 7, ty + 5))
     # bracos
@@ -516,33 +525,62 @@ def draw_person(s, ox, oy, look, pose, back):
             else:
                 pygame.draw.line(s, sh_d, (sx, ty + 1), (sx, ty + 5))
                 s.set_at((sx, ty + 6), sk_d)
+    if acc == "cachecol":                                # cachecol no pescoco, ponta caida
+        sc = _light(shirt)
+        pygame.draw.rect(s, sc, (x + 4, ty - 1, 7, 2))
+        pygame.draw.line(s, sc, (x + (9 if back else 5), ty + 1), (x + (9 if back else 5), ty + 4))
     # cabeca
     if back:
-        if style == "bone":
+        if style in ("careca",):
+            pygame.draw.circle(s, skin, (x + 7, hy), 3)
+            s.set_at((x + 6, hy - 2), scale(skin, 1.2))
+        elif style == "chapeu":
+            pygame.draw.circle(s, hcol, (x + 7, hy - 1), 3)
+            pygame.draw.line(s, scale(hcol, 0.75), (x + 2, hy + 1), (x + 12, hy + 1))
+        elif style == "moicano":
+            pygame.draw.circle(s, skin, (x + 7, hy), 3)
+            pygame.draw.line(s, hcol, (x + 7, hy - 4), (x + 7, hy + 2), 2)
+        elif style == "rabo":
+            pygame.draw.circle(s, hcol, (x + 7, hy), 3)
+            pygame.draw.line(s, hcol, (x + 7, hy + 2), (x + 8, hy + 5), 2)
+        elif style == "bone":
             pygame.draw.circle(s, shirt, (x + 7, hy), 3)
             pygame.draw.line(s, sh_d, (x + 4, hy + 1), (x + 10, hy + 1))
         else:
             pygame.draw.circle(s, hcol, (x + 7, hy), 4 if style == "afro" else 3)
             if style == "longo":
                 pygame.draw.rect(s, hcol, (x + 4, hy, 7, 4))
-        pygame.draw.line(s, scale(mix(hcol or shirt, (200, 220, 255), 0.45), 1.0), (x + 6, hy - 3), (x + 8, hy - 3))
+        if style not in ("careca", "chapeu", "moicano"):
+            pygame.draw.line(s, scale(mix(hcol or shirt, (200, 220, 255), 0.45), 1.0), (x + 6, hy - 3), (x + 8, hy - 3))
         s.set_at((x + 7, hy + 3), sk_d)                  # nuca
     else:
         if style == "afro":
             pygame.draw.circle(s, hcol, (x + 7, hy - 1), 4)
         elif style == "longo":
             pygame.draw.rect(s, hcol, (x + 3, hy - 2, 9, 6))
+        elif style == "rabo":
+            pygame.draw.rect(s, hcol, (x + 10, hy - 1, 2, 4))
         pygame.draw.circle(s, skin, (x + 7, hy), 3)
-        if style == "bone":
+        if style == "chapeu":
+            pygame.draw.line(s, scale(hcol, 0.75), (x + 2, hy - 2), (x + 12, hy - 2))
+            pygame.draw.rect(s, hcol, (x + 4, hy - 5, 7, 3))
+        elif style == "moicano":
+            pygame.draw.line(s, hcol, (x + 7, hy - 5), (x + 7, hy - 2), 2)
+        elif style == "rabo":
+            pygame.draw.rect(s, hcol, (x + 4, hy - 3, 7, 2))
+        elif style == "bone":
             pygame.draw.rect(s, shirt, (x + 4, hy - 3, 7, 2))
             pygame.draw.line(s, sh_d, (x + 3, hy - 1), (x + 11, hy - 1))
         elif style in ("curto", "longo"):
             pygame.draw.rect(s, hcol, (x + 4, hy - 3, 7, 2))
+        if acc == "oculos":
+            pygame.draw.line(s, (20, 20, 26), (x + 5, hy), (x + 9, hy))
         if pose == SAD:
             pygame.draw.line(s, (40, 20, 20), (x + 6, hy + 2), (x + 8, hy + 2))
         else:
-            s.set_at((x + 6, hy), (30, 24, 24))
-            s.set_at((x + 8, hy), (30, 24, 24))
+            if acc != "oculos":
+                s.set_at((x + 6, hy), (30, 24, 24))
+                s.set_at((x + 8, hy), (30, 24, 24))
             if pose != SIT:                              # boca aberta (grito)
                 s.set_at((x + 7, hy + 2), (90, 20, 20))
 
@@ -743,7 +781,7 @@ class Seg:
 class _Bundle:
     __slots__ = ("key", "venue", "level", "camera", "lay", "static", "tarja", "segs", "people", "nbytes", "build_ms",
                  "ex", "colors", "ono_cols", "anchors", "flags", "flares", "smoke", "star", "conf_cols", "telao",
-                 "txt_id", "banners", "led_ads", "led_goal", "led_period")
+                 "txt_id", "banners", "rails", "led_ads", "led_goal", "led_period")
 
 
 def _looks(v, venue, seats, chosen, home, away, rng):
@@ -763,12 +801,12 @@ def _looks(v, venue, seats, chosen, home, away, rng):
             shirt = rng.choice(neutrals)
         else:
             shirt = shirts["away" if fid == "home" else "home"]
-        flag = shirt if rng.random() < 0.3 else None
+        flag = shirt if rng.random() < 0.4 else None
         if v["robots"]:
             looks[k] = ("robo", (rng.choice(ROBOT_METAL), _shirt(shirt) if shirt in neutrals else
                                  scale(shirt, 1.15), flag))
         else:
-            looks[k] = ("pessoa", (rng.choice(SKINS), rng.choice(HAIRS), shirt, flag))
+            looks[k] = ("pessoa", (rng.choice(SKINS), rng.choice(HAIRS), shirt, flag, rng.choice(ACCS)))
     return looks
 
 
@@ -1116,22 +1154,26 @@ def _light(c):
     return (236, 236, 236) if _lum(c) < 170 else (24, 28, 40)
 
 
-def _flag_imgs(stripes, seed):
-    """Bandeira 22x22 (mastro + pano de listras) em 2 quadros de ondulacao (colorkey)."""
-    cloth = pygame.Surface((18, 12)).convert()
+def _flag_imgs(stripes, seed, big=False):
+    """Bandeira 22x22 (mastro + pano de listras) em 2 quadros de ondulacao (colorkey). big: bandeirao
+    32x30 (pano 28x18, onda maior)."""
+    cw, ch = (28, 18) if big else (18, 12)
+    size = (32, 30) if big else (22, 22)
+    amp = 2.2 if big else 1.5
+    cloth = pygame.Surface((cw, ch)).convert()
     n = len(stripes)
     for i, c in enumerate(stripes):
-        cloth.fill(c, (0, i * 12 // n, 18, 12 // n + 1))
+        cloth.fill(c, (0, i * ch // n, cw, ch // n + 1))
     out = []
     for ph in (0.0, math.pi):
-        s = pygame.Surface((22, 22)).convert()
+        s = pygame.Surface(size).convert()
         s.fill(KEY)
-        for col in range(18):
-            dy = int(round(math.sin(col * 0.45 + ph + seed) * 1.5))
-            s.blit(cloth, (3 + col, 2 + dy), (col, 0, 1, 12))
+        for col in range(cw):
+            dy = int(round(math.sin(col * 0.45 + ph + seed) * amp))
+            s.blit(cloth, (3 + col, 2 + dy), (col, 0, 1, ch))
             if math.cos(col * 0.45 + ph + seed) < -0.5:                 # dobra na sombra
-                pygame.draw.line(s, scale(cloth.get_at((col, 1))[:3], 0.7), (3 + col, 2 + dy), (3 + col, 13 + dy))
-        pygame.draw.line(s, (210, 214, 222), (2, 1), (2, 21), 2)
+                pygame.draw.line(s, scale(cloth.get_at((col, 1))[:3], 0.7), (3 + col, 2 + dy), (3 + col, ch + 1 + dy))
+        pygame.draw.line(s, (210, 214, 222), (2, 1), (2, size[1] - 1), 2)
         s.set_colorkey(KEY, pygame.RLEACCEL)
         out.append(s)
     return tuple(out)
@@ -1181,12 +1223,14 @@ def _build_extras(b, v, ex, home, away, level, lay=PERTO):
             else:
                 c = hs if fid == "home" else aws
                 stripes = (c, _light(c), c)
-            imgs = _flag_imgs(stripes, k * 1.3 + (zone == "R"))
-            x = lay.flag_x[0] if zone == "L" else lay.flag_x[1]
+            big = k % 3 == 1                                # um bandeirao a cada 3
+            imgs = _flag_imgs(stripes, k * 1.3 + (zone == "R"), big)
+            fw = imgs[0].get_width()
+            x = lay.flag_x[0] if zone == "L" else lay.flag_x[1] + 22 - fw
             if lay.wide:                                    # ESTADIO: na coluna mais de fora que existe
                 xo = W_SIDE_X[v["wscols"] - 1] - 3
-                x = xo if zone == "L" else W - xo - 22
-            flags.append((imgs, x, ys[k % len(ys)] - 11, fid, (k * 0.11) % 0.25))
+                x = xo if zone == "L" else W - xo - fw
+            flags.append((imgs, x, ys[k % len(ys)] - imgs[0].get_height() // 2, fid, (k * 0.11) % 0.25))
     b.flags = flags
     # sinalizadores: 2 na frente + 2 na lateral por torcida
     flares = {"home": [], "away": []}
@@ -1242,12 +1286,13 @@ def _led_strip(txt, msgs, color, sep_col):
     return s, period
 
 
-def _banner(txt, text, cloth, seed, angle=0):
+def _banner(txt, text, cloth, seed, angle=0, small=False):
     """Faixa de pano 11 px com ondulacao leve e cordinhas (colorkey). angle: 90/-90 = pendurada na
-    vertical (laterais: le-se de baixo para cima na esquerda, de cima para baixo na direita)."""
+    vertical (laterais: le-se de baixo para cima na esquerda, de cima para baixo na direita).
+    small: faixa de 10 px (grade de baixo da camera PERTO, entre o campo e o rodape)."""
     ink = _light(cloth)
-    t = txt(text, 14, ink)
-    w, h = t.get_width() + 14, 11
+    t = txt(text, 13 if small else 14, ink)
+    w, h = t.get_width() + 14, (10 if small else 11)
     s = pygame.Surface((w, h + 2)).convert()
     s.fill(KEY)
     s.fill(cloth, (0, 1, w, h))
@@ -1256,7 +1301,7 @@ def _banner(txt, text, cloth, seed, angle=0):
         if k < -0.6:
             pygame.draw.line(s, scale(cloth, 0.86), (col, 1), (col, h))
     pygame.draw.rect(s, scale(cloth, 0.68), (0, 1, w, h), 1)
-    s.blit(t, (7, 3))
+    s.blit(t, (7, 3 if not small else 2))
     for xx in (1, w - 2):                                   # cordinhas na grade
         pygame.draw.line(s, (210, 210, 210), (xx, 0), (xx, 1))
     if angle:
@@ -1274,6 +1319,28 @@ def _side_banners(txt, texts, home, away, lay=PERTO):
         img = _banner(txt, text, cloth, k * 2.1, 90 if zone == "L" else -90)
         x = lay.banner_x[0] if zone == "L" else lay.banner_x[1]
         out.append((img, (x, lay.banner_cy - img.get_height() // 2)))
+    return out
+
+
+def _rail_banners(txt, texts, home, away, lay=PERTO):
+    """Faixas de pano na horizontal, penduradas na grade entre o campo e a arquibancada: embaixo (as duas
+    cameras) e em cima (so ESTADIO, onde a arquibancada de cima aparece). Cores alternando casa/fora."""
+    out = []
+    area = CAM_RECT if lay.wide else lay.pitch            # ESTADIO: o mundo reduzido cobre CAM_RECT
+    # PERTO: faixa baixa (12 px) entre a borda do campo (650) e a UI do rodape (662)
+    rails = [CAM_RECT.bottom + 1, W_TOP_Y[0] + 4] if lay.wide else [lay.pitch.bottom]
+    cols = (_shirt(home), _shirt(away), (236, 236, 236))
+    k = 0
+    for y in rails:
+        x = area.left + 24
+        while k < len(texts) * 2:
+            img = _banner(txt, texts[k % len(texts)], cols[k % len(cols)], k * 1.7, small=not lay.wide)
+            if x + img.get_width() > area.right - 24:
+                break
+            if visible_frac(img.get_rect(topleft=(x, y)), lay.ui_all) == 1.0:   # nunca sob a UI
+                out.append((img, (x, y)))
+            x += img.get_width() + RAIL_GAP
+            k += 1
     return out
 
 
@@ -1296,8 +1363,14 @@ def ensure_text_extras(b, txt):
         return
     b.txt_id = id(owner)
     v = VENUES[b.venue]
+    b.rails = {}
     b.banners = {story: _side_banners(txt, banner_texts(b.venue, b.key[1], b.key[2], story), b.key[1], b.key[2],
                                       b.lay) for story in (True, False)}
+    for story in (True, False):                     # faixas na grade (frases do local + genericas)
+        texts = (list(EXTRAS[b.venue]["banners"]) if story else []) + list(GENERIC_BANNERS)
+        sd = _seed(b.venue, b.key[1], b.key[2], story)
+        texts = texts[sd % len(texts):] + texts[:sd % len(texts)]
+        b.rails[story] = _rail_banners(txt, texts, b.key[1], b.key[2], b.lay)
     b.led_ads = b.led_goal = None
     if STYLES[v["style"]]["board"]:
         head = LED_HEAD.get(b.venue)
@@ -1352,6 +1425,7 @@ def _build(venue, home, away, level, base, camera="PERTO"):
     _build_extras(b, v, ex, home, away, level, lay)
     b.txt_id = None
     b.banners = {True: [], False: []}
+    b.rails = {True: [], False: []}
     b.led_ads = b.led_goal = None
     b.build_ms = (time.perf_counter() - t0) * 1000
     STATS["builds"] += 1
@@ -1359,7 +1433,7 @@ def _build(venue, home, away, level, base, camera="PERTO"):
 
 
 def warm_crowd(venue=None, home=(50, 120, 255), away=(235, 65, 65), level="ALTA", base=None, txt=None,
-               camera="PERTO"):
+               camera="PERTO", floor=None):
     """Pacote pronto (atlas + arena composta + tarja + extras) do local/cores/nivel/camera. LRU de 3 chaves.
 
     Chamar no inicio da partida (nunca no meio). `base` = pitch_surf do jogo; `txt` = Game.text_img
@@ -1371,6 +1445,8 @@ def warm_crowd(venue=None, home=(50, 120, 255), away=(235, 65, 65), level="ALTA"
     key = (venue, tuple(int(c) for c in home[:3]), tuple(int(c) for c in away[:3]), level)
     if camera != "PERTO":
         key += (camera,)
+    if floor is not None:                          # piso de casa: a arena composta leva o piso (chave propria)
+        key += ("floor", floor)
     b = _CACHE.get(key)
     if b is not None:
         _CACHE.move_to_end(key)
@@ -1400,6 +1476,10 @@ IDLE_MAX = {"ALTA": 6, "MEDIA": 3}  # calmaria: faixas acenando/levantando/pulan
 IDLE_GAP = (0.18, 0.6)          # intervalo entre novas faixas animadas na calmaria (s)
 BOB_HZ, BOB_TH = 1.4, 0.55      # sentados balancam 1 px (fase por faixa) quando a torcida esta viva
 PARTY_S, PARTY_JUMP_S = 6.5, 3.8   # gol: a torcida que marcou pula e depois agita as bandeiras
+CHANT_EVERY = (11.0, 19.0)      # canticos: uma torcida puxa o coro de tempos em tempos (calmaria)
+CHANT_QUIET = 5.0               # ...so depois de alguns segundos sem lance
+CHANT_S, CHANT_BEAT = 4.5, 0.38 # duracao e batida do coro (pulo/bandeira sincronizados)
+RAIL_GAP = 60                   # distancia minima entre faixas na grade
 
 
 class Crowd:
@@ -1427,6 +1507,9 @@ class Crowd:
         self.ola = None             # (inicio, fids ou None)
         self.idle = None            # ultima faixa animada da calmaria (indice, pose, fim)
         self.idles = []             # calmaria: [(indice, pose, fim)] (ate IDLE_MAX)
+        self.next_chant = now + self.rng.uniform(*CHANT_EVERY) * 0.6
+        self.chant_n = 0
+        self.sounds = []            # sons pedidos pela torcida (Game toca: pop_sounds)
         self.next_idle = now + 1.5
         self.last_react = now
         self.last_ola = now
@@ -1735,6 +1818,11 @@ class Crowd:
                     kind = "jump" if el < 3.0 else "mosaic"
                 elif kind == "party":
                     kind = "jump" if el < PARTY_JUMP_S else "flags"
+                elif kind == "chant":                      # coro: todos no mesmo compasso
+                    beat = int(el / CHANT_BEAT)
+                    if beat % 2 == 0:
+                        return UP, s.jump[0], s.jump[1]
+                    return (FLAG_A if beat % 4 == 1 else FLAG_B), 0, 0
                 if kind == "jump":
                     if int((el + s.ph) / 0.18) % 2 == 0:
                         return UP, s.jump[0], s.jump[1]
@@ -1782,6 +1870,15 @@ class Crowd:
                     and now - self.last_ola >= OLA_EVERY):
                 self.ola = (now, None)
                 self.last_ola = now
+                self.sounds.append("crowd_chant")
+            if (now >= self.next_chant and now - self.last_react >= CHANT_QUIET
+                    and not any(now < r[1] + r[2] for r in self.react.values())):
+                fid = ("home", "away")[self.chant_n % 2]          # alterna a torcida que puxa o coro
+                self.chant_n += 1
+                if self.fid_segs.get(fid):
+                    self._set(fid, "chant", CHANT_S, 0, now)
+                    self.sounds.append("crowd_chant")
+                self.next_chant = now + self.rng.uniform(*CHANT_EVERY)
             if self.idles:
                 self.idles = [d for d in self.idles if d[2] > now]
             if now >= self.next_idle:                      # calmaria: varias faixas acenam/levantam/pulam
@@ -1819,6 +1916,8 @@ class Crowd:
         self._tick_extras(now, self.dt)
         b = self.b
         for img, pos in b.banners[self.story]:
+            scr.blit(img, pos)
+        for img, pos in b.rails[self.story]:
             scr.blit(img, pos)
         if b.flags:
             react = self.react
@@ -1919,6 +2018,11 @@ class Crowd:
                     scr.blit(shadow, (x0 + 2, y0 + 2))
                 scr.blit(img, (x0, y0))
             self.onos = keep
+
+    def pop_sounds(self):
+        """Sons que a torcida pediu desde o ultimo quadro (coro, ola). O Game toca e esvazia."""
+        out, self.sounds = self.sounds, []
+        return out
 
     def fid_pose(self, fid):
         """Pose mais comum entre as faixas de uma fidelidade (testes)."""

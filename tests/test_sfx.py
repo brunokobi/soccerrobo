@@ -250,14 +250,16 @@ def test_runtime_build_throttle_and_mute():
 
 
 def test_audio_files_present_and_light():
-    names = [f for fs in sfx.STREAMS.values() for f in fs] + [v[0] for v in sfx.FILE_SFX.values()]
+    names = [f for fs in sfx.STREAMS.values() for f in fs] + [f for v in sfx.FILE_SFX.values() for f in v[0]]
     for f in names + [sfx.AMB_FILE]:
         p = os.path.join(sfx.AUDIO_DIR, f)
         assert os.path.isfile(p), f
         assert f.endswith(".ogg"), f                       # pygbag/navegador: OGG
         assert os.path.getsize(p) < 3_000_000, f
     total = sum(os.path.getsize(os.path.join(sfx.AUDIO_DIR, f)) for f in os.listdir(sfx.AUDIO_DIR))
-    assert total < 8_000_000, total                        # download do jogo continua razoavel
+    assert total < 14_000_000, total                       # download do jogo continua razoavel
+    assert len(sfx.STREAMS["menu"]) == 3                   # 3 musicas no menu principal
+    assert len(sfx.FILE_SFX["goal"][0]) >= 5 and len(sfx.FILE_SFX["goal_opp"][0]) >= 3
 
 
 def test_streams_cycle_and_fall_back():
@@ -309,6 +311,8 @@ def test_streams_cycle_and_fall_back():
             sfx.music_tick("match")
             assert sfx.S.cur == "match"
             assert sfx.play("goal") is True                # sem arquivo: grito sintetizado
+            clk_ok = sfx.play("goal_opp")                      # rival sem arquivo: mesmo sintetizado (throttle do "goal")
+            assert clk_ok is False
             assert sfx.play("robot_off") is False          # so existe em arquivo
         finally:
             sfx.AUDIO_DIR = old
@@ -345,6 +349,95 @@ def test_file_effects_and_motor():
         sfx.clock = time.perf_counter
         sfx.shutdown()
         reset_prefs()
+
+
+def test_goal_variants_never_repeat_in_a_row():
+    reset_prefs()
+    clk = FakeClock()
+    sfx.clock = clk
+    try:
+        if not _init_or_skip():
+            return
+        while not sfx.pump(50.0):
+            pass
+        for sid in ("goal", "goal_opp"):
+            assert len(sfx.S.files[sid]) == len(sfx.FILE_SFX[sid][0]), sid
+            seq = []
+            for _ in range(40):
+                clk.t += 20.0
+                pygame.mixer.stop()                        # libera a voz (1 por vez)
+                assert sfx.play(sid) is True, sid
+                seq.append(sfx.S.var_last[sid])
+            assert all(a != b for a, b in zip(seq, seq[1:])), seq          # nunca repete em seguida
+            assert len(set(seq)) == len(sfx.FILE_SFX[sid][0]), seq         # e passa por todas
+        for sid in ("near", "near_opp", "kickoff_voice", "applause", "click", "ooh", "crowd_cheer", "crowd_chant",
+                    "ole", "boo"):
+            clk.t += 20.0
+            assert sfx.play(sid) is True, sid
+    finally:
+        sfx.clock = time.perf_counter
+        sfx.shutdown()
+        reset_prefs()
+
+
+def test_game_picks_goal_and_near_miss_sounds_by_side():
+    reset_prefs()
+    g = soccer.Game(screen)
+    played = []
+    real = sfx.play
+    sfx.play = lambda sid: played.append(sid) or True
+    try:
+        g.new_match(1, None)                               # VOCE (0) x CPU (1)
+        assert played.count("kickoff_voice") == 1 and played.count("crowd_cheer") == 1
+        g.kickoff(1)
+        assert played.count("kickoff_voice") == 1          # "comecou!" so no 1o pontape
+        g.speed_idx = 0
+        played.clear()
+        g.crowd_event("goal", 0)
+        g.crowd_event("goal", 1)
+        assert played == ["goal", "crowd_cheer", "goal_opp", "boo"]   # aplaude o nosso gol, vaia o do rival
+        played.clear()
+        g.crowd_event("chance", 0)
+        assert played == ["ooh"]                                       # "uuuh" gravado da torcida
+        played.clear()
+        g.crowd_event("save", 1)                           # CPU defendeu: eu quase fiz
+        g.crowd_event("save", 0)                           # eu defendi: quase levei
+        assert "near" in played and "near_opp" in played
+        assert played.index("near") < played.index("near_opp")
+        assert played.count("ole") == 1 and played.index("ole") > played.index("near")   # olé na MINHA defesa
+        played.clear()
+        g.ball.pos.x = soccer.CX + 400                     # trave no gol da direita
+        g.crowd_event("post")
+        dfd = g.defender_at(g.ball.pos.x)
+        assert played[-1] == ("near_opp" if dfd == 0 else "near")
+        g.new_match(1, None)
+        g.speed_idx = 0
+        g.score = [0, 2]
+        played.clear()
+        g.crowd_end()
+        assert "boo" in played and "applause" not in played    # perdi: vaia
+        g.score = [2, 0]
+        played.clear()
+        g.crowd_end()
+        assert "applause" in played and "boo" not in played
+        g.new_match(2, None)                               # 2 jogadores: todo gol e "nosso"
+        played.clear()
+        g.crowd_event("goal", 1)
+        assert played == ["goal", "crowd_cheer"]
+        g.start_career_match({"name": "A", "color": (50, 120, 255), "squad": [("J%d" % i, 60) for i in range(5)]},
+                             {"name": "B", "color": (235, 65, 65), "squad": [("K%d" % i, 60) for i in range(5)]},
+                             user_side=1)
+        played.clear()
+        g.speed_idx = 0
+        g.crowd_event("goal", 0)
+        assert played == ["goal_opp", "boo"]               # jogador e o visitante
+        g.speed_idx = 3
+        played.clear()
+        g.crowd_event("goal", 1)
+        assert played == []                                # MAX: sem som
+    finally:
+        sfx.play = real
+        g.speed_idx = 0
 
 
 def test_prefs_cycle_and_labels():

@@ -162,6 +162,96 @@ def test_team_names_upper_in_hud():
     assert not any(k[0] == "Poeira fc" for k in g.text_cache)
 
 
+def _ev(t, **kw):
+    return pygame.event.Event(t, **kw)
+
+
+def test_demo_mode_starts_after_idle_and_any_input_exits():
+    g = soccer.Game(screen)
+    g.state = "menu"
+    for _ in range(int(soccer.DEMO_IDLE_S * 20)):          # desligado (testes/harness): nunca entra
+        g.update(1 / 20)
+    assert g.state == "menu" and not g.demo
+    g.demo_enabled = True
+    for _ in range(int(soccer.DEMO_IDLE_S * 20) - 20):     # 59 s parado: ainda no menu
+        g.update(1 / 20)
+    assert g.state == "menu" and not g.demo
+    g.handle_event(_ev(pygame.MOUSEMOTION, pos=(10, 10), rel=(1, 0), buttons=(0, 0, 0)))   # jitter: nao conta
+    for _ in range(40):
+        g.update(1 / 20)
+    assert g.demo and g.state in ("kickoff", "play")       # 1 min parado: demo
+    assert g.music_track() == "menu" and not g.ambience_on()   # musica do menu continua
+    assert all(t.human is None for t in g.teams) and g.user_side is None
+    assert g.teams[0].name in [a for a, _ in soccer.DEMO_TEAMS]
+    for _ in range(600):                                   # 10 s de jogo: CPU x CPU andando
+        g.update(1 / 60)
+        g.draw()
+    assert g.demo
+    g.handle_event(_ev(pygame.KEYDOWN, key=pygame.K_1, mod=0, unicode="1", scancode=0))
+    assert g.state == "menu" and not g.demo                # qualquer tecla sai...
+    assert g.idle_t == 0.0                                 # ...sem abrir o amistoso da tecla 1
+    for _ in range(int(soccer.DEMO_IDLE_S * 20) + 2):
+        g.update(1 / 20)
+    assert g.demo
+    g.handle_event(_ev(pygame.MOUSEMOTION, pos=(300, 300), rel=(12, 5), buttons=(0, 0, 0)))
+    assert g.state == "menu" and not g.demo                # mexer o mouse sai
+
+
+def test_demo_ends_by_itself_and_input_resets_idle():
+    g = soccer.Game(screen)
+    g.demo_enabled = True
+    g.state = "menu"
+    g.start_demo()
+    for _ in range(int(soccer.DEMO_LEN_S * 60) + 30):
+        g.update(1 / 60)
+        if g.state == "menu":
+            break
+    assert g.state == "menu" and not g.demo                # ~1 min de demo e volta sozinha
+    g.update(30.0)
+    g.handle_event(_ev(pygame.MOUSEBUTTONDOWN, pos=(5, 5), button=1))
+    assert g.idle_t == 0.0                                 # clique no menu zera a contagem
+    g.state = "campaign"                                   # fora do menu principal: nao conta
+    idle = g.idle_t
+    g.update(1.0)
+    assert g.idle_t == idle
+
+
+def test_floors_render_inside_pitch_and_rotate():
+    import crowd
+    import floors
+    g = soccer.Game(screen)
+    assert g.floor == "neon" and not g.floor_auto          # testes/harness: sempre o piso neon
+    neon = g.pitch_surf
+    outside = [(10, 10), (soccer.PITCH.left - 30, soccer.CY - 200), (soccer.PITCH.right + 30, soccer.CY + 200)]
+    for f in floors.FLOORS:
+        g.set_floor(f)
+        assert g.floor == f and g.pitch_surf.get_size() == (soccer.W, soccer.H)
+        for p in outside:                                  # o piso nao vaza para fora do campo
+            assert g.pitch_surf.get_at(p) == neon.get_at(p), (f, p)
+        if f != "neon":
+            inner = (soccer.PITCH.left + 200, soccer.PITCH.top + 100)
+            assert g.pitch_surf.get_at(inner) != neon.get_at(inner), f
+    g.set_floor("cozinha")
+    assert g.floor_cache["cozinha"] is g.pitch_surf        # cache: desenha uma vez
+    g.set_floor("nao_existe")
+    assert g.floor == "neon"
+    g.floor_auto = True
+    seen = []
+    for _ in range(30):
+        g.new_match(1, None)
+        seen.append(g.floor)
+    assert all(a != b for a, b in zip(seen, seen[1:]))     # nunca repete em seguida
+    assert len(set(seen)) >= 4
+    # torcida: arena composta com o piso tem chave propria (nao reaproveita a de outro piso)
+    g.set_floor("tacos")
+    b1 = crowd.warm_crowd("arena", (50, 120, 255), (235, 65, 65), "ALTA", base=g.pitch_surf, floor="tacos")
+    g.set_floor("cimento")
+    b2 = crowd.warm_crowd("arena", (50, 120, 255), (235, 65, 65), "ALTA", base=g.pitch_surf, floor="cimento")
+    assert b1 is not b2
+    p = (soccer.PITCH.left + 300, soccer.PITCH.top + 200)
+    assert b2.static.get_at(p) == g.pitch_surf.get_at(p)
+
+
 def main():
     names = sys.argv[1:] or [n for n in globals() if n.startswith("test_")]
     fails = 0

@@ -38,26 +38,42 @@ SR = 22050                                   # taxa interna de sintese (mono, 16
 TWO_PI = 2.0 * math.pi
 LEVEL_GAIN = {"0": 0.0, "1": 0.35, "2": 0.65, "3": 1.0}
 LEVEL_NAMES = {"0": "DESL.", "1": "BAIXO", "2": "MÉDIO", "3": "ALTO"}
-MATCH_MUSIC_GAIN = 0.55                      # musica da partida fica por baixo dos efeitos
+MATCH_MUSIC_GAIN = 0.85                      # torcida de fundo da partida (um pouco abaixo dos efeitos)
 N_CHANNELS = 16                              # canal 0 = musica, 1 = motor dos robos; 14 vozes de efeito
 MUSIC_FADE_MS = 400
 PUMP_MS = 5.0                                # orcamento de geracao por quadro (ms de relogio)
 WEB = sys.platform == "emscripten"
 AUDIO_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "audio")
 STREAMS = {                                  # trilha -> faixas (em ciclo; uma depois da outra)
-    "menu": ("menu1.ogg", "menu2.ogg"),
-    "sub": ("submenus.ogg",),
-    "cups": ("copas.ogg",),
+    "menu": ("menu1.ogg", "menu2.ogg", "menu3.ogg"),            # menu principal
+    "sub": ("interno1.ogg", "interno2.ogg", "submenus.ogg"),     # robos
+    "cups": ("copas.ogg", "interno1.ogg", "interno2.ogg"),       # carreira e campanha
     "match": ("torcida.ogg",),
 }
 SYNTH_TRACK = {"menu": "menu", "sub": "menu", "cups": "menu", "match": "match"}   # sem arquivo
-FILE_SFX = {                                 # id -> (arquivo, throttle s, vozes max, volume)
-    "goal": ("gol.ogg", 1.5, 1, 1.0),
-    "whistle_end": ("apito_final.ogg", 1.5, 1, 0.8),
-    "post": ("trave_torcida.ogg", 0.4, 1, 0.85),
-    "robot_off": ("robo_desligar.ogg", 3.0, 1, 0.7),
+FILE_SFX = {          # id -> (variacoes, throttle s, vozes max, volume); sorteia sem repetir a anterior
+    "goal": (("gol.ogg", "gol_grito.ogg", "gol_e_gol.ogg", "gol_olha_o_gol.ogg", "gol_brasil.ogg",
+              "gol_we.ogg"), 1.5, 1, 1.0),                    # gol do jogador (ou de qualquer um no 2P)
+    "goal_opp": (("gol_adv1.ogg", "gol_adv2.ogg", "gol_adv3.ogg", "gol_adv4.ogg"), 1.5, 1, 1.0),
+    "near": (("quase_uh.ogg",), 3.0, 1, 0.9),                # quase gol do jogador (defesa/trave)
+    "near_opp": (("quase_nao.ogg",), 3.0, 1, 0.9),           # quase leva um gol
+    "kickoff_voice": (("comecou.ogg",), 2.0, 1, 0.9),        # "comecou!" no 1o pontape
+    "applause": (("palmas.ogg",), 4.0, 1, 0.6),              # palmas no fim da partida
+    "crowd_chant": (("palmas.ogg",), 6.0, 1, 0.5),         # coro/ola da torcida (palmas no ritmo)
+    # reacoes da torcida gravadas (sorteadas sem repetir): "uuuh" da chance no lugar do sintetizado,
+    # palmas junto da defesa e a torcida aplaudindo o pontape inicial e o gol do jogador
+    "ooh": (("trave_torcida.ogg", "quase_uh.ogg", "uhhh_torcida.ogg"), 1.6, 1, 0.75),
+    "ole": (("ole.ogg",), 3.0, 1, 0.8),                     # "olé!" da torcida (drible/defesa do jogador)
+    "boo": (("vaias.ogg",), 6.0, 1, 0.6),                   # vaia: gol do rival / derrota do jogador
+    "save": (("palmas.ogg",), 2.5, 1, 0.45),
+    "crowd_cheer": (("palmas.ogg",), 5.0, 1, 0.55),
+    "click": (("click.ogg",), 0.05, 2, 0.8),
+    "whistle_end": (("apito_final.ogg",), 1.5, 1, 0.8),
+    "post": (("trave_torcida.ogg",), 0.4, 1, 0.85),
+    "robot_off": (("robo_desligar.ogg",), 3.0, 1, 0.7),
 }
-FILE_LAYER = ("post",)                       # o arquivo soma ao sintetizado; os outros substituem
+FILE_LAYER = ("post", "save")                       # o arquivo soma ao sintetizado; os outros substituem
+SYNTH_ALIAS = {"goal_opp": "goal"}           # sem arquivo: o efeito sintetizado equivalente
 AMB_FILE, AMB_VOL, AMB_FADE_MS = "robo_motor.ogg", 0.35, 300
 
 
@@ -403,7 +419,9 @@ class _State:
         self.stream_ok = {}          # trilha -> faixas em arquivo disponiveis
         self.stream = None           # trilha tocando em stream (pygame.mixer.music)
         self.pl_idx = {}             # trilha -> proxima faixa
-        self.files = {}              # id -> Sound carregado de arquivo (FILE_SFX)
+        self.files = {}              # id -> [Sound] carregados de arquivo (variacoes de FILE_SFX)
+        self.var_last = {}           # id -> indice da ultima variacao tocada
+        self.vrng = random.Random(4242)   # sorteio das variacoes (nunca o random global)
         self.amb = None              # Sound do motor dos robos
         self.amb_chan = None         # canal reservado do motor
         self.amb_on = False
@@ -579,15 +597,31 @@ def _stream_stop():
 
 
 def _load_file(sid):
-    """Carrega o efeito em arquivo `sid` (FILE_SFX). Falhou -> fica o sintetizado."""
-    name, _thr, _voices, vol = FILE_SFX[sid]
-    try:
-        if os.path.isfile(_path(name)):
-            snd = _mixer.Sound(_path(name))
-            snd.set_volume(vol * sfx_gain())
-            S.files[sid] = snd
-    except Exception as e:  # noqa: BLE001
-        _log("[som] efeito %s em arquivo falhou: %r" % (name, e))
+    """Carrega as variacoes do efeito `sid` (FILE_SFX). Nenhuma abriu -> fica o sintetizado."""
+    names, _thr, _voices, vol = FILE_SFX[sid]
+    out = []
+    for name in names:
+        try:
+            if os.path.isfile(_path(name)):
+                snd = _mixer.Sound(_path(name))
+                snd.set_volume(vol * sfx_gain())
+                out.append(snd)
+        except Exception as e:  # noqa: BLE001
+            _log("[som] efeito %s em arquivo falhou: %r" % (name, e))
+    if out:
+        S.files[sid] = out
+
+
+def _pick_variant(sid, n):
+    """Indice da variacao: sorteado, nunca igual a anterior quando ha mais de uma."""
+    if n <= 1:
+        return 0
+    last = S.var_last.get(sid)
+    k = S.vrng.randrange(n - 1 if last is not None else n)
+    if last is not None and k >= last:
+        k += 1
+    S.var_last[sid] = k
+    return k
 
 
 def _load_amb():
@@ -611,12 +645,15 @@ def _builder():
     """Constroi tudo aos poucos (cada yield = um pedaco de poucos ms no desktop)."""
     import music
     for sid in UI_FIRST:
-        if sid not in S.sounds:
+        if sid in FILE_SFX:
+            _load_file(sid)                     # clique gravado: pronto ja no boot
+        if sid not in S.sounds and sid not in S.files:
             _build_sfx(sid)
-            yield
-    for sid in FILE_SFX:
-        _load_file(sid)
         yield
+    for sid in FILE_SFX:
+        if sid not in S.files:
+            _load_file(sid)
+            yield
     _load_amb()
     yield
     need = {SYNTH_TRACK[t] for t in STREAMS if not S.stream_ok.get(t)}   # so as trilhas sem arquivo
@@ -679,22 +716,25 @@ def play(sid):
     """Toca o efeito `sid` (throttle por id, limite de vozes, volume das prefs). Nunca levanta."""
     if not S.ok:
         return False
+    variants = S.files.get(sid)
+    if not variants and sid in SYNTH_ALIAS:
+        sid = SYNTH_ALIAS[sid]
+        variants = S.files.get(sid)
     spec = SFX.get(sid)
-    fsnd = S.files.get(sid)
-    if spec is None and fsnd is None:
+    if spec is None and not variants:
         return False
     try:
         now = clock()
         last = S.last.get(sid)
-        thr = FILE_SFX[sid][1] if fsnd is not None else spec[2]
+        thr = FILE_SFX[sid][1] if variants else spec[2]
         if last is not None and now - last < thr:
             return False
         if sfx_gain() <= 0.0:
             return False
         ok = False
-        if fsnd is not None and fsnd.get_num_channels() < FILE_SFX[sid][2]:
-            ok = fsnd.play() is not None
-        if spec is not None and (fsnd is None or sid in FILE_LAYER):
+        if variants and sum(v.get_num_channels() for v in variants) < FILE_SFX[sid][2]:
+            ok = variants[_pick_variant(sid, len(variants))].play() is not None
+        if spec is not None and (not variants or sid in FILE_LAYER):
             snd = S.sounds.get(sid)
             if snd is None:
                 snd = _build_sfx(sid)           # ainda nao gerado: gera agora (poucos ms)
@@ -748,8 +788,9 @@ def _apply_volumes():
             snd = S.sounds.get(sid)
             if snd is not None:
                 snd.set_volume(spec[4] * g)
-        for sid, snd in S.files.items():
-            snd.set_volume(FILE_SFX[sid][3] * g)
+        for sid, snds in S.files.items():
+            for snd in snds:
+                snd.set_volume(FILE_SFX[sid][3] * g)
         if S.amb_chan is not None:
             if g <= 0.0:
                 S.amb_chan.stop()
