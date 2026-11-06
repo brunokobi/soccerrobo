@@ -329,7 +329,7 @@ def test_v2_finished_save_migrates_to_v3_and_starts_ng():
     assert c2 is not None and not c2.repaired, c2 and c2.warnings
     assert (c2.ch, c2.node, c2.done, c2.endings) == (c.ch, c.node, c.done, c.endings)
     assert c2.next_action() == c.next_action() and c2.next_action()["kind"] == "end"
-    assert c2.can_start_ng()
+    assert c2.can_start_ng() and c2.tower_unlocked() and c2.tower_cfg()["tower"] == 1
     assert c2.start_ng() == 1 and c2.next_action()["id"] == story.NG_REVANCHE["1"]
     for bad_c in (None, [], "x"):                               # `c` invalido continua "bad"
         d2 = copy.deepcopy(d)

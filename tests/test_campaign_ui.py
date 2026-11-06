@@ -2139,7 +2139,7 @@ def test_fx_skill_pts_rewards_recruit_and_training_ph():
         assert lv_ph >= SK.TRAIN_PH_MAX                                   # treino (+ niveis ganhos)
 
 
-# ================================================================== Onda D: NG+ e Miticas
+# ================================================================== Onda D: NG+, Torre do Po e Miticas
 def finish_campaign_api(seed=41):
     """Campanha nova pela UI e jogada ate o fim pela API pura (rapido); a UI fica no mapa."""
     fresh_campaign(seed)
@@ -2156,7 +2156,7 @@ def finish_campaign_api(seed=41):
             cp.advance_chapter()
         else:
             break
-    assert cp.finished() and cp.can_start_ng()
+    assert cp.finished() and cp.can_start_ng() and cp.tower_unlocked()
     ui.persist()
     ui.go("map")
     return cp
@@ -2167,7 +2167,7 @@ def test_ng_entry_from_ending_revanche_and_chapter_end():
     frame()
     assert text_cache_has("Turnê Lendária liberada")
     click_rect(MAP_CONT)
-    assert ui.screen_id == "ending" and ui.end_view["can_ng"]
+    assert ui.screen_id == "ending" and ui.end_view["can_ng"] and ui.end_view["tower"]
     frame()
     assert text_cache_has("TURNÊ LENDÁRIA I") and _no_surface_frames() == 0
     shot("d1_ng_entrada_fim")
@@ -2209,6 +2209,65 @@ def test_ng_entry_from_ending_revanche_and_chapter_end():
     shot("d1_ng_fim_capitulo_mitica")
     click_rect(CE_CONT)
     assert not FORBIDDEN
+    ui.to_menu()
+
+
+def test_tower_screen_sim_watch_marks_and_restart():
+    cp = finish_campaign_api(43)
+    frame()
+    click_rect(cui.MAP_TOWER)
+    assert ui.screen_id == "tower" and ui.tower_act["tower"] == 1
+    frame()
+    assert text_cache_has("TORRE DO PÓ") and text_cache_has("ANDAR 1") and text_cache_has("Arena normal")
+    assert _no_surface_frames() == 0
+    shot("d2_torre_tela")
+    SIMQ.append((2, 0))
+    click_rect(BTN_SIM)
+    assert ui.screen_id == "round" and ui.round_info["tower"] == 1 and cp.tower == {"floor": 1, "best": 1}
+    frame()
+    assert text_cache_has("ANDAR 1 CONCLUÍDO") and text_cache_has("TORRE DO PÓ - ANDAR 1")
+    assert json.loads(CAMP["save"])["c"]["tower"] == {"floor": 1, "best": 1}
+    click_rect(ROUND_CONT)
+    assert ui.screen_id == "tower" and ui.tower_act["tower"] == 2
+    SIMQ.append((0, 1))                                       # derrota: repete o andar
+    click_rect(BTN_SIM)
+    frame()
+    assert text_cache_has("tente o andar de novo") and cp.tower["floor"] == 1
+    click_rect(ROUND_CONT)
+    # andar 10: goleiro gigante + marco
+    cp.tower = {"floor": 9, "best": 9}
+    ui.go("tower")
+    frame()
+    assert ui.tower_act["mod"] == "goleiro_gigante" and text_cache_has("Goleiro gigante")
+    assert text_cache_has("Marco do andar: Poeira Dourada")
+    shot("d2_torre_andar10_modificador")
+    click_rect(BTN_WATCH)
+    assert g.state == "kickoff" and g.arena == "goleiro_gigante" and g.match_sink[0] == "campaign"
+    for _ in range(200):
+        g.update(1 / 60)
+        g.draw()
+    shot_raw = SHOTS_DIR
+    if shot_raw:
+        os.makedirs(shot_raw, exist_ok=True)
+        pygame.image.save(g.screen, "%s/%s.png" % (shot_raw, "d2_torre_partida_modificador"))
+    g.score = [2, 1]
+    g.finish_career_match()
+    assert g.arena is None and ui.screen_id == "round" and cp.tower == {"floor": 10, "best": 10}
+    assert ui.round_info["mark"] == {"cosmetic": "poeira"} and cp.garage.owns_cosmetic("poeira")
+    frame()
+    assert text_cache_has("MARCO: Poeira Dourada")
+    shot("d2_torre_marco")
+    click_rect(ROUND_CONT)
+    # topo: recomecar
+    cp.tower = {"floor": 40, "best": 40}
+    ui.go("tower")
+    frame()
+    assert ui.tower_act is None and text_cache_has("TOPO ALCANÇADO")
+    assert _no_surface_frames() == 0
+    click_rect((700, 390, 360, 76))
+    assert cp.tower == {"floor": 0, "best": 40} and ui.tower_act["tower"] == 1
+    key(pygame.K_ESCAPE)
+    assert ui.screen_id == "map" and not FORBIDDEN
     ui.to_menu()
 
 

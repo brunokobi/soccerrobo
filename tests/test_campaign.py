@@ -1420,7 +1420,7 @@ def test_ng_locked_until_an_ending():
     except ValueError:
         pass
     c = finished()
-    assert c.finished() and c.can_start_ng()
+    assert c.finished() and c.can_start_ng() and c.tower_unlocked()
     c.tour = {"id": "t_c13"}                         # torneio em andamento bloqueia (seguranca)
     assert not c.can_start_ng()
 
@@ -1492,13 +1492,73 @@ def test_ng_pity_after_cap_and_group_sim_shifted():
     assert c.ng_ovr(40) == 60 and c.ng_ovr(85) == 90
 
 
-def test_ng_simulate_uses_post_relief():
+def test_tower_unlock_ovr_mods_and_marks():
+    assert [cm.tower_ovr(f) for f in (1, 10, 20, 30, 40)] == [55, 63, 72, 81, 90]
+    mods = {f: cm.tower_mod(f) for f in range(1, cm.TOWER_FLOORS + 1) if cm.tower_mod(f)}
+    assert sorted(mods) == list(range(5, 41, 5)) and mods[40] == "goleiro_gigante"
+    assert set(mods.values()) == set(cm.TOWER_MOD_CYCLE)
+    c = new(9)
+    assert not c.tower_unlocked() and c.tower_cfg() is None
+    c = finished()
+    assert c.tower is None and c.tower_state() == {"floor": 0, "best": 0}
+    a = c.tower_cfg()
+    assert a["tower"] == 1 and a["O"] == 55 and a["mod"] is None and a["econ_tier"] == cm.NG_ECON_TIER
+    assert c.tower_cfg()["opp"] == a["opp"]                              # puro (nao consome RNG)
+    g = c.garage
+    out = c.record_tower(0, 2)
+    assert out["outcome"] == "tower_lose" and c.tower == {"floor": 0, "best": 0}
+    scrap = g.scrap
+    out = c.record_tower(2, 0)
+    assert out["outcome"] == "tower_win" and out["bonus"] == 110 and c.tower == {"floor": 1, "best": 1}
+    assert g.scrap == scrap + out["rewards"]["scrap"] + 110
+    out = c.record_tower(1, 1, pen=(4, 3))                               # empate: penaltis
+    assert out["outcome"] == "tower_win" and out["pen"] == (4, 3) and c.tower["floor"] == 2
+    out = c.record_tower(1, 1, pen=(2, 4))
+    assert out["outcome"] == "tower_lose" and c.tower["floor"] == 2
+    marks = {}
+    while c.tower_next() is not None:
+        f = c.tower_next()
+        assert c.tower_cfg()["mod"] == cm.tower_mod(f) and c.tower_cfg()["O"] == cm.tower_ovr(f)
+        out = c.record_tower(3, 0)
+        if out["mark"]:
+            marks[f] = out
+    assert sorted(marks) == [10, 20, 30, 40]
+    for f, mk in cm.TOWER_MARKS.items():
+        assert g.owns_cosmetic(mk["cosmetic"]) and (marks[f]["mythic"] is not None) == bool(mk.get("mythic"))
+    assert sum(1 for p in g.inventory if p["rar"] == 4) == 2
+    assert c.tower_cfg() is None and c.tower == {"floor": 40, "best": 40}
+    try:
+        c.record_tower(1, 0)
+        raise AssertionError("andar alem do topo")
+    except RuntimeError:
+        pass
+    check_roundtrip(c)
+    # recomecar: recorde fica, marcos e bonus nao repetem
+    assert c.tower_restart() and c.tower == {"floor": 0, "best": 40}
+    inv, cos = sum(1 for p in g.inventory if p["rar"] == 4), list(g.cosmetics)
+    for _ in range(10):
+        out = c.record_tower(2, 0)
+        assert out["bonus"] == 0 and out["mark"] is None
+    assert sum(1 for p in g.inventory if p["rar"] == 4) == inv           # nenhuma Mitica nova
+    assert g.cosmetics == cos and c.tower == {"floor": 10, "best": 40}
+    assert not c.tower_restart()
+
+
+def test_tower_simulate_discounts_modifier():
     seen = []
     real = cm.sim_match
     cm.sim_match = lambda F, O, rng, relief=None: (seen.append((F, O, relief)), (2, 0))[1]
     try:
         c = finished()
-        c.start_ng()
+        c.tower = {"floor": 9, "best": 9}
+        F = c.garage.match_F()
+        out = c.simulate_tower()                                     # andar 10: goleiro gigante
+        assert out["outcome"] == "tower_win" and out["tower"] == 10
+        assert seen[-1] == (F, 63, cm.POST_SIM_RELIEF - cm.ARENA_SIM_DF["goleiro_gigante"])
+        F = c.garage.match_F()                                       # (a partida anterior deu XP)
+        out = c.simulate_tower()                                     # andar 11: sem modificador
+        assert seen[-1] == (F, cm.tower_ovr(11), cm.POST_SIM_RELIEF) and c.stats["sims"] >= 2
+        c.start_ng()                                                 # NG+: o SIMULAR do torneio tambem alivia
         for _ in range(5):
             a = c.next_action()
             if a["kind"] == "scene":
@@ -1508,6 +1568,7 @@ def test_ng_simulate_uses_post_relief():
         assert seen[-1][2] == cm.POST_SIM_RELIEF
     finally:
         cm.sim_match = real
+    assert set(cm.ARENA_SIM_DF) == set(cm.TOWER_MOD_CYCLE)
 
 
 def main():

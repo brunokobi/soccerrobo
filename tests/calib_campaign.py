@@ -154,6 +154,39 @@ muda, Ato 2 so no fim do cap. 9). Rodada 3 (final):
   13 S2 Guarda Pretoriana  94.5   75   52.0   53.4  +1.4   (duelo do meio: meta de SF)
   13 S3 X-Ômega Prime      94.5   78   43.5   46.6  +3.1   (chefe final: meta 42-50)
   motor: treino 58-67 | regulares 55-67 | SF/duelo do meio 52 | chefes 47-52 (final 43,5). |SIM - motor| media 2,9.
+
+ONDA D - POS-CAMPANHA (05/11/2026, --post --n 100; garage com skills, adversario generico; Torre com o
+modificador do andar). F 94,5 = Forca do fim do Ato 3 (gulosa); F 87,9 = a "potencial" da spec (~88). SIM
+antes = sim_bias da campanha, sem alivio nem desconto; SIM agora = + POST_SIM_RELIEF (4) - ARENA_SIM_DF.
+  celula                       F    O  V/E/D     motor | SIM antes  dif | SIM agora  dif
+  NG+ F88 O60                 87.9  60  78/16/6    86.0   81.2   -4.8   87.1   +1.1
+  NG+ F88 O70                 87.9  70  50/22/28   61.0   61.7   +0.7   70.2   +9.2
+  NG+ F88 O78                 87.9  78  42/21/37   52.5   43.6   -8.9   52.7   +0.2
+  NG+ F88 O85                 87.9  85  26/33/41   42.5   28.5  -14.0   36.9   -5.6
+  NG+ F88 O90                 87.9  90  26/32/42   42.0   19.4  -22.6   26.5  -15.5
+  NG+ F94 O60                 94.5  60  84/13/3    90.5   83.3   -7.2   88.7   -1.8
+  NG+ F94 O70                 94.5  70  63/20/17   73.0   64.6   -8.4   72.8   -0.2
+  NG+ F94 O78                 94.5  78  29/25/46   41.5   46.6   +5.1   55.7  +14.2
+  NG+ F94 O85                 94.5  85  31/28/41   45.0   31.2  -13.8   39.8   -5.2
+  NG+ F94 O90                 94.5  90  16/22/62   27.0   21.6   -5.4   29.1   +2.1
+  Torre 10 goleiro_gigante    94.5  63  70/18/12   79.0   78.4   -0.6   76.6   -2.4
+  Torre 15 bola_pesada        94.5  68  69/13/18   75.5   68.8   -6.7   74.8   -0.7
+  Torre 20 bateria_curta      94.5  72  40/29/31   54.5   60.2   +5.7   61.3   +6.8
+  Torre 25 goleiro_gigante    94.5  76  26/26/48   39.0   51.1  +12.1   48.9   +9.9
+  Torre 30 bola_pesada        94.5  81  38/24/38   50.0   39.8  -10.2   46.6   -3.4
+  Torre 35 bateria_curta      94.5  86  19/33/48   35.5   29.1   -6.4   30.2   -5.3
+  Torre 39 -                  94.5  89  21/18/61   30.0   23.4   -6.6   31.2   +1.2
+  Torre 40 goleiro_gigante    94.5  90  15/26/59   28.0   21.6   -6.4   19.9   -8.1
+  Torre 30 sem mod            94.5  81  24/26/50   37.0   39.8   +2.8   48.9  +11.9
+  Torre 40 sem mod            94.5  90  16/22/62   27.0   21.6   -5.4   29.1   +2.1
+  |SIM - motor|: antes media 7,8 (com sinal -6,3); agora 5,5 (com sinal +0,4); ruido do motor ~+-9 (n=100).
+  Leitura: acima de F ~88 o motor quase nao melhora (F 88 e F 94 dao ~42-45 contra O 85). O NG+ e
+  alcancavel com retentativas: as voltas I-III saturam no teto 90 a partir do cap. 6 (I) ou 4-5 (II/III),
+  onde cada partida vale ~27-45 de V+E/2 (= chance de passar um mata-mata com penaltis); o pity do chefe
+  (-3) e as derrotas sem custo seguram. Torre: andares 1-25 acima de 39 (a maioria 55-80); 30-40 entre 28 e
+  50. Modificadores (com x sem, mesma F): bateria curta e goleiro gigante pesam ate -13 contra O 85; contra
+  O 90 o motor ja esta no piso e o efeito some no ruido; a bola pesada ficou neutra (o chute mais fraco,
+  testado junto, fazia o time forte marcar 5-6 gols e foi retirado).
 """
 import argparse
 import math
@@ -287,13 +320,14 @@ def _game():
 
 
 def one(args):
-    home, away, seed = args
+    home, away, seed = args[:3]
+    arena = args[3] if len(args) > 3 else None             # Onda D: modificador de arena da Torre do Po
     g = _game()
     random.seed(seed)
     old = soccer.BATTERY_ON
     soccer.BATTERY_ON = True
     try:
-        g.start_robot_match(home, away, lambda s, e: None, tuning=robots.TUNING_ROBOTS)
+        g.start_robot_match(home, away, lambda s, e: None, tuning=robots.TUNING_ROBOTS, arena=arena)
         while g.state != "over":
             g.step(DT)
         return g.score[0], g.score[1]
@@ -368,8 +402,9 @@ def table_cells(chapters=None):
     return out
 
 
-def measure(pool, F, kind, tid, ovr, n, with_skills=False):
-    """(F real do garage, V, E, D) do motor: usuario mandante, 10 variantes de adversario."""
+def measure(pool, F, kind, tid, ovr, n, with_skills=False, arena=None):
+    """(F real do garage, V, E, D) do motor: usuario mandante, 10 variantes de adversario. arena: modificador
+    da Torre do Po (Onda D) ou None."""
     g = build_garage_for(F, with_skills)
     home = g.match_cfg()
     if kind == "train":
@@ -378,7 +413,7 @@ def measure(pool, F, kind, tid, ovr, n, with_skills=False):
     else:
         spec = lambda k: opp_team(tid, ovr, 777 + k)  # noqa: E731
     aways = [rl.match_cfg(spec(k)) for k in range(10)]
-    res = pool.map(one, [(home, aways[s % 10], s) for s in range(n)], chunksize=4)
+    res = pool.map(one, [(home, aways[s % 10], s, arena) for s in range(n)], chunksize=4)
     w = sum(x > y for x, y in res)
     l = sum(x < y for x, y in res)
     return g.rating(), w, n - w - l, l
@@ -437,6 +472,37 @@ def main_grid(a):
         json.dump(rows, open(a.json, "w"))
 
 
+def post_cells():
+    """Onda D: (rotulo, F, O, arena). NG+: os ovr distintos que a Turne Lendaria gera (cap. 1/5 deslocados e o
+    teto 90 que vale do cap. 6 em diante na volta I e antes nas II/III) com a Forca do fim do Ato 3 (~94) e a
+    "potencial" da spec (~88). Torre: andares com e sem modificador, F ~94."""
+    out = []
+    for F in (88.0, 94.0):
+        for O in (60, 70, 78, 85, 90):
+            out.append(("NG+ F%.0f O%d" % (F, O), F, O, None))
+    for f in (10, 15, 20, 25, 30, 35, 39, 40):
+        out.append(("Torre %d %s" % (f, cm.tower_mod(f) or "-"), 94.0, cm.tower_ovr(f), cm.tower_mod(f)))
+    for f in (30, 40):
+        out.append(("Torre %d sem mod" % f, 94.0, cm.tower_ovr(f), None))
+    return out
+
+
+def main_post(a):
+    """--post: NG+ e Torre do Po no motor (garage com skills, adversario generico) x SIMULAR (sim_bias e o
+    alivio POST_SIM_RELIEF menos o desconto ARENA_SIM_DF). Imprime V/E/D e V+E/2 (= chance de passar uma partida de mata-mata, V + E x
+    penaltis ~50%, que e o proprio V+E/2)."""
+    print("%-28s %5s %3s | %-13s %6s | %6s %5s" % ("celula", "F", "O", "motor V/E/D", "V+E/2", "SIM", "dif"))
+    with Pool(a.procs) as pool:
+        for name, F, O, arena in post_cells():
+            Fr, w, d, l = measure(pool, F, "train", None, O, a.n, True, arena)
+            eng = 100.0 * (w + d / 2.0) / a.n
+            pw, pd, _ = poisson_wdl(Fr - cm.sim_bias(O, Fr) + cm.POST_SIM_RELIEF - cm.ARENA_SIM_DF.get(arena, 0.0),
+                                    O)
+            sim = points(pw, pd)
+            print("%-28s %5.1f %3d | %3d/%3d/%3d   %6.1f | %6.1f %+5.1f" % (
+                name, Fr, O, w, d, l, eng, sim, sim - eng), flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=300)
@@ -445,8 +511,11 @@ def main():
     ap.add_argument("--json", default="", help="grava as linhas em JSON")
     ap.add_argument("--grid", action="store_true", help="grade F x O (regressao do vies)")
     ap.add_argument("--skills", action="store_true", help="garage com mod_on + SKILL_KIT (B9)")
+    ap.add_argument("--post", action="store_true", help="Onda D: NG+ e Torre do Po (use --n 100)")
     a = ap.parse_args()
-    if a.grid:
+    if a.post:
+        main_post(a)
+    elif a.grid:
         main_grid(a)
     else:
         main_table(a)

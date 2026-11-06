@@ -8,7 +8,8 @@ chama garage.save() e nunca toca a chave do modo livre.
 Telas (screen_id): menu, map (aba HISTÓRIA), garage (aba GARAGEM), shop (aba LOJA), bench, dialog
 (cena com retratos/cenarios por codigo, digitacao e escolhas; ver game/portraits.py),
 tourney (grupo + chaveamento + ASSISTIR/SIMULAR/TREINO), training (partida de treino), round (resultado,
-reaproveita draw_round_body de RobotsUI), chapter_end (relatorio de recompensas), ending (fim/em producao).
+reaproveita draw_round_body de RobotsUI), chapter_end (relatorio de recompensas), ending (fim/em producao),
+tower (Torre do Po, Onda D: 40 andares, ASSISTIR com o modificador de arena / SIMULAR com o desconto).
 NG+ (Onda D): o botao TURNE LENDARIA fica na tela de fim; durante a volta o mapa marca os capitulos pela
 volta atual e o torneio mostra "Revanche".
 
@@ -45,9 +46,9 @@ from robots_ui import RobotsUI
 
 TABS = [("map", "HISTÓRIA"), ("garage", "GARAGEM"), ("shop", "LOJA"), ("skills", "HABILIDADES")]
 FRAME_SCREENS = tuple(t for t, _ in TABS)
-STUB_SCREENS = ("tourney", "training", "round", "chapter_end", "ending", "sides")   # Esc = volta ao mapa
+STUB_SCREENS = ("tourney", "training", "round", "chapter_end", "ending", "sides", "tower")   # Esc = mapa
 SCREENS = ("menu", "map", "garage", "shop", "skills", "bench", "dialog") + STUB_SCREENS
-FRAME_EXTRA = ("tourney", "training", "sides")          # telas com cabecalho + abas (HISTORIA fica ativa)
+FRAME_EXTRA = ("tourney", "training", "sides", "tower")   # telas com cabecalho + abas (HISTORIA ativa)
 NODE_X0, NODE_DX = 110, 176
 NODE_X_MAX = 990                  # ultimo no do mapa (o painel vai ate x = 1080)
 
@@ -61,7 +62,9 @@ ACT_TAB = (32, 139, 112, 24)                              # x, y, w, h da 1a aba
 SIDE_ROWS = 4                                             # missoes por pagina na tela "sides"
 NODE_R = 26
 NG_ROMAN = ("", "I", "II", "III")                         # voltas do NG+ (Turne Lendaria)
-END_NG = (80, 560, 300, 60)                               # botao TURNE LENDARIA na tela de fim
+TOWER_COLS, TOWER_CELL = 10, (44, 30)                     # grade da Torre do Po (4 linhas x 10 andares)
+MAP_TOWER = (430, 590, 240, 40)                           # botao TORRE DO PO no mapa
+END_NG, END_TOWER = (80, 560, 300, 60), (720, 560, 300, 60)   # botoes da tela de fim (VOLTAR fica no meio)
 PULSE_PERIOD = 1.6
 NEON = (0, 230, 255)
 # ---- dialogo
@@ -179,6 +182,7 @@ class CampaignUI(RobotsUI):
         self.end_view = None            # modelo da tela "ending"
         self.map_tab = None             # Ato exibido no mapa (None = o do capitulo atual)
         self.side_page = 0              # pagina da tela "sides"
+        self.tower_act = None           # partida do proximo andar da Torre (tela "tower"; Onda D)
 
     # `self.garage` aponta SEMPRE para a garagem da campanha (os metodos herdados usam self.garage)
     @property
@@ -239,6 +243,8 @@ class CampaignUI(RobotsUI):
             self.enter_chapter_end()
         elif screen == "ending":
             self.enter_ending()
+        elif screen == "tower":
+            self.enter_tower()
 
     def refresh_map(self):
         self.map_act = self.campaign.next_action() if self.campaign is not None else None
@@ -317,7 +323,7 @@ class CampaignUI(RobotsUI):
         recalcular a acao (training_cfg consome o RNG da campanha)."""
         super().on_backpack_change()
         gg = self.garage
-        for act in (self.map_act if self.screen_id == "tourney" else None, self.train):
+        for act in (self.map_act if self.screen_id == "tourney" else None, self.train, self.tower_act):
             if isinstance(act, dict) and "user_F" in act:
                 act["user_F"] = gg.match_F()
                 act["home"] = gg.match_cfg()
@@ -528,6 +534,8 @@ class CampaignUI(RobotsUI):
             n = len(cp.available_sides())
             self.btn((430, 536, 240, 44), "MISSÕES (%d)" % n if n else "MISSÕES", self.open_sides,
                      size=24, color=(90, 70, 140) if n else (50, 50, 70))
+            if cp.tower_unlocked():                         # Onda D: Torre do Po (liberada pelo cap. 13)
+                self.btn(MAP_TOWER, "TORRE DO PÓ", self.open_tower, size=24, color=(150, 80, 50))
         self.text("Sucata: %d" % self.garage.scrap, 26, GOLD, midleft=(704, 552))
         self.btn((880, 532, 180, 40), "TREINO", lambda: self.open_training("map"), size=26,
                  color=(60, 80, 130))
@@ -1041,7 +1049,7 @@ class CampaignUI(RobotsUI):
         self.finish_result(out, pend["act"], events, False, training=True, items=used)
 
     # ---- resultado (tela "round" herdada: draw_round_body + cabecalho proprio)
-    def finish_result(self, out, act, events, simulated, training=False, items=None):
+    def finish_result(self, out, act, events, simulated, training=False, items=None, tower=False):
         cp = self.campaign
         gg = self.garage
         rew = out["rewards"]
@@ -1071,7 +1079,11 @@ class CampaignUI(RobotsUI):
             "side": out.get("side"), "side_reward": fx_text(out.get("side_reward")),
             "outcome": out.get("outcome"), "boss": bool(out.get("boss")), "group_pos": out.get("group_pos"),
             "pity": cp.pity, "single": out.get("outcome") == "done",
-            "items": [SK.ITEMS[i]["name"] for i in (items or ()) if i in SK.ITEMS], "ph": out.get("ph", 0)}
+            "items": [SK.ITEMS[i]["name"] for i in (items or ()) if i in SK.ITEMS], "ph": out.get("ph", 0),
+            "tower": out.get("tower") if tower else None, "mark": out.get("mark"), "mythic": out.get("mythic"),
+            "bonus": out.get("bonus", 0), "mod": act.get("mod") if tower else None}
+        if tower:
+            self.round_info["tname"] = "Torre do Pó"
         self.persist()
         self.go("round")
 
@@ -1079,6 +1091,8 @@ class CampaignUI(RobotsUI):
         info = self.round_info
         if info is not None and info.get("training"):
             return self.back_from_training()
+        if info is not None and info.get("tower"):
+            return self.go("tower")
         if info is not None and info.get("side"):
             try:
                 self.campaign.next_action()
@@ -1093,6 +1107,19 @@ class CampaignUI(RobotsUI):
         if info.get("training"):
             return "Treino concluído - o torneio não avançou", DIM
         oc, st = info.get("outcome"), info.get("stage")
+        if oc == "tower_win":
+            msg = "ANDAR %d CONCLUÍDO!" % info["tower"]
+            if info.get("bonus"):
+                msg += " +%d de sucata" % info["bonus"]
+            mk = info.get("mark")
+            if mk:
+                bits = [P.COSMETIC_NAMES[mk["cosmetic"]]] if mk.get("cosmetic") else []
+                if info.get("mythic"):
+                    bits.append(info["mythic"])
+                msg += "  MARCO: " + " + ".join(bits)
+            return msg, GOLD
+        if oc == "tower_lose":
+            return "Derrota - tente o andar de novo (sem penalidade)", RED
         if oc == "side_win":
             rw = info.get("side_reward")
             return ("MISSÃO CONCLUÍDA! " + rw) if rw else "MISSÃO CONCLUÍDA!", GOLD
@@ -1125,6 +1152,10 @@ class CampaignUI(RobotsUI):
         th, ta = info["teams"]
         if info.get("training"):
             title = "TREINO"
+        elif info.get("tower"):
+            title = "TORRE DO PÓ - ANDAR %d" % info["tower"]
+            if info.get("mod"):
+                title += " (%s)" % C.ARENA_NAMES[info["mod"]].upper()
         elif info.get("side"):
             title = "MISSÃO - %s" % info["tname"]
         else:
@@ -1498,7 +1529,8 @@ class CampaignUI(RobotsUI):
                          "trained": st["trained"], "titles": cp.garage.stats["titles"],
                          "boss_losses": self.count_keys("lose"), "elims": self.count_keys("elim"),
                          "rating": int(round(cp.garage.rating())), "ng_done": act.get("ng_done", 0),
-                         "cosmetic": act.get("cosmetic"), "can_ng": cp.can_start_ng(), "next_ng": cp.ng + 1}
+                         "cosmetic": act.get("cosmetic"), "can_ng": cp.can_start_ng(), "next_ng": cp.ng + 1,
+                         "tower": cp.tower_unlocked()}
         if act.get("ending") or act.get("ng_done"):
             self.persist()                        # o final entrou na galeria / a volta do NG+ fechou agora
 
@@ -1553,8 +1585,10 @@ class CampaignUI(RobotsUI):
             self.btn(END_NG, "TURNÊ LENDÁRIA %s" % NG_ROMAN[k], self.do_start_ng, size=28, color=(150, 50, 100))
             self.text(self.fit("Recomeça no cap. 1 com rivais +%d de Força; a garagem fica." % C.NG_SHIFT[k],
                                20, 1040), 20, DIM, center=(cx, 650))
+        if v.get("tower"):
+            self.btn(END_TOWER, "TORRE DO PÓ", self.open_tower, size=28, color=(150, 80, 50))
 
-    # ================================================================ NG+ (Onda D)
+    # ================================================================ NG+ E TORRE DO PO (Onda D)
     def do_start_ng(self):
         """TURNE LENDARIA: comeca a proxima volta do NG+ (garagem mantida) e volta ao mapa no cap. 1."""
         try:
@@ -1566,3 +1600,137 @@ class CampaignUI(RobotsUI):
         self.go("map")
         self.add_notice("Turnê Lendária %s: rivais +%d (teto %d). Prêmios: sucata, peças Míticas e um "
                         "cosmético." % (NG_ROMAN[self.campaign.ng], C.NG_SHIFT[self.campaign.ng], C.NG_OVR_CAP))
+
+    def open_tower(self):
+        if self.campaign is None or not self.campaign.tower_unlocked():
+            return
+        self.go("tower")
+
+    def enter_tower(self):
+        """Partida do proximo andar (tower_cfg e pura: pode ser recalculada a cada entrada/clique)."""
+        self.tower_act = self.campaign.tower_cfg() if self.campaign is not None else None
+
+    def do_watch_tower(self):
+        act = self.campaign.tower_cfg() if self.campaign is not None else None
+        if act is None:
+            return
+        self.tower_act = act
+        self.pending = {"act": act, "tower": True}
+        self.g.start_robot_match(act["home"], act["away"], on_done=self.tower_done, return_state="campaign",
+                                 venue=self.match_venue(act), arena=act["mod"])
+
+    def tower_done(self, score, events):
+        pend, self.pending = self.pending, None
+        cp = self.campaign
+        if cp is None or not isinstance(pend, dict) or not pend.get("tower"):
+            if cp is not None:
+                self.go("map")
+            return
+        used = cp.garage.backpack_items()
+        try:
+            out = cp.record_tower(int(score[0]), int(score[1]), events=events, simulated=False)
+        except (RuntimeError, ValueError):
+            self.go("tower")
+            return
+        self.finish_result(out, pend["act"], events, False, items=used, tower=True)
+
+    def do_sim_tower(self):
+        cp = self.campaign
+        act = cp.tower_cfg() if cp is not None else None
+        if act is None:
+            return
+        used = cp.garage.backpack_items()
+        try:
+            out = cp.simulate_tower()
+        except (RuntimeError, ValueError):
+            self.go("tower")
+            return
+        self.finish_result(out, act, [], True, items=used, tower=True)
+
+    def do_tower_restart(self):
+        if self.campaign is not None and self.campaign.tower_restart():
+            self.persist()
+        self.go("tower")
+
+    def draw_tower(self):
+        cp = self.campaign
+        scr = self.g.screen
+        st = cp.tower_state()
+        act = self.tower_act
+        self.text("TORRE DO PÓ", 34, GOLD, topleft=(24, 130), shadow=True)
+        self.text("Andar %d/%d   Recorde %d" % (st["floor"], C.TOWER_FLOORS, st["best"]), 22, DIM,
+                  midright=(W - 24, 148))
+        # ---- grade dos 40 andares (o 1 embaixo a esquerda)
+        self.panel((20, 172, 520, 190))
+        cw, chh = TOWER_CELL
+        rows = C.TOWER_FLOORS // TOWER_COLS
+        nxt = cp.tower_next()
+        for f in range(1, C.TOWER_FLOORS + 1):
+            r, c = (f - 1) // TOWER_COLS, (f - 1) % TOWER_COLS
+            rect = pygame.Rect(36 + c * (cw + 6), 180 + (rows - 1 - r) * (chh + 14), cw, chh)
+            done = f <= st["floor"]
+            fill = (20, 110, 70) if done else ((20, 70, 110) if f == nxt else (18, 36, 54))
+            edge = GOLD if f in C.TOWER_MARKS else (NEON if f == nxt else LINE)
+            pygame.draw.rect(scr, fill, rect, border_radius=5)
+            pygame.draw.rect(scr, edge, rect, 3 if f == nxt else 2, border_radius=5)
+            self.text(str(f), 20, TEXT if (done or f == nxt) else DIM, center=rect.center)
+            if C.tower_mod(f):                              # andar com modificador: ponto laranja
+                pygame.draw.circle(scr, (255, 150, 90), (rect.right - 5, rect.y + 5), 3)
+        # ---- marcos
+        px = 556
+        self.panel((px, 172, 524, 190))
+        self.text("MARCOS (prêmio ao bater o recorde)", 22, GOLD, topleft=(px + 18, 180))
+        for k, (f, mk) in enumerate(sorted(C.TOWER_MARKS.items())):
+            y = 210 + k * 36
+            got = st["best"] >= f
+            bits = ["%s (%s)" % (P.COSMETIC_NAMES[mk["cosmetic"]],
+                                 P.LOOK_TITLES[P.COSMETIC_KIND[mk["cosmetic"]]].lower())]
+            if mk.get("mythic"):
+                bits.append("peça Mítica")
+            self.text("Andar %d" % f, 22, GOLD if got else TEXT, topleft=(px + 18, y))
+            self.text(self.fit(" + ".join(bits), 22, 300), 22, P.RAR_COLORS[P.MYTHIC] if mk.get("mythic") else
+                      TEXT, topleft=(px + 110, y))
+            self.text("OK" if got else "-", 22, GREEN if got else DIM, midright=(px + 506, y + 9))
+        # ---- partida do andar
+        self.panel((20, 372, 1060, 308))
+        if act is None:
+            self.text("TOPO ALCANÇADO!", 44, GOLD, topleft=(40, 384), shadow=True)
+            for k, line in enumerate(self.wrap(
+                    "Você venceu os %d andares. Dá para recomeçar a subida para juntar sucata e XP (o recorde "
+                    "fica e os marcos não se repetem)." % C.TOWER_FLOORS, 24, 620)):
+                self.text(line, 24, DIM, topleft=(40, 440 + k * 28))
+            self.btn((700, 390, 360, 76), "RECOMEÇAR SUBIDA", self.do_tower_restart, size=32, color=(150, 80, 50))
+            self.btn((700, 608, 360, 44), "VOLTAR AO MAPA", self.back_to_map, size=24, color=(60, 60, 70))
+            return
+        f = act["tower"]
+        self.text("ANDAR %d" % f, 44, GOLD, topleft=(40, 384), shadow=True)
+        mod = act.get("mod")
+        if mod:
+            self.text(self.fit("Arena: %s - %s" % (C.ARENA_NAMES[mod], C.ARENA_DESC[mod]), 24, 620), 24,
+                      (255, 150, 90), topleft=(40, 432))
+        else:
+            self.text("Arena normal (modificador a cada %d andares)" % C.TOWER_MOD_EVERY, 24, DIM, topleft=(40, 432))
+        mine = int(round(act["user_F"]))
+        opp = act["opp"]
+        gg = self.garage
+        for x, name, col, sub, subc in (
+                (40, gg.team["name"], gg.team["color"], "Sua Força: %d" % mine, GREEN if mine >= act["O"] else GOLD),
+                (400, opp["name"], opp["color"], "Força do rival: %d" % act["O"], TEXT)):
+            pygame.draw.rect(scr, tuple(col), (x, 476, 14, 50), border_radius=3)
+            self.text(self.fit(name, 32, 270), 32, TEXT, topleft=(x + 26, 474), shadow=True)
+            self.text(sub, 24, subc, topleft=(x + 26, 506))
+        self.text("x", 32, DIM, center=(366, 502))
+        mk = act.get("mark")
+        if mk and f > st["best"]:
+            self.text(self.fit("Marco do andar: %s%s" % (P.COSMETIC_NAMES[mk["cosmetic"]],
+                                                         " + peça Mítica" if mk.get("mythic") else ""), 24, 330),
+                      24, GOLD, topleft=(40, 546))
+        if gg.mod_on():
+            self.draw_backpack_strip(pygame.Rect(380, 538, 300, 64))
+        self.text(self.fit("Robôs: " + ", ".join(e["name"] for e in opp["squad"]), 20, 640), 20, DIM,
+                  topleft=(40, 614))
+        self.text("Partida única: empate vai aos pênaltis. Perder repete o andar, sem penalidade.", 20, DIM,
+                  topleft=(40, 640))
+        self.btn((700, 390, 360, 76), "ASSISTIR", self.do_watch_tower, size=36)
+        self.btn((700, 478, 360, 56), "SIMULAR", self.do_sim_tower, size=30, color=(60, 80, 130))
+        self.btn((700, 608, 360, 44), "VOLTAR AO MAPA", self.back_to_map, size=24, color=(60, 60, 70))

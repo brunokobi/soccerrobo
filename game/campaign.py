@@ -41,8 +41,13 @@ Pos-campanha (Onda D, spec campanha-expandida secao 12; save v3)
   (story.POST_SCENES, chave "<cena>#<ng>"). Adversarios: ovr + NG_SHIFT[ng], teto NG_OVR_CAP (o pity do
   chefe vale depois do teto). Fechar um capitulo grava "ng<k>:<cap>" e da NG_CHAPTER_SCRAP[k] sucata (+ uma
   peca Mitica nos capitulos NG_MYTHIC_CHAPTERS); o no "end" grava "ng<k>:end" e da NG_END_COSMETIC[k]. As
-  partidas da volta usam o tier economico NG_ECON_TIER (o mais alto); o SIMULAR da volta devolve
-  POST_SIM_RELIEF ao vies (o motor achata com Forca alta).
+  partidas da volta usam o tier economico NG_ECON_TIER (o mais alto).
+* Torre do Po (`tower` = {"floor": andares vencidos, "best": recorde}): liberada por "reward:rw_13". Andar n:
+  adversario de ovr tower_ovr(n) = min(90, round(54 + 0,9 n)), modificador de arena tower_mod(n) a cada 5
+  andares (soccer.ARENA_MODS, so na partida assistida; o SIMULAR usa POST_SIM_RELIEF - ARENA_SIM_DF[mod]).
+  Partida unica, empate vai aos penaltis; vencer sobe um andar, perder repete o andar (sem penalidade).
+  Marcos (TOWER_MARKS) dao cosmetico (e Mitica em 20/40) so ao bater o recorde; depois do andar 40,
+  tower_restart() recomeca a subida (recorde mantido, marcos nao repetem).
 """
 import copy
 import json
@@ -160,12 +165,25 @@ NG_CHAPTER_SCRAP = (0, 800, 1000, 1200)           # sucata ao fechar um capitulo
 NG_MYTHIC_CHAPTERS = ("5", "9", "13")             # fim de cada Ato na volta: 1 peca Mitica
 NG_END_COSMETIC = (None, "cometa", "relampagos", "aureola")   # fim da volta k
 NG_FREC_CAP = 95.0           # "Forca recomendada" no NG+ (o ovr satura em 90; o F do fim do Ato 3 e ~94)
+TOWER_REWARD = "rw_13"       # fim do cap. 13 libera a Torre (spec secao 7)
+TOWER_BASE, TOWER_STEP, TOWER_OVR_CAP = 54.0, 0.9, 90
+TOWER_MOD_EVERY = 5
+TOWER_MOD_CYCLE = ("bola_pesada", "bateria_curta", "goleiro_gigante")   # = soccer.ARENA_MODS (sem pygame aqui)
+TOWER_MARKS = {10: {"cosmetic": "poeira"}, 20: {"cosmetic": "para_raios", "mythic": True},
+               30: {"cosmetic": "trofeu"}, 40: {"cosmetic": "coroa", "mythic": True}}
+TOWER_FLOOR_SCRAP = 10       # bonus de sucata ao vencer um andar pela 1a vez: 100 + 10 x andar
 # SIMULAR do pos-campanha (tests/calib_campaign.py --post, n=100, 05/11/2026): com F 88-94 contra O 60-90 o
 # motor e ainda mais plano que no Ato 3 e o vies da campanha (sim_bias com a correcao de F alto) fica
 # pessimista (SIM - motor -7,5 em media, ate -23 contra O 90). POST_SIM_RELIEF devolve 4 pontos de Forca ao
 # vies no NG+ e na Torre (media com sinal +0,4, |dif| media 5,5 em 19 celulas; ruido do motor ~+-9 com
-# n=100).
+# n=100). Modificadores (motor, mesma F, com x sem): bola pesada ~0 (-5..+13), bateria curta -6..-8, goleiro
+# gigante -12..-13 (O 85) e ~0 (O 90, motor ja no piso); descontados da Forca do SIMULAR:
 POST_SIM_RELIEF = 4.0
+ARENA_SIM_DF = {"bola_pesada": 1.0, "bateria_curta": 3.5, "goleiro_gigante": 5.0}
+ARENA_NAMES = {"bola_pesada": "Bola pesada", "bateria_curta": "Bateria curta", "goleiro_gigante": "Goleiro gigante"}
+ARENA_DESC = {"bola_pesada": "a bola freia muito mais rápido (os dois times)",
+              "bateria_curta": "a bateria gasta quase o dobro ao correr (os dois times)",
+              "goleiro_gigante": "o goleiro rival alcança bem mais longe"}
 
 
 # --- funcoes puras ------------------------------------------------------------------
@@ -215,6 +233,25 @@ def sim_match(user_F, O, rng, relief=None):
     if relief is None:
         return RL.quick_sim(user_F - sim_bias(O, user_F), O, rng)
     return RL.quick_sim(user_F - sim_bias(O, user_F) + relief, O, rng)
+
+
+def tower_ovr(floor):
+    """ovr do adversario do andar `floor` (1..TOWER_FLOORS): 54 + 0,9 x andar, teto 90."""
+    return min(TOWER_OVR_CAP, int(round(TOWER_BASE + TOWER_STEP * floor)))
+
+
+def tower_mod(floor):
+    """Modificador de arena do andar (a cada TOWER_MOD_EVERY andares) ou None. O andar 40 e o do goleiro
+    gigante (ciclo bateria -> goleiro -> bola pesada a partir do 5)."""
+    if floor <= 0 or floor % TOWER_MOD_EVERY:
+        return None
+    return TOWER_MOD_CYCLE[(floor // TOWER_MOD_EVERY) % len(TOWER_MOD_CYCLE)]
+
+
+def tower_sim(user_F, O, mod, rng):
+    """SIMULAR de um andar: o Poisson do torneio (sim_match) com o alivio do pos-campanha menos o efeito medido
+    do modificador (ARENA_SIM_DF)."""
+    return sim_match(user_F, O, rng, POST_SIM_RELIEF - ARENA_SIM_DF.get(mod, 0.0))
 
 
 def stages_of(tr):
@@ -1152,6 +1189,107 @@ class Campaign:
             new = self.garage.grant_cosmetic(cos) if cos else False
         return {"kind": "end", "draft": False, "ending": None, "ng_done": k, "cosmetic": cos, "new": new,
                 "ng": k}
+
+    # ------------------------------------------------------------------ Torre do Po (Onda D)
+    def tower_unlocked(self):
+        return ("reward:%s" % TOWER_REWARD) in self.done
+
+    def tower_state(self):
+        return dict(self.tower) if self.tower else {"floor": 0, "best": 0}
+
+    def tower_next(self):
+        """Proximo andar a jogar (1..TOWER_FLOORS) ou None se a subida atual chegou ao topo."""
+        f = self.tower_state()["floor"] + 1
+        return f if f <= TOWER_FLOORS else None
+
+    def tower_restart(self):
+        """Depois do topo: recomeca a subida no andar 1 (o recorde fica). False se ainda nao chegou ao topo."""
+        st = self.tower_state()
+        if st["floor"] < TOWER_FLOORS:
+            return False
+        self.tower = {"floor": 0, "best": st["best"]}
+        return True
+
+    def tower_team(self, floor):
+        """Adversario do andar: time generico determinado por (semente da campanha, andar)."""
+        rng = random.Random("%d|torre|%d" % (self.seed, floor))
+        name = "%s %d" % (rng.choice(RL.TEAM_NAMES), floor)
+        color = rng.choice(RL.TEAM_COLORS)
+        return RL.opponent_team(name, color, tower_ovr(floor), rng.randrange(1, 100000))
+
+    def tower_cfg(self):
+        """Partida do proximo andar: {"kind":"match","tower":andar,"mod","opp","home","away","user_F","O",
+        "F_rec","econ_tier","venue","bg","mark"} ou None (torre bloqueada ou no topo)."""
+        floor = self.tower_next()
+        if not self.tower_unlocked() or floor is None:
+            return None
+        team = self.tower_team(floor)
+        O = team["ovr"]
+        return {"kind": "match", "tower": floor, "mod": tower_mod(floor), "opp": team,
+                "home": self.garage.match_cfg(), "away": RL.match_cfg(team), "user_F": self.garage.match_F(),
+                "O": O, "F_rec": float(O + 4), "econ_tier": NG_ECON_TIER, "venue": "coliseu", "bg": "coliseu",
+                "mark": TOWER_MARKS.get(floor), "training": False, "stage": "F", "boss": floor % 10 == 0}
+
+    def record_tower(self, my, opp, pen=None, events=None, simulated=False):
+        """Registra a partida do proximo andar (usuario mandante). Empate: penaltis (pen ou shootout).
+        Vitoria sobe um andar (bonus de sucata e marco so ao bater o recorde). Devolve o dict de resultado
+        com outcome "tower_win" | "tower_lose"."""
+        floor = self.tower_next()
+        if not self.tower_unlocked() or floor is None:
+            raise RuntimeError("sem andar pendente")
+        g = self.garage
+        my, opp = G.clamp(int(my), 0, 99), G.clamp(int(opp), 0, 99)
+        O = tower_ovr(floor)
+        pids = [e["pid"] for e in (events or ()) if e.get("team") == 0 and not e.get("own")
+                and e.get("pid") is not None]
+        rew = G.match_rewards(g, my, opp, pids, NG_ECON_TIER, self._rng("rw"))
+        g.refresh_shop(NG_ECON_TIER, self._rng("shop"))
+        g.consume_backpack()
+        self.stats["matches"] += 1
+        if simulated:
+            self.stats["sims"] += 1
+        pm = po = 0
+        if my == opp:
+            if pen is None:
+                pen = shootout(g.rating(), O, self._rng("pen"))
+            pm, po = int(pen[0]), int(pen[1])
+            if pm == po or pm < 0 or po < 0:
+                raise ValueError("penaltis nao podem empatar")
+        st = self.tower_state()
+        out = {"result": rew["result"], "my": my, "opp": opp, "pen": (pm, po) if (pm or po) else None,
+               "stage": "F", "rewards": rew, "advanced": False, "outcome": "tower_lose", "tournament": None,
+               "tower": floor, "boss": floor % 10 == 0, "mark": None, "bonus": 0, "mythic": None,
+               "warnings": []}
+        if my > opp or (my == opp and pm > po):
+            record = floor > st["best"]
+            self.tower = {"floor": floor, "best": max(st["best"], floor)}
+            out.update(outcome="tower_win", advanced=True)
+            if record:
+                bonus = 100 + TOWER_FLOOR_SCRAP * floor
+                g.scrap = G.clamp(g.scrap + bonus, 0, G.SCRAP_MAX)
+                out["bonus"] = bonus
+                mk = TOWER_MARKS.get(floor)
+                if mk:
+                    out["mark"] = dict(mk)
+                    if mk.get("cosmetic"):
+                        g.grant_cosmetic(mk["cosmetic"])
+                    if mk.get("mythic"):
+                        pc = self._give_mythic("towermyth")
+                        if pc is None:
+                            out["warnings"].append("Inventário cheio: a peça Mítica não foi entregue.")
+                        else:
+                            out["mythic"] = parts.part_name(pc)
+        elif self.tower is None:
+            self.tower = st
+        return out
+
+    def simulate_tower(self):
+        """SIMULAR do proximo andar (tower_sim: Poisson com o desconto do modificador)."""
+        act = self.tower_cfg()
+        if act is None:
+            raise RuntimeError("sem andar pendente")
+        my, opp = tower_sim(act["user_F"], act["O"], act["mod"], self._rng("sim"))
+        return self.record_tower(my, opp, simulated=True)
 
     def reward_spec(self, rid):
         """REWARDS[rid] efetivo: a primeira variante `alt` [(cond, {campos}), ...] cuja cond vale e

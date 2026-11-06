@@ -60,6 +60,17 @@ CAM_LOD_WINDOW, CAM_LOD_MS = 60, 8.0
 # tem o caminho SIMD: "scale" (vizinho mais proximo; casa com o visual pixelado) e o padrao.
 CAM_SCALERS = {"scale": pygame.transform.scale, "smooth": pygame.transform.smoothscale}
 CAM_SCALER = "scale"
+# Onda D (Torre do Po): modificadores de arena OPT-IN por partida (start_robot_match(arena=...)). None (o
+# padrao de TODOS os modos: amistoso, carreira, Modo Robos, campanha) = caminho legado intocado (goldens).
+# bola_pesada: a bola freia mais (ARENA_BALL_DRAG ** dt em vez de 0.35 ** dt; os dois times. Medido: chute
+# mais fraco junto quebrava o motor - o time forte fazia 5-6 gols); bateria_curta: o dreno ao correr x ARENA_BAT_DRAIN (os dois
+# times); goleiro_gigante: o goleiro do RIVAL (lado 1) alcanca a bola ARENA_GK_REACH px mais longe.
+ARENA_MODS = ("bola_pesada", "bateria_curta", "goleiro_gigante")
+ARENA_LABELS = {"bola_pesada": "BOLA PESADA", "bateria_curta": "BATERIA CURTA",
+                "goleiro_gigante": "GOLEIRO GIGANTE"}
+ARENA_BALL_DRAG = 0.25
+ARENA_BAT_DRAIN = 1.8
+ARENA_GK_REACH = 10
 HUMAN_AIM_ERR = 30                     # graus de erro de mira humano por 1.0 de (0.65 - chu/100); so chu < 65
 
 # (papel, fracao x a partir do proprio gol, fracao y)
@@ -283,6 +294,7 @@ class Game:
         self.fx_amb = 0                           # particulas de robo vivas (teto ROBOT_FX_MAX)
         self.speed_idx = 0
         self.sk_on = False                        # skills ligadas nesta partida (so Modo Robos/campanha com skills)
+        self.arena = None                         # modificador de arena (Torre do Po) ou None (legado)
         self.sk_rng = random.Random(SK_RNG_SEED)
         self.sk_t = 0.0
         self.sk_n = 0
@@ -371,6 +383,7 @@ class Game:
         self.match_sink = None
         self.crowd = None
         self.sk_on = False                        # amistoso: nunca ha skills
+        self.arena = None                         # amistoso: nunca ha modificador de arena
         self.speed_idx = 0
         self.match_time = self.time_left = MATCH_TIME
         self.events = []
@@ -391,17 +404,19 @@ class Game:
         self._begin_match(home, away, venue=venue, story=False)
 
     def start_robot_match(self, home, away, on_done, tuning=robots.TUNING_ROBOTS, return_state="robots",
-                          venue=None):
+                          venue=None, arena=None):
         """Partida automática do modo robôs. home/away = {"name","color","squad":[5 dicts]}.
 
         Ao terminar chama on_done(score, events) e volta ao estado return_state ("robots" por padrao).
-        venue: local da torcida (crowd.VENUES); None = crowd.DEFAULT_VENUE.
+        venue: local da torcida (crowd.VENUES); None = crowd.DEFAULT_VENUE. arena: modificador da Torre do
+        Po (ARENA_MODS) ou None (padrao; id desconhecido tambem vira None).
         """
-        self._begin_match(home, away, tuning, venue=venue, story=return_state == "campaign")
+        self._begin_match(home, away, tuning, venue=venue, story=return_state == "campaign", arena=arena)
         self.match_sink = (return_state, on_done)
 
-    def _begin_match(self, home, away, tuning=None, venue=None, story=False):
+    def _begin_match(self, home, away, tuning=None, venue=None, story=False, arena=None):
         self.mode = 0
+        self.arena = arena if arena in ARENA_MODS else None
         self.crowd_story = bool(story)
         c1 = tuple(away["color"])
         if sum(abs(a - b) for a, b in zip(led_color(home["color"]), led_color(c1))) < 130:
@@ -427,6 +442,7 @@ class Game:
 
     def finish_career_match(self):
         self.career_match = False
+        self.arena = None
         self.crowd = None
         self.fx.clear()
         sink, self.match_sink = self.match_sink, None
@@ -781,7 +797,10 @@ class Game:
             if b.air:
                 b.air = max(0.0, b.air - dt)
             b.pos += b.vel * dt
-            b.vel *= 0.35 ** dt
+            if self.arena == "bola_pesada":
+                b.vel *= ARENA_BALL_DRAG ** dt
+            else:
+                b.vel *= 0.35 ** dt
             if b.vel.length() < 8:
                 b.vel = V()
         b.roll += b.vel.length() * dt * 0.12
@@ -822,6 +841,8 @@ class Game:
                     continue
                 d = p.pos.distance_to(b.pos)
                 reach = PR + BR + (12 if p.role == "GK" else p.f.reach)
+                if self.arena == "goleiro_gigante" and t.idx == 1 and p.role == "GK":
+                    reach += ARENA_GK_REACH
                 if d > reach or p.cd > 0:
                     continue
                 if p.role == "GK":
@@ -914,6 +935,8 @@ class Game:
         ratio = p.vel.length() / (PLAYER_SPEED * p.spd)
         if ratio < robots.BAT_REGEN_BELOW:
             p.bat += robots.BAT_REGEN / self.match_time * p.f.bat_regen_mul * dt
+        elif self.arena == "bateria_curta":
+            p.bat -= robots.BAT_RUN / self.match_time * min(1.0, ratio) * p.f.bat_drain_mul * dt * ARENA_BAT_DRAIN
         else:
             p.bat -= robots.BAT_RUN / self.match_time * min(1.0, ratio) * p.f.bat_drain_mul * dt
         p.bat = clamp(p.bat, 0.0, 1.0)
@@ -2105,6 +2128,8 @@ class Game:
         else:
             lvl = int((math.sin(now * 3.1 + p.idx * 1.7 + t.idx) + 1.0) * 1.999)
         scr.blit(art.halo[lvl], (x0, y0), special_flags=pygame.BLEND_RGB_ADD)
+        if self.arena == "goleiro_gigante" and t.idx == 1 and p.role == "GK":   # alcance do goleiro gigante
+            pygame.draw.circle(scr, (255, 150, 90), pos, PR + BR + 12 + ARENA_GK_REACH, 2)
         u = art.atlas.under[d]
         if u is not None:
             scr.blit(u[0], (pos[0] + u[1], pos[1] + u[2]))
@@ -2318,6 +2343,8 @@ class Game:
         self.text("%d  x  %d" % tuple(self.score), 64, (255, 255, 255), center=(W // 2, 30))
         if self.career_match:
             self.text("%d'" % self.minute(), 30, (255, 230, 120), center=(W // 2, 62))
+            if self.arena is not None:                     # Torre do Po: modificador da arena (texto em cache)
+                self.text(ARENA_LABELS[self.arena], 22, (255, 150, 90), center=(W // 2 + 120, 62))
             self.draw_speed_buttons()
             return
         secs = int(math.ceil(max(0, self.time_left)))
