@@ -124,7 +124,7 @@ TOURNAMENTS = {
     # Cap. 7: liga (R1-R5, top 4 a SF) no Estadio Limpex. Estagios (F_rec / O): R1 68,4 / 51; R2 68,7 / 52;
     # R3 69,0 / 52; R4 69,3 / 53; R5 69,6 / 54; SF 69,9 / 59; F 70,2 / 63 (boss_delta 7,2). B2 depois da R2.
     "t_c7": {
-        "chapter": "7", "local": "Estádio Limpex", "bg": "estadio", "format": "league",
+        "chapter": "7", "local": "Estádio Limpex", "bg": "estadio", "venue": "superliga", "format": "league",
         "group": ["esfregao", "microondas", "poarroz", "ventilador", "cera"], "qf": None, "sf": "impec3",
         "final": "plat_elite", "boss": "plat_elite", "boss_delta": 7.1, "regular_delta": (15, 18),
         "hooks": {"before": {"R3": "c7_g3_dudu", "SF": "c7_sf_pre", "F": "c7_final_pre"},
@@ -134,7 +134,7 @@ TOURNAMENTS = {
     # Cap. 8: copa com quartas. Estagios (F_rec / O): G1 70,4 / 53; G2 70,7 / 54; G3 71,0 / 55; QF 71,4 / 57;
     # SF 71,7 / 60; F 72,0 / 64 (boss_delta 8,0). Grupo +1 sobre a spec (regulares F-O <= 18).
     "t_c8": {
-        "chapter": "8", "local": "Estádio Limpex (noite)", "bg": "estadio", "format": "cup",
+        "chapter": "8", "local": "Estádio Limpex (noite)", "bg": "estadio", "venue": "superliga", "format": "cup",
         "group": ["pano", "sempoeira", "lavanderia"], "qf": "bunnies_pro", "sf": "kenji2",
         "final": "guarda_zero", "boss": "guarda_zero", "boss_delta": 7.7, "regular_delta": (15, 18),
         "hooks": {"before": {"G2": "c8_helena", "QF": "c8_qf_pre", "SF": "c8_sf_kenji", "F": "c8_final_pre"},

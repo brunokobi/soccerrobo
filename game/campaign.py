@@ -576,6 +576,10 @@ class Campaign:
                 return self._scene_action(sid)
         if scenes[0] not in self.endings and len(self.endings) < MAX_ENDINGS:
             self.endings.append(scenes[0])
+            reward = next((e[3] for e in story.ENDINGS if len(e) > 3 and
+                           (e[1] if isinstance(e[1], str) else e[1][0]) == scenes[0]), None)
+            if reward:                                  # C14: recompensa do final, uma vez por final visto
+                self.apply_fx(reward)
         return {"kind": "end", "draft": False, "ending": scenes[0]}
 
     # ------------------------------------------------------------------ missoes secundarias (C4)
@@ -755,6 +759,7 @@ class Campaign:
         opp = self._opp_team(tr, stage, tour["seed"])
         frac = stages.index(stage) / max(1, len(stages) - 1)
         return {"kind": "match", "tournament": tour["id"], "stage": stage, "bg": tr.get("bg"),
+                "venue": tr.get("venue"),
                 "stage_name": STAGE_NAMES[stage], "boss": self._is_boss(tr, stage),
                 "knockout": stage[0] not in "GR", "training": False, "opp": opp,
                 "home": self.garage.match_cfg(), "away": RL.match_cfg(opp),
@@ -890,6 +895,13 @@ class Campaign:
     def training_econ_tier(self):
         return G.clamp(self.econ_tier() - 1, 0, len(G.TIER_MUL) - 1)
 
+    def chapter_venue(self):
+        """Local da torcida (crowd) do torneio do capitulo, se o torneio define "venue" (C16); senao None."""
+        for n in self.chapter()["nodes"]:
+            if n[0] == "tournament" and n[1] in story.TOURNAMENTS and (len(n) < 3 or self.check_cond(n[2])):
+                return story.TOURNAMENTS[n[1]].get("venue")
+        return None
+
     def chapter_bg(self):
         """Cenario (bg) do torneio do capitulo atual (o local onde o treino acontece); None se nao ha."""
         for n in self.chapter()["nodes"]:
@@ -906,7 +918,7 @@ class Campaign:
         team = RL.opponent_team(name, color, self.training_ovr(), rng.randrange(1, 100000))
         return {"home": self.garage.match_cfg(), "away": RL.match_cfg(team), "opp": team,
                 "O": team["ovr"], "user_F": self.garage.match_F(), "econ_tier": self.training_econ_tier(),
-                "bg": self.chapter_bg(), "training": True}
+                "bg": self.chapter_bg(), "venue": self.chapter_venue(), "training": True}
 
     def record_training(self, my, opp, events=None, simulated=False):
         """Recompensas de um treino (tier-1); nao mexe em torneio, pity nem nos."""

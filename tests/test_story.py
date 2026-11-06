@@ -687,7 +687,9 @@ def test_sides_and_endings_data():
         assert not sp.get("repeat"), "missoes repetiveis nao sao suportadas (%s)" % sid
     seen = set()
     for i, e in enumerate(st.ENDINGS):
-        assert len(e) in (2, 3), i
+        assert len(e) in (2, 3, 4), i
+        if len(e) == 4:                                  # C14: recompensa do final (fx)
+            assert set(e[3]) <= FX_KEYS and e[3], i
         cond, scenes = e[0], ([e[1]] if isinstance(e[1], str) else e[1])
         if len(e) == 3:
             assert isinstance(e[2], str) and 1 <= len(e[2]) <= 24, i

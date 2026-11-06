@@ -935,7 +935,11 @@ class CampaignUI(RobotsUI):
         return self.sync_act("match")
 
     def match_venue(self, act):
-        """Local da torcida (A8): o bg do torneio (partida) ou do torneio do capitulo (treino)."""
+        """Local da torcida (A8): o "venue" do torneio (C16) ou o do bg do torneio (partida) ou do torneio do
+        capitulo (treino)."""
+        venue = act.get("venue") if isinstance(act, dict) else None
+        if venue:                                       # partida e treino trazem o venue do torneio
+            return venue
         bg = act.get("bg") if isinstance(act, dict) else None
         if bg is None and self.campaign is not None:
             bg = self.campaign.chapter_bg()

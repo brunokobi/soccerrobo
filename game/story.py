@@ -1166,9 +1166,10 @@ CHAPTERS = [
 SIDES = {}
 
 # --- finais (C4/C11; dados em story_a3.py) -----------------------------------------------------
-# ENDINGS = [(cond, [cena, ...], titulo), ...] em ordem de prioridade (titulo opcional, <= 24, para a
-# tela de fim e a galeria); o no ("end", "AUTO") joga as cenas do primeiro final cuja cond vale
-# (cond None = padrao) e grava a primeira cena em c["endings"].
+# ENDINGS = [(cond, [cena, ...], titulo, fx), ...] em ordem de prioridade (titulo opcional, <= 24, para a
+# tela de fim e a galeria; fx opcional, C14: recompensa dada uma vez quando o final entra na galeria); o no
+# ("end", "AUTO") joga as cenas do primeiro final cuja cond vale (cond None = padrao) e grava a primeira
+# cena em c["endings"].
 ENDINGS = []
 
 

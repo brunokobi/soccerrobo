@@ -165,7 +165,7 @@ def test_campaign_matches_and_training_use_tournament_venue():
                 camp.finish_scene(a["id"])
             elif a["kind"] == "match":
                 tr = story.TOURNAMENTS[a["tournament"]]
-                want = crowd.venue_for_bg(tr["bg"])
+                want = tr.get("venue") or crowd.venue_for_bg(tr["bg"])     # C16: venue do torneio
                 ui.do_watch_match()
                 assert calls[-1]["venue"] == want and calls[-1]["return_state"] == "campaign", (a["tournament"], calls[-1])
                 if a["tournament"] not in seen:          # treino do capitulo: mesmo local do torneio

@@ -1330,6 +1330,51 @@ def test_all_14_sides_playable_and_fitas_unlock_secret_ending():
     assert c2 is not None and not c2.repaired and all(c2.side_done(s) for s in story.SIDES)
 
 
+def play_route(seed, want_flags, fitas=False):
+    """C17: joga a campanha inteira vencendo tudo e escolhendo, em cada escolha, a opcao cuja flag esta em
+    want_flags (senao a primeira). fitas=True joga as 4 Fitas do Vo assim que liberam. Devolve a campanha."""
+    c = new(seed)
+    for _ in range(6000):
+        if fitas and c.side is None:
+            for sid in [x for x in c.available_sides() if x.startswith("s_fita")]:
+                c.start_side(sid)
+                break
+        a = c.next_action()
+        k = a["kind"]
+        if k == "scene":
+            ch = next((i for i in c.scene_lines(a["id"]) if isinstance(i, dict)), None)
+            pick = None
+            if ch:
+                pick = next((j for j, o in enumerate(ch["opts"]) if (o.get("fx") or {}).get("flag") in want_flags), 0)
+            c.finish_scene(a["id"], pick)
+        elif k == "match":
+            c.record_match(3, 0)
+        elif k == "chapter_end":
+            assert c.advance_chapter() is not None
+        else:
+            return c, a
+    raise AssertionError("rota nao terminou")
+
+
+def test_autoplay_reaches_all_three_endings():
+    """C17: as 3 rotas (independente, patrocinio e o secreto com as 4 fitas) chegam ao final certo, com a
+    recompensa do final aplicada uma vez e o save de fim de campanha volta igual."""
+    routes = [({"independente", "gabi_amigo", "poupou_ze"}, False, "end_a1"),
+              ({"renova_limpex", "gabi_rival", "desligou_ze"}, False, "end_b1"),
+              ({"independente", "poupou_ze", "chinelo_fica", "gabi_amigo", "denunciou_fabrica"}, True, "end_c1")]
+    for i, (flags, fitas, first) in enumerate(routes):
+        c, a = play_route(300 + i, flags, fitas)
+        assert a == {"kind": "end", "draft": False, "ending": first}, (first, a)
+        assert c.endings == [first] and c.garage.stats["titles"] == n_titles()
+        reward = next(e[3] for e in story.ENDINGS if e[1][0] == first)
+        if reward.get("cosmetic"):
+            assert c.garage.owns_cosmetic(reward["cosmetic"]), first
+        d = copy_json(c.to_dict())
+        c2 = cm.Campaign.from_dict(d)
+        assert c2 is not None and not c2.repaired and c2.endings == [first]
+        assert c2.next_action() == a
+
+
 def main():
     names = sys.argv[1:] or [n for n in globals() if n.startswith("test_")]
     for n in names:

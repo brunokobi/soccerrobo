@@ -73,6 +73,14 @@ TEAMS = {
     "gabi_pro": {"name": "Gabi Trovão Pro", "color": (60, 140, 255), "ovr": 73,
                  "names": ["Raio Pro", "Faísca Pro", "Estrondo", "Ventania", "Relâmpago"],
                  "chassis": list(_CH5), "paint": (250, 210, 40), "perfect": False},
+    # C15: o Gabi rival tambem no grupo do cap. 10 (no lugar dos Aspirateurs Noirs, mesmo ovr)
+    "trovoes_intl": {"name": "Trovões Internacional", "color": (60, 140, 255), "ovr": 69,
+                     "names": ["Raio Intl", "Faísca Intl", "Estrondo", "Ventania", "Relâmpago"],
+                     "chassis": list(_CH5), "paint": (250, 210, 40), "perfect": False},
+    # C15: no cap. 13, com gabi_rival, o X-Omega toma os robos do Gabi (1o duelo, mesmo ovr dos Droides)
+    "gabi_omega": {"name": "Gabi sob o Ômega", "color": (255, 60, 70), "ovr": 72,
+                   "names": ["Raio Ômega", "Faísca Ômega", "Estrondo", "Ventania", "Relâmpago"],
+                   "chassis": list(_CH5), "paint": (60, 60, 70), "perfect": False},
     "plat_imperial": {"name": "Platinum Imperial", "color": (210, 200, 240), "ovr": 75,
                       "names": ['PI-01', 'PI-02', 'PI-03', 'PI-04', 'PI-05'],
                       "chassis": list(_CH5), "paint": (230, 225, 250), "perfect": True},
@@ -99,10 +107,11 @@ TOURNAMENTS = {
     # Cap. 10: copa no estadio da Copa dos Campeoes. Estagios (F_rec / O, provisorio): G1 84,0 / 67;
     # G2 84,4 / 67; G3 84,8 / 68; SF 85,1 / 73; F 85,5 / 77 (boss_delta 8,5).
     "t_c10": {
-        "chapter": "10", "local": "Arena do Intercâmbio", "bg": "estadio", "format": "cup",
+        "chapter": "10", "local": "Arena do Intercâmbio", "bg": "estadio", "venue": "mundial", "format": "cup",
         "group": ["sakura_rb", "staub_pro", "aspir_noirs"], "qf": None, "sf": "nipoteuta",
         "final": "mundos", "boss": "mundos", "boss_delta": 10.8, "regular_delta": (16, 18),
-        "hooks": {"before": {"G1": "c10_sakura_pre", "G2": "c10_staub", "SF": "c10_sf_pre",
+        "alt": [(("flag", "gabi_rival"), {"group": ["sakura_rb", "staub_pro", "trovoes_intl"]})],
+        "hooks": {"before": {"G1": "c10_sakura_pre", "G2": "c10_staub", "G3": "c10_g3_gabi", "SF": "c10_sf_pre",
                              "F": "c10_final_pre"},
                   "after": {"SF": "c10_sf_pos"},
                   "win": "c10_final_win", "lose": "c10_final_lose", "elim": "c10_repescagem"},
@@ -137,6 +146,7 @@ TOURNAMENTS = {
         "chapter": "13", "local": "Coliseu em apagão", "bg": "coliseu", "format": "series",
         "series": ["droides_omega", "pretoriana", "xomega_prime"], "group": [], "qf": None, "sf": None,
         "final": "xomega_prime", "boss": "xomega_prime", "boss_delta": 16.2, "regular_delta": (13, 18),
+        "alt": [(("flag", "gabi_rival"), {"series": ["gabi_omega", "pretoriana", "xomega_prime"]})],
         "hooks": {"before": {"S3": "c13_s3_pre"}, "after": {},
                   "win": "c13_final_win", "lose": "c13_final_lose", "elim": None},
     },
@@ -193,6 +203,20 @@ SCENES = {
         ("narrador", "neutro", "Um fiscal alemão mede o chinelo do Zé com uma régua. Anota. Mede de novo. Anota de novo. Faz que sim com a cabeça, muito sério."),
         ("ambrosio", "feliz", "Ele aprovou o chinelo. Téo, isso é o equivalente alemão de um abraço."),
         ("ze", "robo", "Bip. (o Zé fica imóvel enquanto é medido. Ele nunca foi tão bem documentado.)"),
+    ]},
+
+    # C15: G3 do cap. 10 - o Gabi rival entra no grupo; o amigo assiste e da dica
+    "c10_g3_gabi": {"bg": "estadio", "cast": ["gabi", "teo", "vivi", "dudu", "ze"], "lines": [
+        ("narrador", "neutro", "Terceira rodada do grupo do Intercâmbio. O telão anuncia o adversário."),
+        ("narrador", "neutro", "Trovões Internacional! O Gabi conseguiu uma vaga de última hora, como convidado da Limpex.", ("flag", "gabi_rival")),
+        ("gabi", "convencido", "Surpresa, chinelo. Eu vim de avião. Primeira classe. Paga pela Limpex. Tinha até toalhinha quente.", ("flag", "gabi_rival")),
+        ("teo", "determinado", "Você atravessou o mundo só para jogar contra a gente, Gabi?", ("flag", "gabi_rival")),
+        ("gabi", "bravo", "Eu atravessei o mundo para GANHAR de vocês. É diferente. A toalhinha foi bônus.", ("flag", "gabi_rival")),
+        ("narrador", "neutro", "Les Aspirateurs Noirs, os franceses de preto. Na arquibancada, de boné, o Gabi acena para o Téo.", ("flag", "gabi_amigo")),
+        ("gabi", "feliz", "(no fone) Téo, os franceses param para ajeitar o bigode depois de cada gol. Dez segundos parados. Aproveita.", ("flag", "gabi_amigo")),
+        ("dudu", "euforico", "Chat, o Gabi está espionando para a gente! Isso é amizade internacional!", ("flag", "gabi_amigo")),
+        ("vivi", "pensando", "Anotado. Terceira rodada, terceiro adversário, terceira planilha. Eu trouxe três canetas para isso."),
+        ("ze", "robo", "Bip. (o Zé alinha no meio-campo. Ele está pronto para qualquer bigode e qualquer boné.)"),
     ]},
 
     "c10_sf_pre": {"bg": "estadio", "cast": ["kenji", "helena", "teo", "ogawa", "vivi"], "lines": [
@@ -463,7 +487,7 @@ SCENES = {
     ]},
 
     # ------------------------------------------------------------------ Capitulo 13 (O Chip Zero)
-    "c13_intro": {"bg": "coliseu", "cast": ["teo", "dudu", "vivi", "nestor", "xomega", "ze"], "lines": [
+    "c13_intro": {"bg": "coliseu", "cast": ["teo", "dudu", "vivi", "nestor", "xomega", "gabi", "ze"], "lines": [
         ("narrador", "neutro", "O dia seguinte. O coliseu está escuro, iluminado só por LEDs vermelhos. Todos os robôs da arena acordaram ao mesmo tempo. Todos com o mesmo brilho."),
         ("xomega", "neutro", "Todos os robôs da arena estão sob o meu controle. Os da Superliga. Os da Copa. Os da lanchonete."),
         ("dudu", "susto", "Chat, até o aspirador do bar está com LED vermelho! Ele estava limpando o balcão e agora está me encarando!"),
@@ -471,6 +495,8 @@ SCENES = {
         ("nestor", "neutro", "Eu sempre disse que tecnologia antiga tinha uma vantagem. Ninguém sabe a senha dela. Nem eu."),
         ("xomega", "neutro", "Três duelos. Se eu vencer, o modelo original passa a ser meu. Se eu perder, eu continuo aprendendo. Eu sempre ganho."),
         ("teo", "determinado", "Não. Se você perder, você para. Você devolve os robôs. Todos eles."),
+        ("gabi", "chorando", "Téo! Até os meus robôs estão vermelhos! O Relâmpago nem me reconhece! Eu assinei com a Limpex e a Limpex me apagou!", ("flag", "gabi_rival")),
+        ("gabi", "determinado", "Téo, o meu Relâmpago está com vocês, não está? Ele é o único robô meu que não está vermelho. Cuida dele.", ("flag", "gabi_amigo")),
         ("ze", "robo", "Bzzzt. (o Zé aperta o chinelo com a fita, encosta a faixa do dojo na antena e acende o LED no ciano mais forte que já fez.)"),
     ]},
 
@@ -623,9 +649,10 @@ SCENES = {
 # --- finais (spec secao 5): o primeiro que vale; o ultimo e o padrao ---------------------------------
 ENDINGS = [
     (("all", [("noflag", "renova_limpex"), ("flag", "poupou_ze"), ("flag", "chinelo_fica"),
-              ("count", "side:s_fita", 4)]), ["end_c1", "end_c2", "end_c3"], "O Chinelo Estrutural"),
-    (("flag", "renova_limpex"), ["end_b1", "end_b2"], "Contrato Dourado"),
-    (None, ["end_a1", "end_a2", "end_a3"], "Garagem Livre"),
+              ("count", "side:s_fita", 4)]), ["end_c1", "end_c2", "end_c3"], "O Chinelo Estrutural",
+     {"cosmetic": "chinelo"}),                          # o "Chinelo Dourado" (adesivo de chinelo)
+    (("flag", "renova_limpex"), ["end_b1", "end_b2"], "Contrato Dourado", {"scrap": 1500}),
+    (None, ["end_a1", "end_a2", "end_a3"], "Garagem Livre", {"cosmetic": "fogos"}),
 ]
 
 # --- recompensas --------------------------------------------------------------------------------
