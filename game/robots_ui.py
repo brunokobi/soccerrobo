@@ -431,7 +431,7 @@ class RobotsUI(CareerUI):
         self.text("Nome da equipe", 22, DIM, center=(cx, y - 16))
         pygame.draw.rect(self.g.screen, BG, (cx - 190, y, 270, 44), border_radius=8)
         pygame.draw.rect(self.g.screen, LINE, (cx - 190, y, 270, 44), 2, border_radius=8)
-        self.text(self.team_name, 28, GOLD, center=(cx - 55, y + 22))
+        self.text(self.team_name.upper(), 28, GOLD, center=(cx - 55, y + 22))
         self.btn((cx + 94, y, 96, 44), "SORTEAR", self.do_shuffle_name, color=(60, 80, 130), size=22)
         if self.confirm_new:
             self.btn((cx - 200, 400, 400, 56), "CONFIRMAR: APAGAR O SAVE", self.do_new, size=28,
@@ -451,7 +451,7 @@ class RobotsUI(CareerUI):
         scr = self.g.screen
         pygame.draw.rect(scr, PANEL, (0, 0, W, 74))
         pygame.draw.rect(scr, tuple(gg.team["color"]), (0, 0, 12, 74))
-        self.text(gg.team["name"], 46, TEXT, midleft=(28, 26), shadow=True)
+        self.text(gg.team["name"].upper(), 46, TEXT, midleft=(28, 26), shadow=True)
         st = gg.stats
         self.text("Jogos %d   |   V %d  E %d  D %d   |   Títulos %d" % (
             st["played"], st["w"], st["d"], st["l"], st["titles"]), 24, DIM, midleft=(30, 55))
@@ -877,7 +877,8 @@ class RobotsUI(CareerUI):
         home, away = self.side_cfgs(fx)
         # local da torcida pelo tier da liga (0 bairro, 1 ginasio, 2 arena, 3 estadio)
         venue = crowd.venue_for_tier(lg.get("tier", gg.tier()))
-        self.g.start_robot_match(home, away, on_done=self.match_done, venue=venue)
+        self.g.start_robot_match(home, away, on_done=self.match_done, venue=venue,
+                                 user_side=0 if fx[1] == RL.USER else 1)
 
     def do_sim(self):
         gg = self.garage
@@ -990,7 +991,7 @@ class RobotsUI(CareerUI):
                 pygame.draw.rect(scr, GOLD, (528, y, 544, 34), 2, border_radius=6)
             self.text(str(k + 1), 24, GOLD if me else DIM, midright=(556, y + 17))
             pygame.draw.rect(scr, tuple(row["color"]), (566, y + 8, 14, 18), border_radius=3)
-            self.text(self.fit(row["name"], 24, 200), 24, TEXT if me else (200, 215, 205), midleft=(590, y + 17))
+            self.text(self.fit(row["name"].upper(), 24, 200), 24, TEXT if me else (200, 215, 205), midleft=(590, y + 17))
             for v, x in ((row["pts"], 820), (row["p"], 866), (row["w"], 910), (row["d"], 954),
                          (row["l"], 998), (row["gd"], 1060)):
                 self.text(("%+d" % v) if x == 1060 and v else str(v), 24, GOLD if (me and x == 820) else TEXT,
@@ -1009,7 +1010,7 @@ class RobotsUI(CareerUI):
                 t = lg["teams"][idx]
                 me = idx == RL.USER
                 pygame.draw.rect(scr, tuple(t["color"]), (40, yy, 22, 44), border_radius=4)
-                self.text(self.fit(t["name"], 30, 250), 30, TEXT, midleft=(74, yy + 14))
+                self.text(self.fit(t["name"].upper(), 30, 250), 30, TEXT, midleft=(74, yy + 14))
                 strength = int(round(self.user_strength())) if me else t["ovr"]
                 self.text("Força %d%s" % (strength, "  (você)" if me else ""), 22,
                           GOLD if me else DIM, midleft=(74, yy + 36))
@@ -1026,9 +1027,9 @@ class RobotsUI(CareerUI):
                 y = 496 + k * 36
                 th, ta = lg["teams"][h2], lg["teams"][a2]
                 mine = RL.USER in (h2, a2)
-                self.text(self.fit(th["name"], 22, 170), 22, GOLD if mine else TEXT, midright=(222, y + 14))
+                self.text(self.fit(th["name"].upper(), 22, 170), 22, GOLD if mine else TEXT, midright=(222, y + 14))
                 self.text("%d x %d" % (hg, ag), 24, TEXT, center=(260, y + 14))
-                self.text(self.fit(ta["name"], 22, 170), 22, GOLD if mine else TEXT, midleft=(298, y + 14))
+                self.text(self.fit(ta["name"].upper(), 22, 170), 22, GOLD if mine else TEXT, midleft=(298, y + 14))
         bag = gg.mod_on() and fx is not None              # Mochila (B12): só com itens liberados
         self.panel((520, 450, 300 if bag else 560, 230))
         self.text("PREMIAÇÃO DA LIGA", 22, GOLD, topleft=(540, 460))
@@ -1196,7 +1197,7 @@ class RobotsUI(CareerUI):
         hg, ag = info["score"]
         for team, cx, left in ((th, 280, True), (ta, 820, False)):
             pygame.draw.rect(scr, tuple(team["color"]), (cx - 230 if left else cx + 218, 82, 12, 60), border_radius=3)
-            self.text(self.fit(team["name"], 34, 400), 34, TEXT, center=(cx, 112), shadow=True)
+            self.text(self.fit(team["name"].upper(), 34, 400), 34, TEXT, center=(cx, 112), shadow=True)
         self.text("%d  x  %d" % (hg, ag), 64, GOLD, center=(W // 2, 112), shadow=True)
         rew = info["rew"]
         res = {"w": ("VITÓRIA", GREEN), "d": ("EMPATE", GOLD), "l": ("DERROTA", RED)}[rew["result"]]
@@ -1290,7 +1291,7 @@ class RobotsUI(CareerUI):
                 pygame.draw.rect(scr, GOLD, (28, y, 544, 40), 2, border_radius=6)
             self.text(str(k + 1), 26, GOLD if me else DIM, midright=(60, y + 20))
             pygame.draw.rect(scr, tuple(color), (72, y + 10, 14, 20), border_radius=3)
-            self.text(self.fit(name, 26, 250), 26, TEXT, midleft=(96, y + 20))
+            self.text(self.fit(name.upper(), 26, 250), 26, TEXT, midleft=(96, y + 20))
             self.text(str(pts), 26, GOLD if me else TEXT, midright=(470, y + 20))
             self.text(str(p), 24, TEXT, midright=(515, y + 20))
             self.text("%+d" % gd if gd else "0", 24, TEXT, midright=(560, y + 20))

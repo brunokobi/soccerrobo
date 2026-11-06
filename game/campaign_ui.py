@@ -1178,7 +1178,7 @@ class CampaignUI(RobotsUI):
         hg, ag = info["score"]
         for team, cx, left in ((th, 280, True), (ta, 820, False)):
             pygame.draw.rect(scr, tuple(team["color"]), (cx - 230 if left else cx + 218, 82, 12, 60), border_radius=3)
-            self.text(self.fit(team["name"], 32, 400), 32, TEXT, center=(cx, 108), shadow=True)
+            self.text(self.fit(team["name"].upper(), 32, 400), 32, TEXT, center=(cx, 108), shadow=True)
         self.text("%d  x  %d" % (hg, ag), 60, GOLD, center=(W // 2, 100), shadow=True)
         res = {"w": ("VITÓRIA", GREEN), "d": ("EMPATE", GOLD), "l": ("DERROTA", RED)}[info["rew"]["result"]]
         line = res[0]
@@ -1239,7 +1239,7 @@ class CampaignUI(RobotsUI):
             cy = y + (rh - 4) // 2
             self.text(str(k + 1), fs, GOLD if me else DIM, midright=(52, cy))
             pygame.draw.rect(scr, tuple(row["color"]), (62, cy - 9, 12, 18), border_radius=3)
-            self.text(self.fit(row["name"], fs, 190), fs, TEXT if me else (200, 215, 205), midleft=(82, cy))
+            self.text(self.fit(row["name"].upper(), fs, 190), fs, TEXT if me else (200, 215, 205), midleft=(82, cy))
             for val, x in ((row["pts"], 300), (row["p"], 340), (row["w"], 380), (row["d"], 420),
                            (row["l"], 460), (row["gd"], 515)):
                 self.text(("%+d" % val) if x == 515 and val else str(val), fs,
@@ -1298,7 +1298,7 @@ class CampaignUI(RobotsUI):
                     names, cols, sc = ("?", "?"), (DIM, DIM), ("", "")
                 for k in range(2):
                     yy = y + 14 + k * 24
-                    self.text(self.fit(names[k], 20, cw - 52), 20, cols[k], midleft=(x + 8, yy))
+                    self.text(self.fit(names[k].upper(), 20, cw - 52), 20, cols[k], midleft=(x + 8, yy))
                     if sc[k]:
                         self.text(sc[k], 20, TEXT, midright=(x + cw - 8, yy))
             if not last and v.get("fmt") == "series":       # serie: uma linha reta entre os duelos
@@ -1331,8 +1331,8 @@ class CampaignUI(RobotsUI):
         # --- cartoes dos dois times
         gg = self.garage
         for x, name, col, sub, subc in (
-                (40, gg.team["name"], gg.team["color"], "Sua Força: %d" % mine, GREEN if enough else GOLD),
-                (400, opp["name"], opp["color"], "Força do rival: %d" % act["O"], TEXT)):
+                (40, gg.team["name"].upper(), gg.team["color"], "Sua Força: %d" % mine, GREEN if enough else GOLD),
+                (400, opp["name"].upper(), opp["color"], "Força do rival: %d" % act["O"], TEXT)):
             pygame.draw.rect(scr, tuple(col), (x, 476, 14, 50), border_radius=3)
             self.text(self.fit(name, 32, 270), 32, TEXT, topleft=(x + 26, 474), shadow=True)
             self.text(sub, 24, subc, topleft=(x + 26, 506))
@@ -1375,7 +1375,7 @@ class CampaignUI(RobotsUI):
         self.panel((250, 196, 600, 250))
         opp = tr["opp"]
         pygame.draw.rect(scr, tuple(opp["color"]), (290, 222, 14, 50), border_radius=3)
-        self.text(self.fit(opp["name"], 36, 500), 36, TEXT, topleft=(316, 218), shadow=True)
+        self.text(self.fit(opp["name"].upper(), 36, 500), 36, TEXT, topleft=(316, 218), shadow=True)
         self.text("Força do rival: %d" % tr["O"], 26, DIM, topleft=(316, 256))
         mine = int(round(self.info()["match_F"]))
         self.text("Sua Força: %d" % mine, 28, GREEN if mine >= tr["O"] else GOLD, topleft=(290, 306))
@@ -1723,8 +1723,8 @@ class CampaignUI(RobotsUI):
         opp = act["opp"]
         gg = self.garage
         for x, name, col, sub, subc in (
-                (40, gg.team["name"], gg.team["color"], "Sua Força: %d" % mine, GREEN if mine >= act["O"] else GOLD),
-                (400, opp["name"], opp["color"], "Força do rival: %d" % act["O"], TEXT)):
+                (40, gg.team["name"].upper(), gg.team["color"], "Sua Força: %d" % mine, GREEN if mine >= act["O"] else GOLD),
+                (400, opp["name"].upper(), opp["color"], "Força do rival: %d" % act["O"], TEXT)):
             pygame.draw.rect(scr, tuple(col), (x, 476, 14, 50), border_radius=3)
             self.text(self.fit(name, 32, 270), 32, TEXT, topleft=(x + 26, 474), shadow=True)
             self.text(sub, 24, subc, topleft=(x + 26, 506))

@@ -379,7 +379,8 @@ def test_visible_estadio_much_more_than_perto():
         assert med < wide, (v, med, wide)
     for a, b in zip(VIS_ORDER, VIS_ORDER[1:]):               # lotacao cresce com o local
         assert rows[a][1] < rows[b][1], (a, b, rows[a], rows[b])
-    assert rows["mundial"][1] >= 900 and rows["estadio"][1] >= 750, rows
+    # faixas na grade e bandeiroes cobrem de proposito alguns torcedores (eram >= 900 / 750 sem eles)
+    assert rows["mundial"][1] >= 860 and rows["estadio"][1] >= 740, rows
     for v in crowd.VENUES:
         print("   %-11s visiveis PERTO %3d  ESTADIO %4d" % ((v,) + rows[v]))
 

@@ -194,7 +194,7 @@ def test_robots_mode_and_career_use_their_venues():
     calls = []
     real_r, real_c = g.start_robot_match, g.start_career_match
     g.start_robot_match = lambda home, away, on_done, **kw: calls.append(("robots", kw.get("venue")))
-    g.start_career_match = lambda home, away, venue=None: calls.append(("career", venue))
+    g.start_career_match = lambda home, away, venue=None, **kw: calls.append(("career", venue))
     try:
         rui = g.robots_ui
         gg = gm.new_game(random.Random(5))

@@ -299,6 +299,48 @@ def _at_frame(cr, clk, t0, frame):
     return cr.fid_pose("home"), cr.fid_pose("away")
 
 
+def test_chant_in_quiet_moments_with_sound():
+    cr, clk = _crowd("estadio")
+    t0 = clk.t
+    chants, poses = [], set()
+    for f in range(0, 60 * 45, 3):                     # 45 s sem lance
+        clk.t = t0 + f / 60.0
+        cr.update()
+        r = cr.react.get("home") or cr.react.get("away")
+        for fid in ("home", "away"):
+            rr = cr.react.get(fid)
+            if rr and rr[0] == "chant" and clk.t < rr[1] + rr[2]:
+                poses.add(cr.fid_pose(fid))
+        chants += [x for x in cr.pop_sounds() if x == "crowd_chant"]
+    kinds = {f for f in ("home", "away") if cr.react.get(f) and cr.react[f][0] == "chant"}
+    assert chants, "a torcida nunca puxou o coro"
+    assert kinds == {"home", "away"}                   # as duas torcidas se revezam
+    assert crowd.UP in poses and (crowd.FLAG_A in poses or crowd.FLAG_B in poses), poses
+    cr.event("goal", 0)                                # um lance interrompe o coro
+    assert cr.react["home"][0] == "party"
+    assert cr.pop_sounds() == []
+
+
+def test_fans_have_variety():
+    b = crowd.warm_crowd("mundial", (50, 120, 255), (235, 65, 65), "ALTA", base=g.pitch_surf)
+    rng = random.Random(3)
+    v = crowd.VENUES["mundial"]
+    seats = crowd._seats(v)
+    looks = crowd._looks(v, "mundial", seats, list(range(len(seats))), (50, 120, 255), (235, 65, 65), rng)
+    people = [lk for kind, lk in looks.values() if kind == "pessoa"]
+    assert len({p[0] for p in people}) >= 5            # tons de pele
+    assert len({p[1] for p in people}) >= 10           # cabelos/chapeus/bones
+    assert {p[4] for p in people} >= {None, "listra", "cachecol", "oculos"}
+    for acc in crowd.ACCS:                             # todos desenham sem erro, nas 5 poses, frente e costas
+        for pose in crowd.POSES:
+            for back in (False, True):
+                srf = pygame.Surface((crowd.AW, crowd.AH), pygame.SRCALPHA)
+                crowd.draw_person(srf, 0, 0, ((200, 150, 110), ("chapeu", (210, 190, 120)), (50, 120, 255),
+                                              None, acc), pose, back)
+    big = [f for f in b.flags if f[0][0].get_width() > 22]
+    assert big and len(b.flags) >= 6                   # bandeiroes no meio das bandeiras
+
+
 def test_goal_poses_by_fidelity_frames():
     for team, mine, other in ((0, "home", "away"), (1, "away", "home")):
         cr, clk = _crowd()
@@ -306,12 +348,15 @@ def test_goal_poses_by_fidelity_frames():
         t0 = clk.t
         cr.event("goal", team)
         poses = {}
-        for f in (0, 30, 90, 200):
+        for f in (0, 30, 90, 200, 300, 480):
             h, a = _at_frame(cr, clk, t0, f)
             poses[f] = {"home": h, "away": a}
         assert poses[30][mine] == crowd.UP and poses[90][mine] == crowd.UP, poses
+        assert poses[200][mine] == crowd.UP, poses                          # ainda pulando (festa)
+        assert poses[300][mine] in (crowd.FLAG_A, crowd.FLAG_B), poses      # depois agita as bandeiras
         assert poses[0][other] == crowd.SAD and poses[90][other] == crowd.SAD, poses
-        assert poses[200][mine] == crowd.SIT and poses[200][other] == crowd.SIT, poses
+        assert poses[200][other] == crowd.SIT, poses
+        assert poses[480][mine] == crowd.SIT and poses[480][other] == crowd.SIT, poses
         # pulo: a torcida que marcou sobe (deslocamento) em algum quadro da comemoracao
         jumped = False
         for f in range(10, 120, 3):
@@ -978,6 +1023,13 @@ def test_banners_visible_and_generic_outside_campaign():
                         pygame.Rect(soccer.PITCH.right, soccer.CY - soccer.GOAL_HALF, soccer.GOAL_DEPTH,
                                     soccer.GOAL_HALF * 2)]
                 assert not any(r.colliderect(n) for n in nets), (v, r)
+        # faixas na grade (horizontais): fora do campo e de toda a UI
+        for story in (False, True):
+            assert b.rails[story], (v, story)
+            for img, pos in b.rails[story]:
+                r = img.get_rect(topleft=pos)
+                assert crowd.visible_frac(r, crowd.UI_ALL) == 1.0, (v, r)
+                assert not r.colliderect(soccer.PITCH) and r.w > r.h, (v, r)
     # partidas reais: Modo Robos / carreira = genericas; campanha (return_state "campaign") = do local
     set_level("ALTA")
     g.start_robot_match(cfg("A", (50, 120, 255)), cfg("B", (235, 65, 65)), lambda s, e: None, venue="bairro")
