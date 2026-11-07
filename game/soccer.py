@@ -14,6 +14,7 @@ from pygame import Vector2 as V
 import crowd
 import fireworks
 import floors
+import friendly
 import narration
 import prefs
 import robot_art
@@ -24,6 +25,7 @@ from campaign import Campaign
 from campaign_ui import CampaignUI
 from career import Career
 from career_ui import CareerUI
+from friendly_ui import FriendlyUI
 from garage import Garage
 from robot_art import led_color, scale_color  # noqa: F401  (reexportados: soccer.led_color)
 from robots_ui import RobotsUI
@@ -47,7 +49,7 @@ BATTERY_ON = True                      # bateria ligada (False so no modo legado
 FX_MAX = 120                           # teto de particulas
 TEXT_CACHE_MAX = 600
 CROWD_CYCLE = ("ALTA", "MEDIA", "OFF")    # opcao TORCIDA (prefs "crowd"), tecla T no menu e na pausa
-MUSIC_BY_STATE = {"menu": "menu", "robots": "sub", "career": "cups", "campaign": "cups"}
+MUSIC_BY_STATE = {"menu": "menu", "friendly": "menu", "robots": "sub", "career": "cups", "campaign": "cups"}
 DEMO_IDLE_S = 60.0                     # menu parado por 1 min -> modo demo (CPU x CPU)
 DEMO_LEN_S = 60.0                      # duracao da demonstracao antes de voltar ao menu
 DEMO_OVER_S = 3.0                      # demo terminou a partida: mostra o placar e volta ao menu
@@ -88,7 +90,8 @@ ARENA_BAT_DRAIN = 1.8
 ARENA_GK_REACH = 10
 HUMAN_AIM_ERR = 30                     # graus de erro de mira humano por 1.0 de (0.65 - chu/100); so chu < 65
 
-# (papel, fracao x a partir do proprio gol, fracao y)
+# (papel, fracao x a partir do proprio gol, fracao y). Formacao padrao (friendly.FORMATIONS["equilibrada"]);
+# as outras so entram quando escolhidas no amistoso (Team(formation=...)): mudam fx/fy e o "push" do time.
 FORMATION = [
     ("GK", 0.05, 0.50),
     ("DEF", 0.25, 0.50),
@@ -252,7 +255,7 @@ class Player:
 
 
 class Team:
-    def __init__(self, idx, name, color, gk_color, human=None, squad=None, tuning=None):
+    def __init__(self, idx, name, color, gk_color, human=None, squad=None, tuning=None, formation=None):
         self.idx = idx
         self.dir = 1 if idx == 0 else -1
         self.name = name
@@ -260,7 +263,14 @@ class Team:
         self.gk_color = gk_color
         self.human = human
         self.players = []
-        for i, (r, fx, fy) in enumerate(FORMATION):
+        # formacao escolhida no amistoso (friendly.FORMATIONS[id]) ou None = FORMATION de sempre (legado).
+        # Os papeis (chassi/atributos) seguem FORMATION; so as posicoes base e o push do bloco mudam.
+        layout = FORMATION
+        self.push = 0.0
+        if formation is not None:
+            layout = [(r, fx, fy) for (r, _, _), (fx, fy) in zip(FORMATION, formation["pts"])]
+            self.push = float(formation.get("push", 0.0))
+        for i, (r, fx, fy) in enumerate(layout):
             extra = {}
             if not squad:                          # modos 1P/2P: chassis padrao do papel, sem jitter
                 nm, ovr, chassis, seed = "", 65, None, None
@@ -381,6 +391,8 @@ class Game:
         self.campaign_status = "none"             # cache de Campaign.load_status() (nunca lido por frame)
         self.refresh_campaign_status()
         self.campaign_ui = CampaignUI(self)
+        self.friendly_sel = None
+        self.friendly_ui = FriendlyUI(self)
         self.new_match(1)
         self.state = "menu"
 
@@ -400,9 +412,11 @@ class Game:
         x = W // 2 + 10 if self.has_save else W // 2 - 160
         return pygame.Rect(x, 450, 320, 70)
 
-    def new_match(self, mode, venue=None):
+    def new_match(self, mode, venue=None, sel=None):
         """Amistoso (modos 1/2). venue: local da torcida leve (A8: o menu passa crowd.FRIENDLY_VENUE);
-        None = sem torcida (padrao: testes, goldens e o Game() inicial nao pre-renderizam nada)."""
+        None = sem torcida (padrao: testes, goldens e o Game() inicial nao pre-renderizam nada).
+        sel: escolha da tela do amistoso ({"teams": (id, id), "forms": (id, id)}, ver friendly.py) ou None =
+        times azul x vermelho de sempre na formacao padrao (o motor de antes, bit a bit)."""
         self.mode = mode
         self.user_side = 0 if mode == 1 else None       # 2 jogadores: todo gol e "nosso"
         self.kick_voice = False
@@ -412,10 +426,15 @@ class Game:
         else:
             h0, h1 = Human(P1_KEYS), Human(P2_KEYS)
             n0, n1 = "JOGADOR 1", "JOGADOR 2"
-        self.teams = [
-            Team(0, n0, (50, 120, 255), (250, 200, 40), h0),
-            Team(1, n1, (235, 65, 65), (70, 205, 130), h1),
-        ]
+        if sel is None:
+            self.teams = [
+                Team(0, n0, (50, 120, 255), (250, 200, 40), h0),
+                Team(1, n1, (235, 65, 65), (70, 205, 130), h1),
+            ]
+        else:
+            sel = friendly.sanitize(sel)
+            self.teams = self.friendly_teams(sel, (n0, n1), (h0, h1))
+        self.friendly_sel = sel                   # ENTER no fim = revanche com a mesma escolha
         self.score = [0, 0]
         self.career_match = False
         self.match_sink = None
@@ -437,6 +456,23 @@ class Game:
             self.warm_crowd(venue)
         self.narr_warm()
         self.kickoff(0)
+
+    @staticmethod
+    def friendly_teams(sel, names, humans):
+        """Os 2 Team do amistoso escolhido. Times classicos: elenco de sempre (squad None) e nome do modo
+        ("VOCE"/"CPU", "JOGADOR 1"/"JOGADOR 2"); os outros: nome do time, robos com a forca dele. Formacao
+        padrao = None (FORMATION de sempre). Cores parecidas: o lado 1 muda de cor (como em _begin_match)."""
+        info = [friendly.team(t) for t in sel["teams"]]
+        cols = [tuple(t["color"]) for t in info]
+        if sum(abs(a - b) for a, b in zip(led_color(cols[0]), led_color(cols[1]))) < 130:
+            cols[1] = (235, 235, 235) if sum(cols[0]) < 600 else (0, 230, 255)
+        out = []
+        for i in (0, 1):
+            t, fid = info[i], sel["forms"][i]
+            form = None if fid == friendly.DEFAULT_FORMATION else friendly.formation(fid)
+            name = names[i] if t["names"] is None else t["name"]
+            out.append(Team(i, name, cols[i], GK_COLORS[i], humans[i], friendly.squad(t["id"]), None, form))
+        return out
 
     def start_career_match(self, home, away, venue=None, user_side=0):
         """Partida automática (CPU x CPU) do modo carreira. home/away = match_cfg().
@@ -533,6 +569,8 @@ class Game:
             if kickoff:
                 fx = min(fx, 0.40)
             else:
+                if t.push:                         # formacao do amistoso (0.0 no legado: soma nada)
+                    attack += t.push
                 bf = (b.pos.x - PITCH.left) / PITCH.w
                 if t.dir == -1:
                     bf = 1 - bf
@@ -589,6 +627,8 @@ class Game:
             sfx.play("back")
         if self.state == "career":
             return self.career_ui.handle_event(e)
+        if self.state == "friendly":
+            return self.friendly_ui.handle_event(e)
         if self.state == "robots":
             ui = getattr(self, "robots_ui", None)
             if ui is not None:
@@ -610,9 +650,9 @@ class Game:
                 elif e.key == pygame.K_t:
                     sfx.play("toggle")
                 if e.key == pygame.K_1:
-                    self.new_match(1, crowd.FRIENDLY_VENUE)
+                    self.friendly_ui.open(1)              # tela de escolha de times e formacoes
                 elif e.key == pygame.K_2:
-                    self.new_match(2, crowd.FRIENDLY_VENUE)
+                    self.friendly_ui.open(2)
                 elif e.key == pygame.K_3:
                     self.career_ui.open_new()
                 elif e.key == pygame.K_4:
@@ -638,7 +678,7 @@ class Game:
                     self.finish_career_match()
             elif self.state == "over":
                 if e.key in (pygame.K_RETURN, pygame.K_SPACE):
-                    self.new_match(self.mode, self.crowd_venue)
+                    self.new_match(self.mode, self.crowd_venue, self.friendly_sel)
                 elif e.key == pygame.K_ESCAPE:
                     self.state = "menu"
             else:
@@ -658,7 +698,7 @@ class Game:
                     sfx.play("click")
                 for i, r in enumerate(self.menu_btns):
                     if r.collidepoint(e.pos):
-                        [lambda: self.new_match(1, crowd.FRIENDLY_VENUE), lambda: self.new_match(2, crowd.FRIENDLY_VENUE),
+                        [lambda: self.friendly_ui.open(1), lambda: self.friendly_ui.open(2),
                          self.career_ui.open_new][i]()
                         return
                 if self.has_save and self.continue_btn.collidepoint(e.pos):
@@ -682,6 +722,8 @@ class Game:
 
     # ----------------------------------------------------------------- update
     def update(self, dt):
+        if self.state == "friendly":
+            return
         if self.state == "menu":
             if self.demo_enabled:
                 self.idle_t += dt
@@ -2280,6 +2322,8 @@ class Game:
         scr = self.screen
         if self.state == "career":
             return self.career_ui.draw()
+        if self.state == "friendly":
+            return self.friendly_ui.draw()
         if self.state == "robots":
             ui = getattr(self, "robots_ui", None)
             if ui is not None:

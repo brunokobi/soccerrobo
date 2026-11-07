@@ -191,7 +191,9 @@ def test_main_menu_button_6_and_keys():
     g.robots_ui.to_menu()
     assert g.state == "menu"
     key(pygame.K_1)
-    assert g.state == "playing" or g.state != "menu"
+    assert g.state == "friendly"                        # amistoso: tela de times e formacoes
+    key(pygame.K_ESCAPE)
+    assert g.state == "menu"
     g.new_match(1)
     g.state = "menu"
 

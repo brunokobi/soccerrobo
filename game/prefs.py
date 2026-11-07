@@ -13,13 +13,15 @@ Uso: prefs.get("crowd") -> "ALTA"; prefs.set("crowd", "OFF") -> True se gravou.
 Som (Fase 6): "sfx_vol"/"music_vol" em "0".."3" (padrao "2" = medio) e "mute" "0"/"1" (padrao "0").
 
 Campos OPCIONAIS (padrao None em FIELDS): ausentes = "o jogador nunca escolheu". Nao aparecem em
-load()/no JSON gravado ate o primeiro set(); unset(campo) volta ao automatico. Hoje nao ha nenhum: o antigo
-"camera" saiu (toda partida comeca na camera ESTADIO; ver soccer.Game.camera_mode) e, se ainda estiver num
-JSON antigo, o sanitize o descarta.
+load()/no JSON gravado ate o primeiro set(); unset(campo) volta ao automatico. Hoje: a ultima escolha do
+amistoso ("fr_t0"/"fr_t1" = ids de friendly.TEAMS, "fr_f0"/"fr_f1" = ids de friendly.FORMATIONS; gravados
+juntos por update() quando a partida comeca). O antigo "camera" saiu (toda partida comeca na camera ESTADIO;
+ver soccer.Game.camera_mode) e, se ainda estiver num JSON antigo, o sanitize o descarta.
 """
 import json
 import os
 
+import friendly
 import store
 
 PREFS_KEY = "soccerpy_prefs_v1"
@@ -37,6 +39,11 @@ FIELDS = {
     "sfx_vol": (VOLUME_LEVELS, "2"),        # volume dos efeitos (tecla S)
     "music_vol": (VOLUME_LEVELS, "2"),      # volume da musica (tecla N)
     "mute": (MUTE_VALUES, "0"),             # mudo geral (tecla M)
+    # amistoso: ultima escolha de times e formacoes (opcionais: ausentes = padrao do jogo)
+    "fr_t0": (friendly.TEAM_IDS, None),
+    "fr_t1": (friendly.TEAM_IDS, None),
+    "fr_f0": (friendly.FORMATION_ORDER, None),
+    "fr_f1": (friendly.FORMATION_ORDER, None),
 }
 
 _cur = None                                 # cache em memoria (None = ainda nao carregado)
@@ -117,6 +124,18 @@ def set(name, value):  # noqa: A001  (API do modulo: prefs.set)
     if spec is None or not isinstance(value, str) or value not in spec[0]:
         return False
     _prefs()[name] = value
+    return save()
+
+
+def update(values):
+    """Muda varios campos e grava UMA vez. Algum campo/valor invalido: nada muda, devolve False."""
+    if not isinstance(values, dict) or not values:
+        return False
+    for name, value in values.items():
+        spec = FIELDS.get(name)
+        if spec is None or not isinstance(value, str) or value not in spec[0]:
+            return False
+    _prefs().update(values)
     return save()
 
 

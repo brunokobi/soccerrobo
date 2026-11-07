@@ -225,6 +225,7 @@ def test_friendly_light_crowd_respects_prefs():
     set_level("ALTA")
     g.state = "menu"
     g.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_1, unicode="1"))
+    g.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN, unicode=""))   # tela do amistoso
     assert g.crowd is not None and g.crowd.b.venue == "bairro" and not g.crowd.telao_on
     g.state = "play"
     for _ in range(5):
@@ -235,6 +236,7 @@ def test_friendly_light_crowd_respects_prefs():
     set_level("OFF")
     g.state = "menu"
     g.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_2, unicode="2"))
+    g.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN, unicode=""))
     assert g.crowd is None and g.mode == 2
     g.paused = True                                       # T na pausa do amistoso liga de novo
     g.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_t, unicode="t"))

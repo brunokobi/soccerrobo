@@ -194,7 +194,9 @@ def test_key_c_menu_and_pause():
     g.paused = False
     # amistoso com torcida (menu): comeca em ESTADIO; a pausa oferece e aplica; o proximo volta
     g.state = "menu"
-    key(pygame.K_1)
+    key(pygame.K_1)                                          # tela do amistoso...
+    key(pygame.K_RETURN)                                     # ...ENTER = jogar (grava a escolha nas prefs)
+    raw = PREFS["raw"]
     assert g.crowd.b.camera == "ESTADIO"
     g.paused = True
     key(pygame.K_c)
@@ -418,6 +420,7 @@ def test_friendly_keyboard_in_estadio():
     random.seed(5)
     g.state = "menu"
     key(pygame.K_1)
+    key(pygame.K_RETURN)                                     # tela do amistoso: ENTER = jogar
     assert g.crowd.b.camera == "ESTADIO" and g.mode == 1
     g.state = "play"
     real = pygame.key.get_pressed
