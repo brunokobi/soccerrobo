@@ -101,7 +101,7 @@ Efeitos sintetizados por código (`game/sfx.py` e `game/music.py`, gerados com `
 início do jogo, aos poucos) somados a sons gravados em `game/audio/` (OGG mono, volume nivelado por
 `tools/normalizar_audio.sh`, ~7,3 MB no total):
 
-- **Músicas (stream, uma faixa depois da outra, em loop):** menu principal = `menu1/2/3.ogg`
+- **Músicas (stream, uma faixa depois da outra, em loop):** menu principal = `menu1/2/3.ogg` (`menu1` = "Era do Metal", a primeira a tocar)
   (desde o clique da tela de carregamento); tela de robôs = `interno1/2.ogg` + `submenus.ogg`;
   carreira e campanha = `copas.ogg` + `interno1/2.ogg`; **partidas** (amistoso, carreira, Modo Robôs e
   campanha) = `partida_musica.ogg` ("Into the Iron Horizon", 3 min, em loop), mais baixa que a torcida e
