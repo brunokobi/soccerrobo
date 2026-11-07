@@ -20,7 +20,7 @@ pelas habilidades dos robôs.
 
 | | |
 |---|---|
-| ![Menu principal](docs/img/menu.png) | ![Partida com câmera de estádio e torcida no gol](docs/img/partida-estadio-gol.png) |
+| ![Menu principal](docs/img/menu.png) | ![Partida com câmera de estádio, gol e faixa do narrador](docs/img/partida-estadio-gol.png) |
 | **Menu** - amistosos, carreira de clubes, Modo Robôs e campanha | **Partida** - câmera de estádio, torcida reagindo ao gol, LED e faixa do narrador |
 | ![Campanha: diálogo](docs/img/campanha-dialogo.png) | ![Campanha: mapa dos capítulos](docs/img/campanha-mapa.png) |
 | **Campanha** - diálogos com retratos animados e cenários desenhados por código | **Mapa da campanha** - da escola ao Mundial de Aspiradores |
