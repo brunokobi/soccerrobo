@@ -11,6 +11,7 @@ import math
 import os
 import random
 
+import formations
 import parts
 import robots
 import skills
@@ -75,8 +76,10 @@ NAME_MAX_ROBOT, NAME_MAX_TEAM = 12, 16
 NAME_MAX_LEAGUE_TEAM = 24     # nomes gerados da liga (ex.: "Engrenagem Atlética")
 
 FIELDS = ("scrap", "next_id", "team", "robots", "lineup", "inventory", "unlocked",
-          "tier_done", "league", "shop", "stats", "flags", "items", "cosmetics", "cap", "tactic")
+          "tier_done", "league", "shop", "stats", "flags", "items", "cosmetics", "cap", "tactic", "formation")
 # v2 (Fase 4/B3): slot "modulo", robo.skills/look, items, cosmetics, cap, tactic, MAX_FLAGS 128.
+# "formation" (formacao do time do jogador, id de formations.FORMATIONS): campo OPCIONAL da v2 (sem subir a
+# versao): save antigo sem o campo, ou com id invalido, carrega com a padrao ("equilibrada").
 VERSION = 2
 SAVE_KEY = "soccerpy_robots_v1"
 SAVE_PATH = os.path.join(os.path.expanduser("~"), ".soccerpy_robots.json")
@@ -286,6 +289,7 @@ class Garage:
         self.cosmetics = []
         self.cap = MAX_LEVEL
         self.tactic = skills.DEFAULT_TACTIC
+        self.formation = formations.DEFAULT    # formacao do time na partida (Campanha / Modo Robos)
         self.backpack = []            # Mochila da PROXIMA partida (transitoria: nao vai ao save; UI no B12)
 
     # ---------------------------------------------------------------- serializacao
@@ -407,8 +411,10 @@ class Garage:
         return team_rating(self.lineup_robots(), self.pieces_by_id(), self.mod_on())
 
     def match_F(self):
-        """Forca para o SIMULAR da proxima partida: rating() + item_force da Mochila (spec 5/9.2)."""
-        return self.rating() + skills.item_force(self.backpack_items())
+        """Forca para o SIMULAR da proxima partida: rating() + item_force da Mochila (spec 5/9.2) + o efeito
+        medido da formacao (formations.sim_df; 0.0 na padrao)."""
+        r = self.rating()
+        return r + skills.item_force(self.backpack_items()) + formations.sim_df(self.formation, r)
 
     def entry(self, robot):
         return match_entry(robot, self.pieces_by_id(), self.mod_on())
@@ -422,6 +428,8 @@ class Garage:
                "squad": [match_entry(self.robot(i), pb, on) for i in self.lineup]}
         if on:
             cfg["tactic"] = self.tactic
+        if self.formation != formations.DEFAULT:        # padrao: cfg identico ao de sempre (motor legado)
+            cfg["formation"] = self.formation
         items = self.backpack_items()
         if items:
             cfg["items"] = tuple(items)
@@ -566,6 +574,13 @@ class Garage:
             return False, "Tática inválida."
         self.tactic = tactic
         return True, "Tática: %s." % skills.TACTIC_NAMES.get(tactic, tactic)
+
+    def set_formation(self, fid):
+        """Formacao do time (formations.FORMATIONS): so muda as posicoes no motor. (ok, msg)."""
+        if fid not in formations.FORMATIONS:
+            return False, "Formação inválida."
+        self.formation = fid
+        return True, "Formação: %s." % formations.label(fid)
 
     def new_id(self):
         i = self.next_id
@@ -1219,7 +1234,8 @@ def _sanitize(data):
              "unlocked": unlocked,
              "tier_done": _int(data.get("tier_done"), -1, len(TIER_OVR) - 1, -1),
              "league": _league(data.get("league")), "shop": shop, "stats": stats,
-             "flags": flags, "items": items, "cosmetics": cosmetics, "cap": cap, "tactic": tactic}
+             "flags": flags, "items": items, "cosmetics": cosmetics, "cap": cap, "tactic": tactic,
+             "formation": formations.clean(data.get("formation"))}
     # escalacao: 5 ids distintos de robos existentes; senao automatica
     lu = data.get("lineup")
     ok = (isinstance(lu, list) and len(lu) == len(LINEUP_SLOTS)

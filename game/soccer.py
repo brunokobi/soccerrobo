@@ -14,6 +14,7 @@ from pygame import Vector2 as V
 import crowd
 import fireworks
 import floors
+import formations
 import friendly
 import narration
 import prefs
@@ -90,8 +91,9 @@ ARENA_BAT_DRAIN = 1.8
 ARENA_GK_REACH = 10
 HUMAN_AIM_ERR = 30                     # graus de erro de mira humano por 1.0 de (0.65 - chu/100); so chu < 65
 
-# (papel, fracao x a partir do proprio gol, fracao y). Formacao padrao (friendly.FORMATIONS["equilibrada"]);
-# as outras so entram quando escolhidas no amistoso (Team(formation=...)): mudam fx/fy e o "push" do time.
+# (papel, fracao x a partir do proprio gol, fracao y). Formacao padrao (formations.FORMATIONS["equilibrada"]);
+# as outras so entram quando escolhidas (amistoso, ou "formation" no cfg da campanha/Modo Robos/carreira:
+# Team(formation=...)): mudam fx/fy e o "push" do time.
 FORMATION = [
     ("GK", 0.05, 0.50),
     ("DEF", 0.25, 0.50),
@@ -263,7 +265,7 @@ class Team:
         self.gk_color = gk_color
         self.human = human
         self.players = []
-        # formacao escolhida no amistoso (friendly.FORMATIONS[id]) ou None = FORMATION de sempre (legado).
+        # formacao escolhida (formations.FORMATIONS[id]) ou None = FORMATION de sempre (legado).
         # Os papeis (chassi/atributos) seguem FORMATION; so as posicoes base e o push do bloco mudam.
         layout = FORMATION
         self.push = 0.0
@@ -502,9 +504,12 @@ class Game:
         c1 = tuple(away["color"])
         if sum(abs(a - b) for a, b in zip(led_color(home["color"]), led_color(c1))) < 130:
             c1 = (235, 235, 235) if sum(home["color"]) < 600 else (0, 230, 255)
+        # formacao do cfg ("formation": id de formations.FORMATIONS; ausente/padrao = None = motor de sempre)
         self.teams = [
-            Team(0, home["name"], tuple(home["color"]), GK_COLORS[0], None, home["squad"], tuning),
-            Team(1, away["name"], c1, GK_COLORS[1], None, away["squad"], tuning),
+            Team(0, home["name"], tuple(home["color"]), GK_COLORS[0], None, home["squad"], tuning,
+                 formations.engine(home.get("formation"))),
+            Team(1, away["name"], c1, GK_COLORS[1], None, away["squad"], tuning,
+                 formations.engine(away.get("formation"))),
         ]
         self.score = [0, 0]
         self.career_match = True
@@ -569,7 +574,7 @@ class Game:
             if kickoff:
                 fx = min(fx, 0.40)
             else:
-                if t.push:                         # formacao do amistoso (0.0 no legado: soma nada)
+                if t.push:                         # formacao escolhida (0.0 no legado: soma nada)
                     attack += t.push
                 bf = (b.pos.x - PITCH.left) / PITCH.w
                 if t.dir == -1:

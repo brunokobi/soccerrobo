@@ -15,6 +15,7 @@ import random
 import pygame
 
 import crowd
+import formation_ui
 import friendly
 import prefs
 import sfx
@@ -28,9 +29,6 @@ NEON = (0, 230, 255)
 TEXT = (235, 245, 250)
 DIM = (150, 185, 205)
 GOLD = (255, 214, 90)
-PITCH_FILL = (16, 70, 46)
-PITCH_LINE = (150, 220, 180)
-GK_COLORS = ((250, 200, 40), (70, 205, 130))
 SRC_COLORS = {"AMISTOSO": (120, 200, 255), "CARREIRA": (255, 214, 90), "CAMPANHA": (210, 170, 255),
               "MODO ROBÔS": (90, 255, 210)}
 ROWS = ("team", "form")
@@ -295,34 +293,8 @@ class FriendlyUI:
         self.draw_pitch(pygame.Rect(x + 60, pr.y + 272, PANEL_W - 120, 182), form, side, col)
 
     def draw_pitch(self, r, form, side, col):
-        scr = self.g.screen
-        pygame.draw.rect(scr, PITCH_FILL, r, border_radius=6)
-        pygame.draw.rect(scr, PITCH_LINE, r, 2, border_radius=6)
-        pygame.draw.line(scr, PITCH_LINE, (r.centerx, r.y), (r.centerx, r.bottom - 1), 2)
-        pygame.draw.circle(scr, PITCH_LINE, r.center, r.h // 6, 2)
-        gh = r.h // 4
-        for gx, d in ((r.x, 1), (r.right - 1, -1)):
-            box = pygame.Rect(0, r.centery - gh, r.w // 9, 2 * gh)
-            if d == 1:
-                box.left = gx
-            else:
-                box.right = gx + 1
-            pygame.draw.rect(scr, PITCH_LINE, box, 2)
-        # gol que o time ataca (seta) e os 5 pontos da formacao (com o push do bloco)
-        ax = r.right - 18 if side == 0 else r.x + 18
-        d = 1 if side == 0 else -1
-        pygame.draw.polygon(scr, GOLD, [(ax + 8 * d, r.y + 14), (ax - 6 * d, r.y + 6), (ax - 6 * d, r.y + 22)])
-        lc = led_color(col)
-        push = form.get("push", 0.0)
-        for i, (fx, fy) in enumerate(form["pts"]):
-            if i:
-                fx = min(0.92, max(0.10, fx + push))
-            px = r.x + int(fx * r.w) if side == 0 else r.right - int(fx * r.w)
-            py = r.y + int(fy * r.h)
-            c = GK_COLORS[side] if i == 0 else lc
-            pygame.draw.circle(scr, (6, 12, 20), (px + 2, py + 2), 11)
-            pygame.draw.circle(scr, c, (px, py), 11)
-            pygame.draw.circle(scr, (255, 255, 255), (px, py), 11, 2)
+        """Mini-campo da formacao (desenho compartilhado com Campanha/Modo Robos/Carreira: formation_ui)."""
+        formation_ui.draw_pitch(self.g.screen, r, form, side, col)
 
     def colors(self):
         """Cores dos dois lados como ficarao na partida (cores parecidas: o lado 1 muda, igual ao motor)."""

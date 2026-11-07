@@ -50,6 +50,8 @@ FRAME_SCREENS = tuple(t for t, _ in TABS)
 STUB_SCREENS = ("tourney", "training", "round", "chapter_end", "ending", "sides", "tower")   # Esc = mapa
 SCREENS = ("menu", "map", "garage", "shop", "skills", "bench", "dialog") + STUB_SCREENS
 FRAME_EXTRA = ("tourney", "training", "sides", "tower")   # telas com cabecalho + abas (HISTORIA ativa)
+FORM_SCREENS = ("tourney", "training", "tower")            # telas com o seletor de FORMACAO
+FORM_RECT = (700, 386, 360, 54)                            # seletor no painel da partida (torneio e Torre)
 NODE_X0, NODE_DX = 110, 176
 NODE_X_MAX = 990                  # ultimo no do mapa (o painel vai ate x = 1080)
 
@@ -328,6 +330,21 @@ class CampaignUI(RobotsUI):
             if isinstance(act, dict) and "user_F" in act:
                 act["user_F"] = gg.match_F()
                 act["home"] = gg.match_cfg()
+
+    # ------------------------------------------------------------ formacao (B: seletor nas telas de partida)
+    def formation_screen(self):
+        return (self.campaign is not None and self.screen_id in FORM_SCREENS
+                and not (self.bp_open or self.vis_open))
+
+    def on_formation_change(self):
+        """A formacao mudou (ja gravada no save da campanha): atualiza o lado do jogador e a Forca do SIMULAR
+        (formations.sim_df) da partida ja montada (torneio, treino e Torre), como on_backpack_change."""
+        gg = self.garage
+        for act in (self.map_act if self.screen_id == "tourney" else None, self.train, self.tower_act):
+            if isinstance(act, dict) and "home" in act:
+                act["home"] = gg.match_cfg()
+                if "user_F" in act:                     # Forca do SIMULAR com o efeito da formacao
+                    act["user_F"] = gg.match_F()
 
     # ------------------------------------------------------------ mapa
     def do_story(self):
@@ -1347,11 +1364,12 @@ class CampaignUI(RobotsUI):
             self.text("Peneira: qualquer resultado conclui.", 20, DIM, topleft=(40, 640))
         else:
             self.text(RULES_TEXT.get(v.get("fmt"), RULES_TEXT["cup"]), 20, DIM, topleft=(40, 640))
-        self.btn((700, 390, 360, 76), "ASSISTIR", self.do_watch_match, size=36)
-        self.btn((700, 478, 360, 56), "SIMULAR", self.do_sim_match, size=30, color=(60, 80, 130))
-        self.btn((700, 546, 360, 50), "TREINO", lambda: self.open_training("tourney"), size=26,
+        self.draw_formation(FORM_RECT)
+        self.btn((700, 448, 360, 64), "ASSISTIR", self.do_watch_match, size=36)
+        self.btn((700, 520, 360, 48), "SIMULAR", self.do_sim_match, size=30, color=(60, 80, 130))
+        self.btn((700, 576, 360, 42), "TREINO", lambda: self.open_training("tourney"), size=26,
                  color=(60, 80, 130))
-        self.btn((700, 608, 360, 44), "VOLTAR AO MAPA", self.back_to_map, size=24, color=(60, 60, 70))
+        self.btn((700, 626, 360, 40), "VOLTAR AO MAPA", self.back_to_map, size=24, color=(60, 60, 70))
 
     # ---- treino
     def tab_active(self, tid):
@@ -1383,6 +1401,7 @@ class CampaignUI(RobotsUI):
                 "Partida livre: não avança o torneio nem a história. A recompensa é menor que a de "
                 "uma partida valendo.", 22, 540)):
             self.text(line, 22, DIM, topleft=(290, 350 + k * 26))
+        self.draw_formation((290, 402, 520, 38))
         self.btn((250, 470, 600, 64), "ASSISTIR TREINO", self.do_watch_train, size=34)
         self.btn((250, 546, 600, 50), "SIMULAR TREINO", self.do_sim_train, size=28, color=(60, 80, 130))
         self.btn((250, 610, 600, 42), "VOLTAR", self.back_from_training, size=24, color=(60, 60, 70))
@@ -1738,6 +1757,7 @@ class CampaignUI(RobotsUI):
                   topleft=(40, 614))
         self.text("Partida única: empate vai aos pênaltis. Perder repete o andar, sem penalidade.", 20, DIM,
                   topleft=(40, 640))
-        self.btn((700, 390, 360, 76), "ASSISTIR", self.do_watch_tower, size=36)
-        self.btn((700, 478, 360, 56), "SIMULAR", self.do_sim_tower, size=30, color=(60, 80, 130))
-        self.btn((700, 608, 360, 44), "VOLTAR AO MAPA", self.back_to_map, size=24, color=(60, 60, 70))
+        self.draw_formation(FORM_RECT)
+        self.btn((700, 448, 360, 64), "ASSISTIR", self.do_watch_tower, size=36)
+        self.btn((700, 520, 360, 48), "SIMULAR", self.do_sim_tower, size=30, color=(60, 80, 130))
+        self.btn((700, 626, 360, 40), "VOLTAR AO MAPA", self.back_to_map, size=24, color=(60, 60, 70))

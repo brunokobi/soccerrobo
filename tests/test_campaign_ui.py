@@ -1013,7 +1013,7 @@ REAL_SHOOT = cm.shootout
 SIMQ = []                                   # placares forcados (my, opp) consumidos por sim_match
 cm.sim_match = lambda F, O, rng, relief=None: SIMQ.pop(0) if SIMQ else REAL_SIM(F, O, rng, relief)
 MAP_CONT = (700, 446, 360, 76)
-BTN_WATCH, BTN_SIM, BTN_TRAIN, BTN_BACK = (700, 390, 360, 76), (700, 478, 360, 56), (700, 546, 360, 50), (700, 608, 360, 44)
+BTN_WATCH, BTN_SIM, BTN_TRAIN, BTN_BACK = (700, 448, 360, 64), (700, 520, 360, 48), (700, 576, 360, 42), (700, 626, 360, 40)
 ROUND_CONT = (420, 650, 260, 42)
 CE_CONT = (400, 596, 300, 64)
 END_BACK = (400, 560, 300, 60)
@@ -2309,6 +2309,70 @@ def test_mythic_piece_in_bench_and_reward_cosmetics_in_shop():
     assert _no_surface_frames() == 0
     shot("d3_visual_premios")
     ui.close_visual()
+    ui.to_menu()
+
+
+# --- formacao do time do jogador (seletor no painel da partida, treino e Torre; save da campanha) -----
+FORM_RECT = (700, 386, 360, 54)
+
+
+def test_formation_selector_tourney_training_and_save():
+    fresh_campaign(31)
+    drive_until(at_match())
+    cp = ui.campaign
+    assert cp.garage.formation == "equilibrada" and "formation" not in ui.map_act["home"]
+    assert text_cache_has("FORMAÇÃO") and text_cache_has("EQUILIBRADA  1-2-1")
+    assert _no_surface_frames() == 0
+    r = pygame.Rect(FORM_RECT)
+    click_rect(FORM_RECT)                                  # corpo do cartao: proxima
+    assert cp.garage.formation == "retranca"
+    assert json.loads(CAMP["save"])["garage"]["formation"] == "retranca"    # gravou no save da campanha
+    assert ui.map_act["home"]["formation"] == "retranca"
+    frame()
+    left = [b for b in ui.buttons if b[0].w == 26 and r.contains(b[0])]
+    assert len(left) == 2
+    click(left[0][0].center)                               # seta < volta
+    assert cp.garage.formation == "equilibrada"
+    key(pygame.K_RIGHT)
+    key(pygame.K_RIGHT)
+    assert cp.garage.formation == "ofensiva"
+    g.handle_event(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_f, mod=pygame.KMOD_SHIFT, unicode="F"))
+    assert cp.garage.formation == "retranca"
+    frame()
+    assert text_cache_has("RETRANCA  2-1-1") and _no_surface_frames() == 0
+    shot("formacao_torneio")
+    # ASSISTIR leva a formacao ao motor (so o lado do jogador; a CPU fica na padrao)
+    click_rect(BTN_WATCH)
+    assert g.teams[0].push == cm.G.formations.FORMATIONS["retranca"]["push"]
+    assert [(p.fx, p.fy) for p in g.teams[0].players] == list(cm.G.formations.FORMATIONS["retranca"]["pts"])
+    assert g.teams[1].push == 0.0 and g.teams[1].players[1].fx == 0.25
+    g.match_sink = None
+    g.career_match = False
+    g.state = "campaign"
+    ui.go("map")
+    # treino: o seletor atualiza a partida ja montada
+    ui.open_training("map")
+    frame()
+    assert ui.train["home"]["formation"] == "retranca"
+    key(pygame.K_RIGHT)
+    assert ui.train["home"]["formation"] == "ofensiva" and _no_surface_frames() == 0
+    # recarregar: a formacao volta do save
+    ui.to_menu()
+    c2 = cm.Campaign.load()
+    assert c2.garage.formation == "ofensiva"
+    assert not FORBIDDEN
+
+
+def test_formation_old_campaign_save_loads_default():
+    fresh_campaign(32)
+    d = json.loads(CAMP["save"])
+    d["garage"].pop("formation", None)
+    c = cm.Campaign.from_dict(d)
+    assert c is not None and c.garage.formation == "equilibrada"
+    d["garage"]["formation"] = "4-4-2"
+    assert cm.Campaign.from_dict(d).garage.formation == "equilibrada"
+    d["garage"]["formation"] = "quadrado"
+    assert cm.Campaign.from_dict(d).garage.formation == "quadrado"
     ui.to_menu()
 
 

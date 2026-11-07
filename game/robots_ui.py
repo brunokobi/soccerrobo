@@ -11,6 +11,8 @@ import random
 import pygame
 
 import crowd
+import formation_ui
+import formations
 import garage as G
 import parts as P
 import robot_art
@@ -375,6 +377,9 @@ class RobotsUI(CareerUI):
                     sfx.play("click")
                     fn()
                     break
+        elif e.type == pygame.KEYDOWN and self.formation_screen() and formation_ui.key_step(e):
+            sfx.play("click")
+            self.change_formation(formation_ui.key_step(e))
         elif e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE:
             sid = self.screen_id
             if sid == "menu":
@@ -388,6 +393,29 @@ class RobotsUI(CareerUI):
                 self.bench_back()
             else:
                 self.go("hub")
+
+    # ------------------------------------------------------------ formação (seletor da partida)
+    def formation_screen(self):
+        """Telas com o seletor de FORMACAO (teclado: setas esquerda/direita, F). Modo Robos: LIGA com jogo."""
+        gg = self.garage
+        return (gg is not None and self.screen_id == "hub" and not (self.bp_open or self.vis_open)
+                and gg.league is not None and RL.next_fixture(gg.league) is not None)
+
+    def change_formation(self, step):
+        """Troca a formacao do time (garage.formation) e grava (act -> persist: o save do modo/da campanha)."""
+        gg = self.garage
+        if gg is None:
+            return
+        if self.act(gg.set_formation(formations.cycle(gg.formation, step))):
+            self.on_formation_change()
+
+    def on_formation_change(self):
+        """Gancho: a Campanha atualiza a config da partida ja montada."""
+
+    def draw_formation(self, rect):
+        gg = self.garage
+        return formation_ui.draw_selector(self, rect, gg.formation, self.change_formation,
+                                          lambda r, fn: self.hit(r, fn), col=gg.team["color"])
 
     def update(self, dt):
         if self.editing:
@@ -1004,7 +1032,7 @@ class RobotsUI(CareerUI):
             rnd, h, a = fx
             self.text("RODADA %d/%d" % (rnd + 1, RL.ROUNDS), 28, GOLD, topleft=(40, 145))
             self.text("PRÓXIMO JOGO", 20, DIM, topleft=(300, 152))
-            for yy, idx, lab in ((190, h, "CASA"), (250, a, "FORA")):
+            for yy, idx, lab in ((172, h, "CASA"), (218, a, "FORA")):
                 t = lg["teams"][idx]
                 me = idx == RL.USER
                 pygame.draw.rect(scr, tuple(t["color"]), (40, yy, 22, 44), border_radius=4)
@@ -1013,8 +1041,9 @@ class RobotsUI(CareerUI):
                 self.text("Força %d%s" % (strength, "  (você)" if me else ""), 22,
                           GOLD if me else DIM, midleft=(74, yy + 36))
                 self.text(lab, 22, DIM, midright=(480, yy + 22))
-            self.text("x", 26, DIM, center=(300, 241))
-            self.btn((40, 320, 440, 54), "ASSISTIR", self.do_watch, size=32)
+            self.text("x", 26, DIM, center=(300, 215))
+            self.draw_formation((40, 270, 440, 40))
+            self.btn((40, 318, 440, 54), "ASSISTIR", self.do_watch, size=32)
             self.btn((40, 380, 440, 44), "SIMULAR", self.do_sim, color=(60, 80, 130), size=26)
         # ---- resultados da rodada anterior
         self.panel((20, 450, 480, 230))

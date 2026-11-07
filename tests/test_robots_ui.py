@@ -1754,6 +1754,151 @@ def test_cosmetics_shop_gallery_and_match():
     ui.to_menu()
 
 
+# --- formacao do time (seletor na LIGA do Modo Robos e no INICIO da carreira; saves) --------------
+def _form_btns(cu, rect):
+    r0 = pygame.Rect(rect)
+    return [b for b in cu.buttons if r0.contains(b[0])]
+
+
+def test_formation_selector_robots_hub_and_save():
+    import formations
+    gg = fresh(seed=41)
+    start_league()
+    frame()
+    assert gg.formation == "equilibrada" and "formation" not in gg.match_cfg()
+    btns = _form_btns(ui, (40, 270, 440, 40))
+    assert len(btns) == 3                                            # corpo + setas < >
+    assert any("EQUILIBRADA" in k[0] for k in g.text_cache)
+    zero_surface_frames(30)
+    click(btns[0][0].center)                                         # corpo: proxima
+    assert gg.formation == "retranca" and saved().formation == "retranca"
+    key(pygame.K_LEFT)
+    assert gg.formation == "equilibrada" and saved().formation == "equilibrada"
+    key(pygame.K_f)
+    key(pygame.K_f)
+    assert gg.formation == "ofensiva" and gg.match_cfg()["formation"] == "ofensiva"
+    frame()
+    zero_surface_frames(30)
+    shot("formacao_robos")
+    # SIMULAR/ASSISTIR continuam nos mesmos tamanhos; ASSISTIR leva a formacao ao motor (so o lado do usuario)
+    assert click_btn(lambda r: r.size == (440, 54))
+    uside = 0 if g.teams[0].name == gg.team["name"] else 1
+    t = g.teams[uside]
+    assert [(p.fx, p.fy) for p in t.players] == list(formations.FORMATIONS["ofensiva"]["pts"])
+    assert t.push == formations.FORMATIONS["ofensiva"]["push"] and g.teams[1 - uside].push == 0.0
+    g.match_sink = None
+    g.career_match = False
+    g.crowd = None
+    g.state = "robots"
+    ui.go("hub")
+    # teclas da formacao nao agem fora da LIGA
+    ui.go("garage")
+    key(pygame.K_RIGHT)
+    assert gg.formation == "ofensiva"
+    ui.to_menu()
+
+
+def test_formation_garage_save_migration_and_sanitize():
+    import json
+    gg = fresh(seed=42)
+    d = json.loads(MEM["save"])
+    assert d["v"] == gm.VERSION == 2 and d["formation"] == "equilibrada"
+    d.pop("formation")                                               # save v2 antigo, sem o campo
+    assert gm.Garage.from_dict(d).formation == "equilibrada"
+    d["formation"] = 7
+    assert gm.Garage.sanitize(d)["formation"] == "equilibrada"
+    d["formation"] = "pressao"
+    assert gm.Garage.from_dict(d).formation == "pressao"
+    assert gg.set_formation("nada")[0] is False and gg.formation == "equilibrada"
+    # SIMULAR fiel ao motor: a padrao nao mexe na Forca; as outras somam formations.sim_df(rating)
+    import formations
+    r = gg.rating()
+    base = gg.match_F()
+    assert abs(base - r) < 1e-9                                       # Mochila vazia: match_F = rating
+    for fid in formations.ORDER:
+        gg.formation = fid
+        assert abs(gg.match_F() - base - formations.sim_df(fid, r)) < 1e-9
+    gg.formation = "equilibrada"
+    assert gg.match_F() == base and formations.sim_df("equilibrada", 90) == 0.0
+    assert formations.sim_df("retranca", 90) < formations.sim_df("retranca", 45)
+    ui.to_menu()
+
+
+def test_formation_selector_career_home_and_save():
+    import json
+    reset()
+    c = career.Career.new()
+    cu = g.career_ui
+    cu.career = c
+    cu.screen_id = "pick"
+    cu.reset_ui()
+    cu.choose(0)
+    g.state = "career"
+    frame()
+    assert c.formation == "equilibrada"
+    assert all("formation" not in c.match_cfg(i) for i in range(len(c.clubs)))
+    btns = _form_btns(cu, (40, 382, 500, 50))
+    assert len(btns) == 3
+    zero_surface_frames(30)
+    click(btns[2][0].center)                                         # seta >
+    assert c.formation == "retranca" and json.loads(CAREER["save"])["formation"] == "retranca"
+    key(pygame.K_RIGHT)
+    assert c.formation == "ofensiva"
+    assert c.match_cfg(c.user)["formation"] == "ofensiva"
+    assert all("formation" not in c.match_cfg(i) for i in range(len(c.clubs)) if i != c.user)
+    frame()
+    assert any("OFENSIVA" in k[0] for k in g.text_cache)
+    zero_surface_frames(30)
+    shot("formacao_carreira")
+    # saves antigos (sem o campo) e invalidos carregam com a padrao
+    d = json.loads(CAREER["save"])
+    d.pop("formation")
+    CAREER["save"] = json.dumps(d)
+    assert career.Career.load().formation == "equilibrada"
+    d["formation"] = ["x"]
+    CAREER["save"] = json.dumps(d)
+    assert career.Career.load().formation == "equilibrada"
+    # SIMULAR da carreira: a formacao entra nas forcas do clube do usuario (formations.sim_df)
+    import formations
+    real_p = career.poisson
+    career.poisson = lambda lam: lam                                 # lambdas do Poisson, sem sorteio
+    try:
+        h, a = c.user_fixture()
+        c.formation = "equilibrada"
+        base = c.sim_match(h, a)
+        c.formation = "retranca"
+        df = formations.sim_df("retranca", c.rating(c.clubs[c.user]))
+        got = c.sim_match(h, a)
+        assert df < 0 and got != base
+        mine = 0 if h == c.user else 1
+        assert got[mine] < base[mine] and got[1 - mine] > base[1 - mine]
+    finally:
+        career.poisson = real_p
+    # ASSISTIR: o motor recebe a formacao do clube do usuario
+    c.formation = "quadrado"
+    frame()
+    assert click_btn_career(cu, lambda r: r.size == (240, 70) and r.x == 40)
+    us = [t for t in g.teams if t.name == c.clubs[c.user]["name"]][0]
+    assert (us.players[1].fx, us.players[1].fy) == formations_pts("quadrado")[1] and us.push > 0.0
+    g.career_match = False
+    g.crowd = None
+    g.state = "menu"
+
+
+def click_btn_career(cu, pred):
+    frame()
+    for r, fn, en in cu.buttons:
+        if en and pred(r):
+            click(r.center)
+            return True
+    return False
+
+
+def formations_pts(fid):
+    import formations
+    return formations.FORMATIONS[fid]["pts"]
+
+
 if __name__ == "__main__":
     names = sys.argv[1:]
     tests = [(k, v) for k, v in sorted(globals().items(), key=lambda kv: kv[1].__code__.co_firstlineno

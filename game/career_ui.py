@@ -3,6 +3,8 @@ import pygame
 
 import career as C
 import crowd
+import formation_ui
+import formations
 import sfx
 
 W, H = 1100, 700
@@ -112,6 +114,15 @@ class CareerUI:
         self.career.play_round(None)
         self.make_round_info([])
 
+    def change_formation(self, step):
+        """Seletor de FORMACAO (aba INICIO): troca e grava no save da carreira."""
+        c = self.career
+        if c is None or c.user is None:
+            return
+        c.set_formation(formations.cycle(c.formation, step))
+        self.msg = ""
+        self.save()
+
     def match_done(self, score, events):
         self.career.play_round(user_score=(score[0], score[1]))
         self.make_round_info(events)
@@ -152,6 +163,9 @@ class CareerUI:
                     break
         elif e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE and self.screen_id in ("pick", "hub"):
             self.to_menu()
+        elif self.screen_id == "hub" and self.tab == "home" and formation_ui.key_step(e):
+            sfx.play("click")
+            self.change_formation(formation_ui.key_step(e))
 
     def update(self, dt):
         pass
@@ -251,14 +265,16 @@ class CareerUI:
         ch, ca = c.clubs[h], c.clubs[a]
         self.panel((20, 135, 540, 400))
         self.text("PRÓXIMA PARTIDA  -  Rodada %d" % (c.round + 1), 30, GOLD, topleft=(42, 150))
-        self.text(ch["name"].upper(), 46, vis(ch["color"]), center=(290, 225), shadow=True)
-        self.text("x", 34, DIM, center=(290, 272))
-        self.text(ca["name"].upper(), 46, vis(ca["color"]), center=(290, 319), shadow=True)
+        self.text(ch["name"].upper(), 46, vis(ch["color"]), center=(290, 212), shadow=True)
+        self.text("x", 34, DIM, center=(290, 252))
+        self.text(ca["name"].upper(), 46, vis(ca["color"]), center=(290, 292), shadow=True)
         self.text("Você joga %s" % ("em CASA (bilheteria!)" if h == c.user else "FORA de casa"), 26, TEXT,
-                  center=(290, 370))
-        self.text("Força:  %d  x  %d" % (c.rating(ch), c.rating(ca)), 26, DIM, center=(290, 400))
-        self.btn((40, 440, 240, 70), "ASSISTIR", self.play_match, size=34)
-        self.btn((300, 440, 240, 70), "SIMULAR", self.quick_sim, color=(60, 80, 130), size=34)
+                  center=(290, 334))
+        self.text("Força:  %d  x  %d" % (c.rating(ch), c.rating(ca)), 26, DIM, center=(290, 362))
+        formation_ui.draw_selector(self, (40, 382, 500, 50), c.formation, self.change_formation,
+                                   lambda r, fn: self.hit(r, fn), col=club["color"])
+        self.btn((40, 446, 240, 70), "ASSISTIR", self.play_match, size=34)
+        self.btn((300, 446, 240, 70), "SIMULAR", self.quick_sim, color=(60, 80, 130), size=34)
 
         self.panel((580, 135, 500, 400))
         self.text("SUA CAMPANHA", 30, GOLD, topleft=(602, 150))

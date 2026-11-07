@@ -273,7 +273,7 @@ def test_v2_roundtrip_and_idempotent():
     assert g2.robots[4]["slots"]["modulo"] is not None and g2.items == {"cera_turbo": 2, "cafe": 9}
     assert g2.skills_of(g2.robots[4])[0] == ("curva", 2, 1)
     assert set(json.loads(MEM["main"])) == {"v"} | set(gm.FIELDS)
-    assert len(gm.FIELDS) == len(V1_FIELDS) + 4
+    assert len(gm.FIELDS) == len(V1_FIELDS) + 5          # v2: items, cosmetics, cap, tactic + formation (opcional)
 
 
 def test_fuzz_v2_mutations_never_raise():

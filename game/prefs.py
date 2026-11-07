@@ -14,7 +14,7 @@ Som (Fase 6): "sfx_vol"/"music_vol" em "0".."3" (padrao "2" = medio) e "mute" "0
 
 Campos OPCIONAIS (padrao None em FIELDS): ausentes = "o jogador nunca escolheu". Nao aparecem em
 load()/no JSON gravado ate o primeiro set(); unset(campo) volta ao automatico. Hoje: a ultima escolha do
-amistoso ("fr_t0"/"fr_t1" = ids de friendly.TEAMS, "fr_f0"/"fr_f1" = ids de friendly.FORMATIONS; gravados
+amistoso ("fr_t0"/"fr_t1" = ids de friendly.TEAMS, "fr_f0"/"fr_f1" = ids de formations.FORMATIONS; gravados
 juntos por update() quando a partida comeca). O antigo "camera" saiu (toda partida comeca na camera ESTADIO;
 ver soccer.Game.camera_mode) e, se ainda estiver num JSON antigo, o sanitize o descarta.
 """

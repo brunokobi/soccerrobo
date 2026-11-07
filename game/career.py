@@ -8,6 +8,8 @@ import os
 import random
 import sys
 
+import formations
+
 SLOTS = ["GK", "DEF", "MID", "MID", "ATT"]       # os 5 titulares em campo
 TEMPLATE = [("GK", 2), ("DEF", 4), ("MID", 5), ("ATT", 4)]
 MIN_SQUAD, MAX_SQUAD = 12, 20
@@ -131,7 +133,9 @@ def _store_set(text):
 
 class Career:
     FIELDS = ("season", "round", "clubs", "divs", "fixtures", "user", "market",
-              "log", "last_results", "last_fin", "form", "next_id", "history")
+              "log", "last_results", "last_fin", "form", "next_id", "history", "formation")
+    # "formation": formacao do clube do jogador (id de formations.FORMATIONS). Campo opcional: save antigo sem
+    # ele (ou com id invalido) carrega com a padrao ("equilibrada"); o save da carreira nao tem versao.
 
     def __init__(self):
         self.season = 1
@@ -147,6 +151,7 @@ class Career:
         self.form = []
         self.next_id = 1
         self.history = []
+        self.formation = formations.DEFAULT
 
     # ------------------------------------------------------------- criação
     @classmethod
@@ -236,7 +241,17 @@ class Career:
         club = self.clubs[idx]
         squad = [(short_name(p["name"]), eff(p, s), p["id"], p["pos"])
                  for p, s in zip(self.lineup_players(club), SLOTS)]
-        return {"name": club["name"], "color": tuple(club["color"]), "squad": squad}
+        cfg = {"name": club["name"], "color": tuple(club["color"]), "squad": squad}
+        if idx == self.user and self.formation != formations.DEFAULT:   # padrao: cfg de sempre (motor legado)
+            cfg["formation"] = self.formation
+        return cfg
+
+    def set_formation(self, fid):
+        """Formacao do clube do jogador (so muda as posicoes no motor). True se mudou."""
+        if fid not in formations.FORMATIONS:
+            return False
+        self.formation = fid
+        return True
 
     def put_in_lineup(self, pid):
         """Escala o jogador no lugar do titular mais fraco da mesma posição."""
@@ -262,6 +277,12 @@ class Career:
     def sim_match(self, h, a):
         ah, dh = self.strengths(h)
         aa, da = self.strengths(a)
+        if self.user in (h, a) and self.formation != formations.DEFAULT:   # efeito medido da formacao
+            df = formations.sim_df(self.formation, self.rating(self.clubs[self.user]))
+            if h == self.user:
+                ah, dh = ah + df, dh + df
+            else:
+                aa, da = aa + df, da + df
         lam_h = clamp(1.0 * math.exp((ah - da) / 22) * 1.1, 0.2, 4.5)
         lam_a = clamp(1.0 * math.exp((aa - dh) / 22), 0.2, 4.5)
         return poisson(lam_h), poisson(lam_a)
@@ -475,6 +496,7 @@ class Career:
                     setattr(c, k, data[k])
             if c.user is not None and not (isinstance(c.user, int) and 0 <= c.user < len(c.clubs)):
                 return None               # save inconsistente
+            c.formation = formations.clean(c.formation)   # campo opcional: ausente/invalido -> padrao
             return c
         except Exception as ex:  # noqa: BLE001
             print("save load error:", ex)

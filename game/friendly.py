@@ -14,33 +14,18 @@ a formacao so muda onde cada robo fica e para onde volta (soccer.Game.formation_
 de sempre com push 0.0 (o padrao reproduz exatamente o motor antigo; goldens 80/80).
 """
 import career
+import formations
 import robot_league
 import story
 
 CLASSIC = ("azul", "vermelho")
 DEFAULT_TEAMS = ("azul", "vermelho")
-DEFAULT_FORMATION = "equilibrada"
+DEFAULT_FORMATION = formations.DEFAULT
 FORCE_MIN, FORCE_MAX = 45, 85
 
-# id -> {"name", "code" (notacao: linhas de linha sem o goleiro), "desc", "pts": 5 x (fx, fy), "push"}
-FORMATIONS = {
-    "equilibrada": {"name": "EQUILIBRADA", "code": "1-2-1", "desc": "a de sempre: um atrás, dois no meio",
-                    "pts": ((0.05, 0.50), (0.25, 0.50), (0.45, 0.22), (0.45, 0.78), (0.66, 0.50)),
-                    "push": 0.0},
-    "retranca": {"name": "RETRANCA", "code": "2-1-1", "desc": "dois zagueiros e o time recuado",
-                 "pts": ((0.05, 0.50), (0.20, 0.30), (0.20, 0.70), (0.38, 0.50), (0.56, 0.50)),
-                 "push": -0.06},
-    "ofensiva": {"name": "OFENSIVA", "code": "1-1-2", "desc": "dois atacantes abertos lá na frente",
-                 "pts": ((0.05, 0.50), (0.28, 0.50), (0.48, 0.50), (0.68, 0.26), (0.68, 0.74)),
-                 "push": 0.05},
-    "quadrado": {"name": "QUADRADO", "code": "2-2", "desc": "duas linhas de dois, bem fechado",
-                 "pts": ((0.05, 0.50), (0.25, 0.28), (0.55, 0.28), (0.25, 0.72), (0.55, 0.72)),
-                 "push": 0.0},
-    "pressao": {"name": "PRESSÃO", "code": "1-2-1", "desc": "linha alta: aperta a saída do rival",
-                "pts": ((0.05, 0.50), (0.40, 0.50), (0.58, 0.22), (0.58, 0.78), (0.76, 0.50)),
-                "push": 0.08},
-}
-FORMATION_ORDER = ("equilibrada", "retranca", "ofensiva", "quadrado", "pressao")
+# formacoes: dados em formations.py (compartilhados com Campanha, Modo Robos e Carreira)
+FORMATIONS = formations.FORMATIONS
+FORMATION_ORDER = formations.ORDER
 
 
 def _force_story(ovr):
@@ -91,7 +76,7 @@ def team(tid):
 
 def formation(fid):
     """Formacao pelo id (desconhecido -> a padrao)."""
-    return FORMATIONS.get(fid) or FORMATIONS[DEFAULT_FORMATION]
+    return formations.get(fid)
 
 
 def squad(tid):
@@ -137,8 +122,7 @@ def cycle_team(cur, other, step):
 
 
 def cycle_formation(cur, step):
-    i = FORMATION_ORDER.index(cur) if cur in FORMATIONS else 0
-    return FORMATION_ORDER[(i + step) % len(FORMATION_ORDER)]
+    return formations.cycle(cur, step)
 
 
 def random_pick(rng):

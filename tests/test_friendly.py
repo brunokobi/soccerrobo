@@ -172,14 +172,14 @@ def test_formation_changes_positions_and_play():
     sel = {"teams": ("azul", "vermelho"), "forms": ("retranca", "ofensiva")}
     g.new_match(1, None, sel)
     t0, t1 = g.teams
-    assert t0.push < 0 < t1.push
+    assert t0.push == friendly.FORMATIONS["retranca"]["push"] and t1.push == friendly.FORMATIONS["ofensiva"]["push"] > 0
     for t, fid in ((t0, "retranca"), (t1, "ofensiva")):
         assert [(p.fx, p.fy) for p in t.players] == list(friendly.FORMATIONS[fid]["pts"])
         assert [p.role for p in t.players] == [r for r, _, _ in soccer.FORMATION]   # papeis nao mudam
     g.ball.pos.update(soccer.CX, soccer.CY)
     p = t0.players[1]
     eq = friendly.FORMATIONS["equilibrada"]["pts"][1]
-    # formation_pos: retranca recua (fx menor + push negativo) em relacao a equilibrada
+    # formation_pos: o zagueiro da retranca fica mais atras (fx menor) que o da equilibrada
     x_ret = g.formation_pos(p).x
     p.fx, p.fy = eq
     t0.push = 0.0
@@ -397,6 +397,53 @@ def main():
             traceback.print_exc()
     print("%d testes passaram" % (len(names) - fails) if not fails else "%d falhas" % fails)
     sys.exit(1 if fails else 0)
+
+
+# ------------------------------------------------------------------ formacao nos outros modos (cfg do motor)
+def test_cfg_formation_default_identical_and_applied():
+    import formations
+    import robot_league as rl
+    import robots
+
+    def cfgs(fa=None, fb=None):
+        a = rl.match_cfg(rl.opponent_team("A", (50, 120, 255), 60, 11))
+        b = rl.match_cfg(rl.opponent_team("B", (235, 65, 65), 60, 22))
+        if fa is not None:
+            a["formation"] = fa
+        if fb is not None:
+            b["formation"] = fb
+        return a, b
+
+    def play(fa=None, fb=None, steps=1500):
+        a, b = cfgs(fa, fb)
+        random.seed(5)
+        g.start_robot_match(a, b, lambda s, e: None, tuning=robots.TUNING_ROBOTS)
+        out = run(g, steps, 5)
+        g.match_sink = None
+        return out
+
+    base = play()
+    assert play("equilibrada", "equilibrada") == base               # padrao = motor de sempre
+    assert play("xyz", 3) == base                                    # id invalido = padrao
+    assert play("pressao") != base
+    a, b = cfgs("retranca")
+    g.start_robot_match(a, b, lambda s, e: None, tuning=robots.TUNING_ROBOTS)
+    t0, t1 = g.teams
+    assert [(p.fx, p.fy) for p in t0.players] == list(formations.FORMATIONS["retranca"]["pts"])
+    assert t0.push == formations.FORMATIONS["retranca"]["push"] and t1.push == 0.0
+    assert [p.role for p in t0.players] == [r for r, _, _ in soccer.FORMATION]
+    g.match_sink = None
+    # carreira (squad legado) idem
+    c = {"name": "C", "color": (1, 2, 3), "squad": [("x%d" % i, 60) for i in range(5)], "formation": "ofensiva"}
+    g.start_career_match(c, {"name": "D", "color": (200, 2, 3), "squad": [("y%d" % i, 60) for i in range(5)]})
+    assert g.teams[0].push == formations.FORMATIONS["ofensiva"]["push"] and g.teams[1].push == 0.0
+    g.career_match = False
+    g.state = "menu"
+    g.crowd = None
+    assert formations.engine("equilibrada") is None and formations.engine(None) is None
+    assert formations.clean("quadrado") == "quadrado" and formations.clean(["x"]) == "equilibrada"
+    assert formations.cycle("pressao", 1) == "equilibrada" and formations.cycle("equilibrada", -1) == "pressao"
+    assert friendly.FORMATIONS is formations.FORMATIONS
 
 
 if __name__ == "__main__":
