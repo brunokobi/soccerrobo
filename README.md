@@ -343,10 +343,11 @@ do Pó.
 | 3 | **Campanha** "A Garagem do Vô": história, diálogos, torneios, chefes e treino (escola -> mundial) | pronta e jogável |
 | 4 | **Campanha Expandida**: torcida realista, câmera de estádio e desenhos mais detalhados (Onda A), peças/sets/relíquias/itens/cosméticos e 16 skills dos robôs (Onda B), Atos 2 e 3, missões secundárias e 3 finais (Onda C), NG+ "Turnê Lendária", Torre do Pó e peças Míticas (Onda D) | Ondas A, B, C e D (pós-campanha) prontas e publicadas ([docs/roadmap.md](docs/roadmap.md)) |
 | 5 | Editor de firmware (regras da IA em blocos) | planejada |
-| 6 | **Som**: efeitos e música sintetizados por código, sons gravados (torcida, gol, apito, "acabou!", caixa registradora), música "Into the Iron Horizon" nas partidas com a torcida de fundo em loop, mudo (M) e volumes (S/N) | pronta, ainda não publicada |
+| 6 | **Som**: efeitos e música sintetizados por código, sons gravados (torcida, gol, apito, "acabou!", caixa registradora), música "Into the Iron Horizon" nas partidas com a torcida de fundo em loop, mudo (M) e volumes (S/N) | pronta e publicada |
 
-Também prontos e ainda não publicados: amistoso com escolha de times e formações e a escolha de
-formação na campanha, no Modo Robôs e na carreira. O planejamento detalhado fica em [`docs/`](docs/INDEX.md).
+Também prontos e publicados: amistoso com escolha de times e formações e a escolha de
+formação na campanha, no Modo Robôs e na carreira (com robôs fortes a PRESSÃO rende mais; ver
+[docs/specs/formacoes.md](docs/specs/formacoes.md)). O planejamento detalhado fica em [`docs/`](docs/INDEX.md).
 
 **Robôs (Fase 1):** 6 chassis (Disco, Tanque, Velocista, Goleiro, Orbital, Titã) e 8 atributos
 (velocidade, aceleração, chute, controle/sucção, defesa, visão, bateria, QI) que

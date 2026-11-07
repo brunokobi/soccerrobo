@@ -84,7 +84,7 @@ Comandos de validação padrão (rodar da raiz com `export SDL_VIDEODRIVER=dummy
 | C18 | rotineiro | Fechamento da Onda C: README, calibração final (tabela no docstring), suíte e goldens | `README.md`, `docs/` | tudo verde |
 
 ## Onda D (opcional) - Pós-campanha
-> **Estado (05/11/2026): D1-D3 prontos no `main` local (não publicados).** Commits na ordem D3 -> D1 -> D2 ->
+> **Estado (05/11/2026): D1-D3 prontos e publicados.** Commits na ordem D3 -> D1 -> D2 ->
 > docs (as recompensas do NG+ e da Torre usam as Míticas e os cosméticos do D3). Decisões onde a spec era
 > omissa e desvios:
 > - **Save v3** (`campaign.VERSION` 2 -> 3, `MIGRATIONS[("v", 2)]` só sobe a versão e garante `ng`/`tower`):

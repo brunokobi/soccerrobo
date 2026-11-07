@@ -11,8 +11,8 @@ Tabela original do planejamento (HEAD fd5e17b); as linhas das Fases 4 e 6 e a do
 | 3 | Campanha "A Garagem do Vô": Prólogo + 5 capítulos + epílogo, 53 cenas / 626 falas, 27 times, 12 personagens, 6 escolhas, torneios (grupo de 4 + mata-mata), chefes com pity, treino, save próprio `soccerpy_campaign_v1` (v1, sv1) | pronta e jogável |
 | 4 (nova) | **Campanha Expandida**: torcida + desenhos detalhados, itens/skills, campanha 3 atos | Ondas A (visual, torcida, câmera de estádio), B (peças, sets, módulo, 16 skills, itens, cosméticos) e C (campanha Prólogo + 13 capítulos em 3 Atos, 3 finais, 14 missões, calibrada no motor) e D (NG+ "Turnê Lendária", Torre do Pó, peças Míticas) prontas e publicadas |
 | 5 | Editor de firmware (regras da IA em blocos) | planejada (era a antiga Fase 4) |
-| 6 | **Som**: efeitos sonoros e música sintetizados por código (stdlib), sons gravados, música nas partidas com a torcida de fundo em loop, mudo e volumes nas prefs | pronta, ainda não publicada ([specs/som.md](specs/som.md)) |
-| - | **Amistoso** com escolha de times e formações; **formação** também na Campanha, no Modo Robôs e na Carreira | pronto, ainda não publicado ([specs/formacoes.md](specs/formacoes.md)); balanceamento medido em `tests/calib_formations.py` (sem formação dominante até Força ~75; efeito no SIMULAR) |
+| 6 | **Som**: efeitos sonoros e música sintetizados por código (stdlib), sons gravados, música nas partidas com a torcida de fundo em loop, mudo e volumes nas prefs | pronta e publicada ([specs/som.md](specs/som.md)) |
+| - | **Amistoso** com escolha de times e formações; **formação** também na Campanha, no Modo Robôs e na Carreira | pronto e publicado ([specs/formacoes.md](specs/formacoes.md)); balanceamento medido em `tests/calib_formations.py` (sem formação dominante até Força ~75; acima disso a PRESSÃO rende mais, aceito pelo dono; efeito no SIMULAR) |
 
 Números do código hoje:
 - ~48,9 mil linhas (game ~28,9 mil, tests ~20,0 mil); 532 testes.

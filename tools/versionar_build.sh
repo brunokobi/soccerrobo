@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Versiona os pacotes do jogo no index.html do build (cache busting):
 #   "game.apk" -> "game.apk?v=<versao>"  e  "game.tar.gz" -> "game.tar.gz?v=<versao>"
-# Cada deploy pede uma URL nova, entao nem o Cloudflare nem o navegador servem o pacote antigo.
+# Cada deploy pede uma URL nova, entao nem o cache (CDN) nem o navegador servem o pacote antigo.
 # A versao padrao e o sha256 curto do game.apk (muda so quando o jogo muda).
 #
 # Uso (da raiz do repo, depois do build do pygbag):

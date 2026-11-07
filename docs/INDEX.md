@@ -42,18 +42,19 @@ Planejamento e especificações do jogo. O código e os comandos do dia a dia es
     [specs/plano-de-implementacao.md](specs/plano-de-implementacao.md)).
 - Fase 5 (Editor de firmware): planejada
 - Amistoso com escolha de times (29, de todos os modos) e formações (5) antes da partida (`game/friendly.py`,
-  `game/friendly_ui.py`; padrão idêntico ao motor antigo, goldens 80/80): pronto, ainda não publicado.
-- Formação em todos os modos (branch `feat/formacao-todos-os-modos`): o mesmo seletor na Campanha
+  `game/friendly_ui.py`; padrão idêntico ao motor antigo, goldens 80/80): pronto e publicado.
+- Formação em todos os modos: o mesmo seletor na Campanha
   (torneio, treino, Torre), no Modo Robôs (aba LIGA) e na Carreira (aba INÍCIO), salvo como campo opcional
   `formation` (garage v2 sem subir versão; carreira idem), CPU na padrão
-  ([specs/formacoes.md](specs/formacoes.md)): pronta, ainda não publicada; balanceamento medido em
-  `tests/calib_formations.py` (sem formação dominante até Força ~75; o efeito por Força entra no SIMULAR).
+  ([specs/formacoes.md](specs/formacoes.md)): pronta e publicada; balanceamento medido em
+  `tests/calib_formations.py` (sem formação dominante até Força ~75; acima disso a PRESSÃO rende mais,
+  aceito pelo dono; o efeito por Força entra no SIMULAR).
 - Fase 6 (Som): **pronta** — efeitos e música sintetizados por código (`game/sfx.py`, `game/music.py`),
   sons gravados em `game/audio/` (músicas de menu/robôs/copas, torcida com variações em saco embaralhado,
   gol, apito, "acabou!", caixa registradora no card do resumo, trave, motor e desligar dos robôs), música
   "Into the Iron Horizon" (`partida_musica.ogg`) nas partidas junto da torcida de fundo em loop
   (`tools/torcida_loop.sh`), áudios nivelados (`tools/normalizar_audio.sh`), mudo (M) e volumes (S/N) nas
-  prefs, testado no desktop e no navegador (pygbag); ainda não publicada.
+  prefs, testado no desktop e no navegador (pygbag); publicada.
 - Partida e campanha: câmera ESTÁDIO em toda partida, sem troca automática (C só na pausa, só naquela
   partida), faixa do narrador Tonho e da comentarista Cleide (`game/narration.py`), personagens e
   cenários da campanha em pixel art (`game/portraits_pixel.py`, `game/scenes_pixel.py`).
