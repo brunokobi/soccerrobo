@@ -119,7 +119,7 @@ Ligados por padrão em volume médio.
   (explosão da torcida + buzina), "uuuh" da chance, defesa, palmas, skill (BUZZ), arrancada (ZOOM),
   cliques de menu, avanço de diálogo, vitória/derrota/empate, recompensa, compra e upgrade na loja.
 - **Música** chiptune em loop: uma trilha para menus/campanha e outra, mais animada e mais baixa,
-  para a partida; jingles de vitória e de derrota na tela de resultado.
+  para a partida; "acabou!" no apito final e caixa registradora no card do resumo da partida.
 - **Teclas:** **M** liga/desliga o mudo geral (em qualquer tela); **S** gira o volume dos efeitos e
   **N** o da música (DESL. / BAIXO / MÉDIO / ALTO), no menu ou na pausa. Tudo fica gravado nas
   preferências. No modo MAX a partida fica sem efeitos.

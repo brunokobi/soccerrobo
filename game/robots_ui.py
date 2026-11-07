@@ -916,8 +916,6 @@ class RobotsUI(CareerUI):
         starters = set(gg.lineup)
         rew = G.match_rewards(gg, my, opp, pids, tier, self.rng)
         sfx.result(my, opp)
-        if any(rew["levels"].values()):
-            sfx.play("reward")
         used = gg.consume_backpack()                  # Mochila (B12): gasta ao assistir ou simular
         rows = []
         for r in order:

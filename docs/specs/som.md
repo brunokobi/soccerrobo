@@ -25,7 +25,7 @@ volume médio.
 | `post` | CLANG (parciais inarmônicas) | `crowd_event("post")` |
 | `skill` / `dash` | BUZZ / ZOOM | `sk_start` (fx `dash`/`wheel` = ZOOM) |
 | `click` / `back` / `toggle` / `blip` | clique / Esc / opção alternada / avanço de diálogo (discreto) | menu, botões das telas, T/C/S/M, `dlg_advance` |
-| `reward` / `buy` / `upgrade` / `error` | arpejo / moeda / power-up / recusa | subiu de nível ou recompensa no resultado / compras / upgrade / ação recusada |
+| `reward` / `buy` / `upgrade` / `error` | arpejo / moeda / power-up / recusa | recompensa / compras / upgrade / ação recusada |
 | `draw` | "plim-plom" | resultado empatado |
 | `ole` | palmas ritmadas | catálogo (reserva para festas) |
 
@@ -38,7 +38,7 @@ Em **MAX** (`speed_idx == 3`) nenhum som de lance toca.
 |---|---|---|
 | `menu` | menu, carreira, Modo Robôs, campanha (loop) | 128 bpm, 8 compassos, ~15 s |
 | `match` | partida, inclusive pausa e fim (loop, ganho 0,55 sob os efeitos) | 150 bpm, 8 compassos, ~12,8 s |
-| `win` / `lose` | jingle na tela de resultado (do ponto de vista do jogador) | ~3,4 s / ~5 s |
+| `win` / `lose` | jingles sintetizados (não tocam mais no resultado: o card usa a caixa registradora) | ~3,4 s / ~5 s |
 
 Lead em pulso (duty 25/50%), baixo em triângulo, bateria com bumbo (seno descendo), caixa, chimbal e
 prato (ruído). A trilha vem de `Game.music_track()`; `sfx.tick` troca com fade de 400 ms no canal
@@ -103,16 +103,18 @@ tabela.
 
 **Sorteio:** "saco embaralhado" por id com RNG privado (`S.vrng`): cada volta toca todas as variações,
 nunca a mesma duas vezes seguidas. **Vozes faladas** (`SPOKEN`: `inicio2` 60 s, `lamento3` 45 s,
-`defesa3` e `trave3` 35 s) só voltam depois do seu intervalo.
+`defesa3`, `trave3` e `derrota2` 35 s) só voltam depois do seu intervalo.
 
 | Reação (id) | Quando | Variações |
 |---|---|---|
 | `goal` | gol do jogador (2P: qualquer gol) | 9: `gol`, `gol_grito`, `gol_e_gol`, `gol_olha_o_gol`, `gol_brasil`, `gol_we` + `gol_grito`@0,92, `gol_e_gol`@1,08, `gol`@0,94 |
-| `goal_opp` | gol do adversário | 6: `gol_adv1..4` + `gol_adv1`@0,93, `gol_adv3`@1,07 |
+| `goal_opp` | gol do adversário | 7: `gol_adv1..4`, `gol_adv_nao` ("não!", voz, 20 s) + `gol_adv1`@0,93, `gol_adv3`@1,07 |
+| `end_voice` | apito final | `acabou` ("acabou!") |
+| `cash` | card do resumo da partida (qualquer placar; `sfx.result`) | `caixa_registradora` |
 | `lament` | gol sofrido: lamento da torcida da casa | 4: `lamento1`, `lamento2`, `lamento3` (voz) + `lamento1`@0,9 |
 | `boo` | gol contra do nosso time; derrota | 3: `vaias`, `vaia2` + `vaias`@0,9 (1º terço) |
-| `ooh` | chance (chute forte perto do gol) | 4: `uhhh_torcida`, `quase_uh` + derivadas de cada |
-| `near` / `near_opp` | defesa/trave: quase gol do jogador / contra o jogador | 4: `quase_uh`, `defesa1` + 2 derivadas / 3: `quase_nao` + @0,88 e @1,12 |
+| `ooh` | chance (chute forte perto do gol) | 6: `uhhh_torcida`, `quase_uh`, `defesa3` ("ooo that's strong"), `derrota2` + derivadas |
+| `near` / `near_opp` | defesa/trave: quase gol do jogador / contra o jogador | 6: `quase_uh`, `defesa1`, `defesa3`, `derrota2` + 2 derivadas / 3: `quase_nao` + @0,88 e @1,12 |
 | `save` | defesa (soma à luva sintetizada) | 4: `defesa1`, `defesa3` (voz) + trecho de `palmas` + `defesa1`@0,92 |
 | `post` | trave (soma ao CLANG) | 4: `trave_torcida`, `trave2`, `trave3` (voz) + `trave_torcida`@0,9 |
 | `ole` | drible e defesa do jogador | 4: `ole` + 2 trechos de ~5 s do coro `ole2` (14 s) + `ole`@0,92 |
