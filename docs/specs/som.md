@@ -103,7 +103,7 @@ tabela.
 
 **Sorteio:** "saco embaralhado" por id com RNG privado (`S.vrng`): cada volta toca todas as variações,
 nunca a mesma duas vezes seguidas. **Vozes faladas** (`SPOKEN`: `inicio2` 60 s, `lamento3` 45 s,
-`defesa3` e `trave3` 35 s) só voltam depois do seu intervalo.
+`defesa3`, `trave3` e `derrota2` 35 s) só voltam depois do seu intervalo.
 
 | Reação (id) | Quando | Variações |
 |---|---|---|
@@ -111,8 +111,8 @@ nunca a mesma duas vezes seguidas. **Vozes faladas** (`SPOKEN`: `inicio2` 60 s, 
 | `goal_opp` | gol do adversário | 6: `gol_adv1..4` + `gol_adv1`@0,93, `gol_adv3`@1,07 |
 | `lament` | gol sofrido: lamento da torcida da casa | 4: `lamento1`, `lamento2`, `lamento3` (voz) + `lamento1`@0,9 |
 | `boo` | gol contra do nosso time; derrota | 3: `vaias`, `vaia2` + `vaias`@0,9 (1º terço) |
-| `ooh` | chance (chute forte perto do gol) | 4: `uhhh_torcida`, `quase_uh` + derivadas de cada |
-| `near` / `near_opp` | defesa/trave: quase gol do jogador / contra o jogador | 4: `quase_uh`, `defesa1` + 2 derivadas / 3: `quase_nao` + @0,88 e @1,12 |
+| `ooh` | chance (chute forte perto do gol) | 6: `uhhh_torcida`, `quase_uh`, `defesa3` ("ooo that's strong"), `derrota2` + derivadas |
+| `near` / `near_opp` | defesa/trave: quase gol do jogador / contra o jogador | 6: `quase_uh`, `defesa1`, `defesa3`, `derrota2` + 2 derivadas / 3: `quase_nao` + @0,88 e @1,12 |
 | `save` | defesa (soma à luva sintetizada) | 4: `defesa1`, `defesa3` (voz) + trecho de `palmas` + `defesa1`@0,92 |
 | `post` | trave (soma ao CLANG) | 4: `trave_torcida`, `trave2`, `trave3` (voz) + `trave_torcida`@0,9 |
 | `ole` | drible e defesa do jogador | 4: `ole` + 2 trechos de ~5 s do coro `ole2` (14 s) + `ole`@0,92 |

@@ -70,7 +70,8 @@ FILE_SFX = {
     "goal_opp": (("gol_adv1.ogg", "gol_adv2.ogg", "gol_adv3.ogg", "gol_adv4.ogg",
                   ("gol_adv1.ogg", 0.93, 0.0, 1.0), ("gol_adv3.ogg", 1.07, 0.0, 1.0)), 1.5, 1, 1.0),
     # quase gol: do jogador (defesa/trave do rival) e contra o jogador
-    "near": (("quase_uh.ogg", "defesa1.ogg", ("quase_uh.ogg", 0.9, 0.0, 1.0), ("uhhh_torcida.ogg", 1.06, 0.0, 0.45)),
+    "near": (("quase_uh.ogg", "defesa1.ogg", "defesa3.ogg", "derrota2.ogg", ("quase_uh.ogg", 0.9, 0.0, 1.0),
+              ("uhhh_torcida.ogg", 1.06, 0.0, 0.45)),
              3.0, 1, 0.9),
     "near_opp": (("quase_nao.ogg", ("quase_nao.ogg", 0.88, 0.0, 1.0), ("quase_nao.ogg", 1.12, 0.0, 1.0)),
                  3.0, 1, 0.9),
@@ -78,7 +79,7 @@ FILE_SFX = {
     "kickoff_voice": (("comecou.ogg", "inicio2.ogg", "inicio3.ogg"), 2.0, 1, 0.9),
     "applause": (("palmas.ogg", "palmas2.ogg", "palmas3.ogg", ("palmas.ogg", 0.94, 0.0, 0.45)), 4.0, 1, 0.6),
     "crowd_chant": (("palmas3.ogg", "palmas.ogg", ("palmas2.ogg", 1.0, 0.0, 0.4, 4.5)), 6.0, 1, 0.5),
-    "ooh": (("uhhh_torcida.ogg", "quase_uh.ogg", ("uhhh_torcida.ogg", 0.9, 0.0, 0.55),
+    "ooh": (("uhhh_torcida.ogg", "quase_uh.ogg", "defesa3.ogg", "derrota2.ogg", ("uhhh_torcida.ogg", 0.9, 0.0, 0.55),
              ("quase_uh.ogg", 1.12, 0.0, 1.0)), 1.6, 1, 0.75),          # "uuuh" da chance
     # ole: o coro de 14 s (ole2) entra em dois trechos de ~5 s
     "ole": (("ole.ogg", ("ole2.ogg", 1.0, 0.0, 0.38, 5.0), ("ole2.ogg", 1.0, 0.5, 0.88, 5.0),
@@ -99,7 +100,8 @@ FILE_SFX = {
     "robot_off": (("robo_desligar.ogg",), 3.0, 1, 0.7),
 }
 # vozes faladas (repetidas cansam): arquivo -> intervalo minimo (s) entre duas vezes dele
-SPOKEN = {"inicio2.ogg": 60.0, "lamento3.ogg": 45.0, "defesa3.ogg": 35.0, "trave3.ogg": 35.0}
+SPOKEN = {"inicio2.ogg": 60.0, "lamento3.ogg": 45.0, "defesa3.ogg": 35.0, "trave3.ogg": 35.0,
+          "derrota2.ogg": 35.0}
 DERIVE_MAX_S = 3.0
 DERIVE_CHUNK = 6000             # quadros por pedaco da geracao (um yield do _builder)
 DERIVE_FADE_S = 0.03
