@@ -55,7 +55,7 @@ DEMO_TEAMS = (("ASPIRADORES FC", "VASSOURAS UNIDAS"), ("POEIRA ZERO", "RODO DE O
               ("FAXINA TOTAL", "PANO DE CHÃO EC"), ("TURBO ASPIRA", "CERA BRILHANTE"))
 INPUT_EVENTS = (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN, pygame.MOUSEWHEEL, pygame.FINGERDOWN,
                 pygame.FINGERMOTION, pygame.JOYBUTTONDOWN)
-GOAL_SFX = ("goal", "goal_opp", "boo", "crowd_cheer")   # sons do gol cortados (fade) no reinicio
+GOAL_SFX = ("goal", "goal_opp", "lament", "boo", "crowd_cheer")   # sons do gol cortados (fade) no reinicio
 GOAL_PAUSE_S = 2.4                     # comemoracao do gol (tempo de jogo) antes do novo pontape
 GOAL_FLASH_S = 0.35
 GOAL_ROCKETS, WIN_ROCKETS = 7, 10
@@ -1882,7 +1882,8 @@ class Game:
         if kind == "goal":
             rival = self.is_rival(team)
             sfx.play("goal_opp" if rival else "goal")                    # gritos variados por lado
-            sfx.play("boo" if rival else "crowd_cheer")                  # torcida vaia o rival / aplaude
+            own = bool(self.events and self.events[-1].get("own") and self.events[-1].get("team") == team)
+            sfx.play(("boo" if own else "lament") if rival else "crowd_cheer")   # lamento (gol contra: vaia) / palmas
         else:
             sfx.play(EVENT_SFX.get(kind))
         if kind in ("save", "post"):                                     # quase gol (de quem atacou)
@@ -2005,8 +2006,15 @@ class Game:
             self.fireworks_show(WIN_ROCKETS, self.teams[0 if a > c else 1].color)
         if self.speed_idx != 3:
             sfx.play("robot_off")                       # apito final: os robos desligam
-            lost = a != c and self.is_rival(0 if a > c else 1)
-            sfx.play("boo" if lost else "applause")     # derrota do jogador: vaia; senao palmas
+            win = 0 if a > c else 1
+            lost = a != c and self.is_rival(win)
+            if lost:                                    # derrota do jogador: lamento + vaia
+                sfx.play("lose_crowd")
+                sfx.play("boo")
+            else:                                       # vitoria (ou empate): festa + palmas
+                if a != c and self.user_side is not None:
+                    sfx.play("win_crowd")
+                sfx.play("applause")
         if not self.career_match and self.speed_idx != 3 and not self.demo:   # amistoso: jingle (modo 1 = visao do humano)
             if self.mode == 1:
                 sfx.result(a, c)

@@ -70,25 +70,36 @@ FILE_SFX = {
     "goal_opp": (("gol_adv1.ogg", "gol_adv2.ogg", "gol_adv3.ogg", "gol_adv4.ogg",
                   ("gol_adv1.ogg", 0.93, 0.0, 1.0), ("gol_adv3.ogg", 1.07, 0.0, 1.0)), 1.5, 1, 1.0),
     # quase gol: do jogador (defesa/trave do rival) e contra o jogador
-    "near": (("quase_uh.ogg", ("quase_uh.ogg", 0.9, 0.0, 1.0), ("uhhh_torcida.ogg", 1.06, 0.0, 0.45)), 3.0, 1, 0.9),
+    "near": (("quase_uh.ogg", "defesa1.ogg", ("quase_uh.ogg", 0.9, 0.0, 1.0), ("uhhh_torcida.ogg", 1.06, 0.0, 0.45)),
+             3.0, 1, 0.9),
     "near_opp": (("quase_nao.ogg", ("quase_nao.ogg", 0.88, 0.0, 1.0), ("quase_nao.ogg", 1.12, 0.0, 1.0)),
                  3.0, 1, 0.9),
-    "kickoff_voice": (("comecou.ogg",), 2.0, 1, 0.9),        # "comecou!" no 1o pontape
-    "applause": (("palmas.ogg", ("palmas.ogg", 0.94, 0.0, 0.45), ("palmas.ogg", 1.06, 0.5, 1.0)), 4.0, 1, 0.6),
-    "crowd_chant": (("palmas.ogg", ("palmas.ogg", 0.94, 0.0, 0.45), ("palmas.ogg", 1.06, 0.5, 1.0)), 6.0, 1, 0.5),
+    # inicio: "comecou!" / "ja comecou" / vinheta (1o pontape)
+    "kickoff_voice": (("comecou.ogg", "inicio2.ogg", "inicio3.ogg"), 2.0, 1, 0.9),
+    "applause": (("palmas.ogg", "palmas2.ogg", "palmas3.ogg", ("palmas.ogg", 0.94, 0.0, 0.45)), 4.0, 1, 0.6),
+    "crowd_chant": (("palmas3.ogg", "palmas.ogg", ("palmas2.ogg", 1.0, 0.0, 0.4, 4.5)), 6.0, 1, 0.5),
     "ooh": (("uhhh_torcida.ogg", "quase_uh.ogg", ("uhhh_torcida.ogg", 0.9, 0.0, 0.55),
              ("quase_uh.ogg", 1.12, 0.0, 1.0)), 1.6, 1, 0.75),          # "uuuh" da chance
-    "ole": (("ole.ogg", ("ole.ogg", 0.92, 0.0, 1.0), ("ole.ogg", 1.08, 0.0, 1.0)), 3.0, 1, 0.8),
-    "boo": (("vaias.ogg", ("vaias.ogg", 0.9, 0.0, 0.33), ("vaias.ogg", 1.1, 0.4, 0.8)), 6.0, 1, 0.6),
-    "save": (("palmas.ogg", ("palmas.ogg", 1.0, 0.35, 0.6), ("palmas.ogg", 1.1, 0.62, 0.9)), 2.5, 1, 0.45),
-    "crowd_cheer": (("palmas.ogg", ("palmas.ogg", 1.08, 0.0, 0.45), ("palmas.ogg", 0.95, 0.4, 0.85)), 5.0, 1, 0.55),
+    # ole: o coro de 14 s (ole2) entra em dois trechos de ~5 s
+    "ole": (("ole.ogg", ("ole2.ogg", 1.0, 0.0, 0.38, 5.0), ("ole2.ogg", 1.0, 0.5, 0.88, 5.0),
+             ("ole.ogg", 0.92, 0.0, 1.0)), 3.0, 1, 0.8),
+    "boo": (("vaias.ogg", "vaia2.ogg", ("vaias.ogg", 0.9, 0.0, 0.33)), 6.0, 1, 0.6),
+    # lamento da torcida da casa (gol sofrido pelo jogador)
+    "lament": (("lamento1.ogg", "lamento2.ogg", "lamento3.ogg", ("lamento1.ogg", 0.9, 0.0, 1.0)), 3.0, 1, 0.85),
+    # defesa: "uuuh" / exclamacao, palmas (soma a luva sintetizada: FILE_LAYER)
+    "save": (("defesa1.ogg", "defesa3.ogg", ("palmas.ogg", 1.0, 0.35, 0.6), ("defesa1.ogg", 0.92, 0.0, 1.0)),
+             2.5, 1, 0.6),
+    "crowd_cheer": (("palmas3.ogg", "palmas.ogg", ("palmas2.ogg", 1.0, 0.45, 0.8, 4.0)), 5.0, 1, 0.55),
+    # fim de jogo do ponto de vista do jogador
+    "win_crowd": (("vitoria1.ogg", ("vitoria1.ogg", 0.94, 0.0, 1.0), ("vitoria1.ogg", 1.06, 0.0, 1.0)), 4.0, 1, 0.85),
+    "lose_crowd": (("derrota1.ogg", "derrota2.ogg", ("derrota2.ogg", 0.93, 0.0, 1.0)), 4.0, 1, 0.85),
     "click": (("click.ogg",), 0.05, 2, 0.8),
     "whistle_end": (("apito_final.ogg",), 1.5, 1, 0.8),
-    "post": (("trave_torcida.ogg", ("trave_torcida.ogg", 0.9, 0.0, 0.9), ("trave_torcida.ogg", 1.1, 0.0, 0.8)),
-             0.4, 1, 0.85),
+    "post": (("trave_torcida.ogg", "trave2.ogg", "trave3.ogg", ("trave_torcida.ogg", 0.9, 0.0, 0.9)), 0.4, 1, 0.85),
     "robot_off": (("robo_desligar.ogg",), 3.0, 1, 0.7),
 }
-SPOKEN = {}                     # arquivo de voz falada -> intervalo minimo (s) entre duas vezes dele
+# vozes faladas (repetidas cansam): arquivo -> intervalo minimo (s) entre duas vezes dele
+SPOKEN = {"inicio2.ogg": 60.0, "lamento3.ogg": 45.0, "defesa3.ogg": 35.0, "trave3.ogg": 35.0}
 DERIVE_MAX_S = 3.0
 DERIVE_CHUNK = 6000             # quadros por pedaco da geracao (um yield do _builder)
 DERIVE_FADE_S = 0.03
@@ -804,6 +815,7 @@ def _builder():
                 yield from _derive(sid, spec)
             except Exception as e:  # noqa: BLE001  (sem a variacao: ficam as gravadas)
                 _log("[som] variacao %s %r falhou: %r" % (sid, spec, e))
+    S.src.clear()                               # fontes so de derivadas (ex.: ole2 de 14 s) saem da memoria
     _load_amb()
     yield
     need = {SYNTH_TRACK[t] for t in STREAMS if not S.stream_ok.get(t)}   # so as trilhas sem arquivo

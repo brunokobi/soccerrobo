@@ -387,7 +387,8 @@ def test_goal_variants_never_repeat_in_a_row():
             assert all(a != b for a, b in zip(seq, seq[1:])), (sid, seq)
             for r in range(3):                             # toca todas antes de repetir (volta a volta)
                 assert sorted(seq[r * n:(r + 1) * n]) == list(range(n)), (sid, seq)
-        for sid in ("ooh", "near", "near_opp", "save", "post", "ole", "boo", "applause", "crowd_cheer"):
+        for sid in ("ooh", "near", "near_opp", "save", "post", "ole", "boo", "applause", "crowd_cheer", "lament",
+                    "kickoff_voice", "win_crowd", "lose_crowd", "crowd_chant"):
             assert sfx.n_variants(sid) >= 3, sid            # >= 3 por reacao da torcida
         assert all(v.get_length() > 0 for vs in sfx.S.files.values() for v in vs)
         for sid in ("near", "near_opp", "kickoff_voice", "applause", "click", "ooh", "crowd_cheer", "crowd_chant",
@@ -492,7 +493,11 @@ def test_game_picks_goal_and_near_miss_sounds_by_side():
         played.clear()
         g.crowd_event("goal", 0)
         g.crowd_event("goal", 1)
-        assert played == ["goal", "crowd_cheer", "goal_opp", "boo"]   # aplaude o nosso gol, vaia o do rival
+        assert played == ["goal", "crowd_cheer", "goal_opp", "lament"]   # aplaude o nosso gol, lamenta o do rival
+        played.clear()
+        g.events.append({"min": 3, "team": 1, "name": "", "own": True, "pid": None})
+        g.crowd_event("goal", 1)
+        assert played == ["goal_opp", "boo"]                          # gol contra do nosso time: vaia
         played.clear()
         g.crowd_event("chance", 0)
         assert played == ["ooh"]                                       # "uuuh" gravado da torcida
@@ -512,11 +517,11 @@ def test_game_picks_goal_and_near_miss_sounds_by_side():
         g.score = [0, 2]
         played.clear()
         g.crowd_end()
-        assert "boo" in played and "applause" not in played    # perdi: vaia
+        assert "boo" in played and "lose_crowd" in played and "applause" not in played    # perdi
         g.score = [2, 0]
         played.clear()
         g.crowd_end()
-        assert "applause" in played and "boo" not in played
+        assert "applause" in played and "win_crowd" in played and "boo" not in played
         g.new_match(2, None)                               # 2 jogadores: todo gol e "nosso"
         played.clear()
         g.crowd_event("goal", 1)
@@ -527,7 +532,7 @@ def test_game_picks_goal_and_near_miss_sounds_by_side():
         played.clear()
         g.speed_idx = 0
         g.crowd_event("goal", 0)
-        assert played == ["goal_opp", "boo"]               # jogador e o visitante
+        assert played == ["goal_opp", "lament"]            # jogador e o visitante
         g.speed_idx = 3
         played.clear()
         g.crowd_event("goal", 1)
