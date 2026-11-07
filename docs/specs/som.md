@@ -1,8 +1,9 @@
 # Fase 6 - Som
 
-Efeitos sonoros e música **100% sintetizados por código** (stdlib: `math`, `array`, `random.Random`
-privado). Não existe nenhum arquivo de áudio no repositório nem no pacote do pygbag. Ligado por
-padrão, volume médio.
+Efeitos sonoros e música sintetizados por código (stdlib: `math`, `array`, `random.Random` privado)
+**somados a gravações** em `game/audio/` (OGG; ver "Reações da torcida" e "Arquivos de áudio" no fim).
+A síntese é o plano B de cada som gravado (arquivo faltando ou que não abre). Ligado por padrão,
+volume médio.
 
 ## Arquivos
 | Arquivo | Papel |
@@ -58,7 +59,7 @@ canal e, ao terminar, a trilha pedida volta sozinha. Resultado: Modo Robôs `fin
   nunca são tocados (goldens 80/80; `test_simulation_identical_with_sound_on_off`).
 
 ## Runtime
-- `main()`: `sfx.pre_init()` (pede 22050 Hz estéreo; buffer 512, 2048 no navegador) -> `pygame.init()`
+- `main()`: `sfx.pre_init()` (pede `MIXER_RATE` = 44100 Hz estéreo; buffer 512, 2048 no navegador) -> `pygame.init()`
   -> `Game(...)` -> `sfx.init()` (depois do `Game`, para o `new_match` do construtor não apitar) e, por
   quadro, `sfx.tick(game.music_track())`.
 - A geração roda **aos poucos** dentro de `tick` (orçamento de 5 ms por quadro; cada pedaço é um
@@ -90,3 +91,61 @@ zero Surface por quadro).
   respondendo durante a geração. Os pedaços maiores (rugido do gol, coro do "uuuh") custam ~40-50 ms
   no desktop e algumas centenas de ms no WASM, uma única vez, ainda no menu.
 - O `sfx` escreve `[som] ...` no console do JS (início e fim da geração) para diagnóstico.
+
+## Reações da torcida (tabela única `sfx.FILE_SFX`)
+Cada id de efeito gravado aponta para uma lista de variações: um arquivo de `game/audio/` ou uma
+variação **derivada em runtime** dele, `("x.ogg", velocidade, início, fim[, máx_s])` — reamostra
+(velocidade != 1 muda tom e andamento), recorta o trecho `[início, fim)` (frações da duração), limita a
+`máx_s` (padrão `DERIVE_MAX_S` = 3 s) e suaviza as pontas (30 ms). As derivadas não viram arquivo (o
+`game.apk` não cresce): o `_builder` gera em pedaços de `DERIVE_CHUNK` quadros (no navegador a geração
+inteira levou ~0,35 s de CPU em ~3 s de relógio, ainda no menu). Para trocar um som, mexa só na
+tabela.
+
+**Sorteio:** "saco embaralhado" por id com RNG privado (`S.vrng`): cada volta toca todas as variações,
+nunca a mesma duas vezes seguidas. **Vozes faladas** (`SPOKEN`: `inicio2` 60 s, `lamento3` 45 s,
+`defesa3` e `trave3` 35 s) só voltam depois do seu intervalo.
+
+| Reação (id) | Quando | Variações |
+|---|---|---|
+| `goal` | gol do jogador (2P: qualquer gol) | 9: `gol`, `gol_grito`, `gol_e_gol`, `gol_olha_o_gol`, `gol_brasil`, `gol_we` + `gol_grito`@0,92, `gol_e_gol`@1,08, `gol`@0,94 |
+| `goal_opp` | gol do adversário | 6: `gol_adv1..4` + `gol_adv1`@0,93, `gol_adv3`@1,07 |
+| `lament` | gol sofrido: lamento da torcida da casa | 4: `lamento1`, `lamento2`, `lamento3` (voz) + `lamento1`@0,9 |
+| `boo` | gol contra do nosso time; derrota | 3: `vaias`, `vaia2` + `vaias`@0,9 (1º terço) |
+| `ooh` | chance (chute forte perto do gol) | 4: `uhhh_torcida`, `quase_uh` + derivadas de cada |
+| `near` / `near_opp` | defesa/trave: quase gol do jogador / contra o jogador | 4: `quase_uh`, `defesa1` + 2 derivadas / 3: `quase_nao` + @0,88 e @1,12 |
+| `save` | defesa (soma à luva sintetizada) | 4: `defesa1`, `defesa3` (voz) + trecho de `palmas` + `defesa1`@0,92 |
+| `post` | trave (soma ao CLANG) | 4: `trave_torcida`, `trave2`, `trave3` (voz) + `trave_torcida`@0,9 |
+| `ole` | drible e defesa do jogador | 4: `ole` + 2 trechos de ~5 s do coro `ole2` (14 s) + `ole`@0,92 |
+| `kickoff_voice` | 1º pontapé | 3: `comecou`, `inicio2` (voz), `inicio3` |
+| `crowd_cheer` | 1º pontapé e gol do jogador | 3: `palmas3`, `palmas` + trecho de `palmas2` |
+| `applause` / `crowd_chant` | fim sem derrota / cântico e ola | 4: `palmas`, `palmas2`, `palmas3` + derivada / 3 |
+| `win_crowd` | vitória do jogador | 3: `vitoria1` + @0,94 e @1,06 |
+| `lose_crowd` | derrota do jogador (com a vaia) | 3: `derrota1`, `derrota2` + `derrota2`@0,93 |
+
+Em MAX nenhum som de lance toca. Gravações reais que ainda deixariam as reações mais variadas (hoje
+completadas por derivadas): mais 2 tomadas de "olé" curto (2-3 s), 2 de "uuuh" de chance (1-2 s), 1-2
+de "nãããão" (quase leva gol, 1 s), 1-2 de vaia curta (2-4 s) e 1-2 de festa de vitória (2-4 s).
+
+**Mixer a 44,1 kHz:** `pre_init`/`init` pedem `MIXER_RATE` = 44100 (a mesma taxa do navegador). Com o
+mixer a 22050 Hz o SDL_mixer do pygame 2.6.1 (desktop) devolvia `Sound` vazio (`get_length() == 0`)
+para algumas gravações de 44,1 kHz (`vaias`, `gol`, `inicio3`, `palmas3`...), que então não tocavam.
+`_load_file` também descarta Sound vazio (fica a síntese). A síntese continua em 22050 e o `fit`
+converte (44100 = 2 x 22050).
+
+## Arquivos de áudio: compactos e com o mesmo volume
+Regra: todo áudio novo passa por `tools/normalizar_audio.sh <pasta_de_entrada> [game/audio]`
+(ffmpeg + libvorbis, reprodutível):
+
+| Tipo | Formato | Corte | Volume |
+|---|---|---|---|
+| efeitos e reações (o resto) | vorbis mono 44,1 kHz, q3 | silêncio do início (`silenceremove`, -50 dB) | `loudnorm` I=-16 LUFS, TP=-1,5 dBTP |
+| músicas e torcida de fundo (stream: `menu1-3`, `copas`, `interno1/2`, `submenus`, `torcida*`) | vorbis mono 22,05 kHz, q2 | nenhum | I=-20 LUFS (fundo: não briga com os efeitos) |
+| motor dos robôs (`robo_motor`, Sound em loop) | vorbis mono 44,1 kHz, q2 | nenhum | I=-20 LUFS |
+
+Medido: fontes em `game/audio/` 14,4 MB -> 7,5 MB (48 arquivos, já com as 16 gravações novas);
+`game.apk` 10.267.824 -> 7.169.990 bytes.
+
+**Cópias `*-pygbag.ogg`:** o build do pygbag converte cada áudio com ffmpeg para `<nome>-pygbag.ogg`
+ao lado do original e empacota a cópia no lugar dele; elas ficam fora do git (`.gitignore`). O pygbag só
+reconverte quando a cópia NÃO existe, então quem troca um `.ogg` precisa apagar a cópia (o script já
+apaga) ou o `game.apk` leva o som antigo.

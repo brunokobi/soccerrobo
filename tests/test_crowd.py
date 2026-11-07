@@ -56,10 +56,12 @@ LEVELS = ("ALTA", "MEDIA")
 
 
 def set_level(level, camera="PERTO"):
-    """Nivel da torcida + camera EXPLICITA: os testes deste arquivo conferem a geometria PERTO (campo em
-    tela cheia); a camera ESTADIO (padrao AUTO das partidas assistidas) fica em tests/test_camera.py."""
-    PREFS["raw"] = '{"v": 1, "crowd": "%s", "camera": "%s"}' % (level, camera)
+    """Nivel da torcida + camera de INICIO EXPLICITA (Game.camera_start): os testes deste arquivo conferem a
+    geometria PERTO (campo em tela cheia); a camera ESTADIO (a de toda partida no jogo) fica em
+    tests/test_camera.py."""
+    PREFS["raw"] = '{"v": 1, "crowd": "%s"}' % level
     prefs.reset_cache()
+    g.camera_start = camera
 
 
 def cfg(name, color, ovr=65):
@@ -570,7 +572,7 @@ def test_latin1_source():
         f.read().encode("latin-1")
 
 
-# --- A4-A7: extras, LED, onomatopeias, telao, LOD e opcao TORCIDA -------------------------------
+# --- A4-A7: extras, LED, telao, LOD e opcao TORCIDA (as onomatopeias sairam: narration.py) -------------------------------
 def start_clk(venue="mundial", level="ALTA", seed=0):
     """Partida assistida com relogio injetado (1/60 s por quadro em frames())."""
     clk = Clock(500.0)
@@ -603,7 +605,7 @@ def test_extras_zero_surface_every_venue_level_and_lod():
             cr, clk = start_clk(v, level, seed=2)
             g.state = "play"
             frames(clk, 3, step=False)                    # aquecimento (texto do HUD)
-            seen = {"confetti": 0, "flashes": 0, "smoke": 0, "onos": 0}
+            seen = {"confetti": 0, "flashes": 0, "smoke": 0}
             with SurfaceCounter() as c:
                 for lod in (2, 1, 0, 2):
                     cr.set_lod(lod)
@@ -619,7 +621,7 @@ def test_extras_zero_surface_every_venue_level_and_lod():
                 g.paused = False
             assert c.n == 0, (v, level, c.n)
             ex = crowd.EXTRAS[v]
-            assert seen["onos"] > 0, v
+            assert not hasattr(cr, "onos") and not hasattr(crowd, "WORDS"), v    # sem letreiros da torcida
             assert (seen["confetti"] > 0) == ex["confetti"], (v, level, seen)
             assert (seen["flashes"] > 0) == ex["flashes"], (v, level, seen)
             assert (seen["smoke"] > 0) == (ex["flares"] and level == "ALTA"), (v, level, seen)
@@ -631,7 +633,7 @@ def test_particle_caps_and_decay():
     for level in LEVELS:
         cr, clk = start_clk("mundial", level)
         g.state = "play"
-        peak = {"confetti": 0, "flashes": 0, "smoke": 0, "onos": 0}
+        peak = {"confetti": 0, "flashes": 0, "smoke": 0}
         for k in range(900):                          # gols sem parar: o teto segura tudo
             clk.t += 1 / 60
             if k % 15 == 0:
@@ -644,7 +646,6 @@ def test_particle_caps_and_decay():
         assert peak["confetti"] <= crowd.CONFETTI_MAX[level] and peak["confetti"] > 0, peak
         assert peak["flashes"] <= crowd.FLASH_MAX[level], peak
         assert peak["smoke"] <= crowd.SMOKE_MAX[level], peak
-        assert peak["onos"] <= crowd.ONO_MAX, peak
         if level == "MEDIA":
             assert crowd.CONFETTI_MAX["MEDIA"] < crowd.CONFETTI_MAX["ALTA"]
             assert len(cr.b.flags) < len(crowd.warm_crowd("mundial", *cr.b.key[1:3], "ALTA",
@@ -654,7 +655,7 @@ def test_particle_caps_and_decay():
             cr.draw(screen)
             cr.draw_over(screen)
         # flashes: so os raros da calmaria (0,6/s, vida <= 0,14 s) podem estar acesos; nada sobra dos gols
-        assert not cr.confetti and not cr.smoke and not cr.onos
+        assert not cr.confetti and not cr.smoke
         assert all(f[2] - clk.t <= 0.15 for f in cr.flashes), (clk.t, cr.flashes)
 
 
@@ -669,7 +670,7 @@ def test_text_cache_keys_stable_after_warmup():
         cr, clk = start_clk(v, "ALTA")
         frames(clk, 5)
         before = set(g.text_cache)
-        assert ("TONHO:", crowd.TELAO_SIZE, crowd.SPEAKERS[0][1]) in before    # telao pre-buscado
+        assert (crowd.TELAO_TEXT[0][0], crowd.TELAO_SIZE, crowd.TELAO_TEXT[0][1]) in before   # telao pre-buscado
         called = []
         orig = g.text_img
         g.text_img = lambda s, size, color: called.append(s) or orig(s, size, color)
@@ -699,7 +700,7 @@ def test_telao_only_in_assisted_matches_and_modes_keep_hints():
         p = crowd.TELAO.move(30, 4).topleft
         assert screen.get_at(p) != (4, 8, 16, 255)
     cr, clk = start_clk("arena")
-    assert cr.telao_on and cr.cap is not None and cr.cap[0] == "kickoff"
+    assert cr.telao_on and len(cr.telao_imgs) == len(crowd.TELAO_TEXT)
     g.state = "play"
     frames(clk, 2)
     assert screen.get_at((crowd.TELAO.left + 1, crowd.TELAO.centery)) == cr.b.telao.get_at((1, crowd.TELAO.h // 2))
@@ -718,12 +719,9 @@ def test_telao_only_in_assisted_matches_and_modes_keep_hints():
     pau.midleft = (24, soccer.H - 22)
     for r in g.speed_rects() + [vel, pau]:
         assert not crowd.TELAO.colliderect(r), r
-    # legendas cabem no telao
-    for kind, variants in crowd.CAPTIONS.items():
-        for pair in variants:
-            for (name, _), line in zip(crowd.SPEAKERS, pair):
-                w = g.font(crowd.TELAO_SIZE).size(name)[0] + 6 + g.font(crowd.TELAO_SIZE).size(line)[0]
-                assert 22 + w <= crowd.TELAO.w - 6, (kind, line, w)
+    # o texto do telao ("AO VIVO" ...) cabe nele
+    w = sum(g.font(crowd.TELAO_SIZE).size(t)[0] + 10 for t, _ in crowd.TELAO_TEXT)
+    assert 22 + w <= crowd.TELAO.w, w
 
 
 def test_led_scrolls_and_shows_goal():

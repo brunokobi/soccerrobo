@@ -250,13 +250,14 @@ def test_runtime_build_throttle_and_mute():
 
 
 def test_audio_files_present_and_light():
-    names = [f for fs in sfx.STREAMS.values() for f in fs] + [f for v in sfx.FILE_SFX.values() for f in v[0]]
+    names = [f for fs in sfx.STREAMS.values() for f in fs] + sfx.file_names()
     for f in names + [sfx.AMB_FILE]:
         p = os.path.join(sfx.AUDIO_DIR, f)
         assert os.path.isfile(p), f
         assert f.endswith(".ogg"), f                       # pygbag/navegador: OGG
         assert os.path.getsize(p) < 3_000_000, f
-    total = sum(os.path.getsize(os.path.join(sfx.AUDIO_DIR, f)) for f in os.listdir(sfx.AUDIO_DIR))
+    total = sum(os.path.getsize(os.path.join(sfx.AUDIO_DIR, f)) for f in os.listdir(sfx.AUDIO_DIR)
+                if "-pygbag." not in f)                    # sem as copias que o build do pygbag gera
     assert total < 15_000_000, total                       # download do jogo continua razoavel
     assert len(sfx.STREAMS["menu"]) == 3                   # 3 musicas no menu principal
     assert len(sfx.FILE_SFX["goal"][0]) >= 5 and len(sfx.FILE_SFX["goal_opp"][0]) >= 3
@@ -370,11 +371,77 @@ def test_goal_variants_never_repeat_in_a_row():
                 seq.append(sfx.S.var_last[sid])
             assert all(a != b for a, b in zip(seq, seq[1:])), seq          # nunca repete em seguida
             assert len(set(seq)) == len(sfx.FILE_SFX[sid][0]), seq         # e passa por todas
+        # saco embaralhado em TODA reacao gravada: cada volta toca todas as variacoes (gravadas + derivadas)
+        for sid, (variants, _thr, _vo, _g) in sfx.FILE_SFX.items():
+            n = len(variants)
+            assert sfx.n_variants(sid) == n, (sid, sfx.n_variants(sid), n)
+            if n < 2:
+                continue
+            sfx.S.bag.pop(sid, None)
+            seq = []
+            for _ in range(3 * n):
+                clk.t += 100.0
+                pygame.mixer.stop()
+                assert sfx.play(sid) is True, sid
+                seq.append(sfx.S.var_last[sid])
+            assert all(a != b for a, b in zip(seq, seq[1:])), (sid, seq)
+            for r in range(3):                             # toca todas antes de repetir (volta a volta)
+                assert sorted(seq[r * n:(r + 1) * n]) == list(range(n)), (sid, seq)
+        for sid in ("ooh", "near", "near_opp", "save", "post", "ole", "boo", "applause", "crowd_cheer", "lament",
+                    "kickoff_voice", "win_crowd", "lose_crowd", "crowd_chant"):
+            assert sfx.n_variants(sid) >= 3, sid            # >= 3 por reacao da torcida
+        assert all(v.get_length() > 0 for vs in sfx.S.files.values() for v in vs)
         for sid in ("near", "near_opp", "kickoff_voice", "applause", "click", "ooh", "crowd_cheer", "crowd_chant",
                     "ole", "boo"):
             clk.t += 20.0
             assert sfx.play(sid) is True, sid
     finally:
+        sfx.clock = time.perf_counter
+        sfx.shutdown()
+        reset_prefs()
+
+
+def test_derive_frames_pure():
+    from array import array
+    src = array("h", [v for i in range(1000) for v in (i, i)])        # estereo, rampa 0..999
+    out = None
+    steps = 0
+    for out in sfx.derive_frames(src, 2.0, 0.0, 1.0, 2, 1000, maxs=10.0, chunk=100, fade_s=0.0):
+        steps += 1
+    assert steps > 2 and out is not None and len(out) == 2 * 500     # metade dos quadros (velocidade 2)
+    assert list(out[0::2][:5]) == [0, 2, 4, 6, 8] and out[0::2] == out[1::2]
+    for out in sfx.derive_frames(src, 0.5, 0.5, 1.0, 2, 1000, maxs=0.3, fade_s=0.01):
+        pass
+    assert len(out) == 2 * 300 and out[0] == 0 and out[2 * 10] == 500 + 5     # trecho, teto e fade
+    f = array("f", [0.5] * 400)
+    for out in sfx.derive_frames(f, 1.0, 0.0, 1.0, 1, 100, maxs=10.0, fade_s=0.1):
+        pass
+    assert out.typecode == "f" and len(out) == 400 and out[0] == 0.0 and out[200] == 0.5
+
+
+def test_spoken_voice_has_long_interval():
+    reset_prefs()
+    clk = FakeClock()
+    sfx.clock = clk
+    old = dict(sfx.SPOKEN)
+    try:
+        if not _init_or_skip():
+            return
+        while not sfx.pump(50.0):
+            pass
+        names = sfx.S.names["goal"]
+        sfx.SPOKEN.clear()
+        sfx.SPOKEN[names[0]] = 1000.0                       # finge que o 1o grito e uma voz falada
+        hits = []
+        for _ in range(60):
+            clk.t += 10.0
+            pygame.mixer.stop()
+            assert sfx.play("goal")
+            hits.append(sfx.S.var_last["goal"] == 0)
+        assert sum(hits) <= 1, hits                          # 600 s < 1000 s: no maximo uma vez
+    finally:
+        sfx.SPOKEN.clear()
+        sfx.SPOKEN.update(old)
         sfx.clock = time.perf_counter
         sfx.shutdown()
         reset_prefs()
@@ -426,7 +493,11 @@ def test_game_picks_goal_and_near_miss_sounds_by_side():
         played.clear()
         g.crowd_event("goal", 0)
         g.crowd_event("goal", 1)
-        assert played == ["goal", "crowd_cheer", "goal_opp", "boo"]   # aplaude o nosso gol, vaia o do rival
+        assert played == ["goal", "crowd_cheer", "goal_opp", "lament"]   # aplaude o nosso gol, lamenta o do rival
+        played.clear()
+        g.events.append({"min": 3, "team": 1, "name": "", "own": True, "pid": None})
+        g.crowd_event("goal", 1)
+        assert played == ["goal_opp", "boo"]                          # gol contra do nosso time: vaia
         played.clear()
         g.crowd_event("chance", 0)
         assert played == ["ooh"]                                       # "uuuh" gravado da torcida
@@ -446,11 +517,11 @@ def test_game_picks_goal_and_near_miss_sounds_by_side():
         g.score = [0, 2]
         played.clear()
         g.crowd_end()
-        assert "boo" in played and "applause" not in played    # perdi: vaia
+        assert "boo" in played and "lose_crowd" in played and "applause" not in played    # perdi
         g.score = [2, 0]
         played.clear()
         g.crowd_end()
-        assert "applause" in played and "boo" not in played
+        assert "applause" in played and "win_crowd" in played and "boo" not in played
         g.new_match(2, None)                               # 2 jogadores: todo gol e "nosso"
         played.clear()
         g.crowd_event("goal", 1)
@@ -461,7 +532,7 @@ def test_game_picks_goal_and_near_miss_sounds_by_side():
         played.clear()
         g.speed_idx = 0
         g.crowd_event("goal", 0)
-        assert played == ["goal_opp", "boo"]               # jogador e o visitante
+        assert played == ["goal_opp", "lament"]            # jogador e o visitante
         g.speed_idx = 3
         played.clear()
         g.crowd_event("goal", 1)

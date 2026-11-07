@@ -28,9 +28,10 @@ Tudo desenhado por codigo (pygame.draw), pre-renderizado no inicio da partida:
   pontape inicial e na vitoria) e faixas de pano penduradas na vertical atras dos gols (coluna de fora
   das laterais; na campanha as frases do local, fora dela GENERIC_BANNERS). Particulas com teto fixo
   (CONFETTI_MAX/FLASH_MAX/SMOKE_MAX por nivel) e vida por tempo real (RNG proprio `fxr`).
-- **LED e "som visual"** (A5): placa de LED do topo = tira longa pre-renderizada, scroll com
-  `blit(area=...)`; onomatopeias com 4 degraus de cor pre-buscados via Game.text_img.
-- **Telao** (A6): legendas de 2 locutores (CAPTIONS) no rodape, so em partidas assistidas.
+- **LED** (A5): placa de LED do topo = tira longa pre-renderizada, scroll com `blit(area=...)`. As
+  antigas onomatopeias ("GOOOL!", "UHHH!", "CLAP CLAP"...) sairam: no lugar delas o narrador e o
+  comentarista falam numa faixa de TV (game/narration.py, desenhada pelo soccer.Game).
+- **Telao** (A6): caixinha "AO VIVO" no rodape (so em partidas assistidas); as falas ficam na faixa.
 - **LOD** (A7): ver LOD_* (media do quadro de partida em janelas de 60 quadros; > 4 ms desce,
   < 2,5 ms por 3 janelas sobe). Em MAX nada disso e desenhado nem atualizado.
 
@@ -43,7 +44,7 @@ Visibilidade: a UI da partida (UI_HUD, UI_PAUSE, UI_TELAO, UI_SPEED, UI_HINT; ve
 topo e quase toda a frente. _pick enche primeiro os lugares visiveis (as laterais, em todos os
 locais) e deixa a frente so para o excedente.
 
-**Camera** (prefs "camera"; ver Layout, PERTO/ESTADIO): a geometria acima e a da camera PERTO (campo
+**Camera** (soccer.Game.camera_mode: toda partida comeca em ESTADIO; ver Layout, PERTO/ESTADIO): a geometria acima e a da camera PERTO (campo
 em tela cheia). Na camera ESTADIO o jogo desenha o "mundo" (campo, gols, robos, bola, FX) numa Surface
 fora da tela e o reduz (CAM_SCALE) para CAM_RECT; sobram arquibancadas LARGAS em volta (VENUES_WIDE:
 fileiras em cima, ate 6 colunas nas laterais, fileiras embaixo; zona "T" = arquibancada de cima, de
@@ -298,7 +299,6 @@ GOLD = (255, 210, 60)
 CONFETTI_MAX = {"ALTA": 90, "MEDIA": 40}
 FLASH_MAX = {"ALTA": 8, "MEDIA": 4}
 SMOKE_MAX = {"ALTA": 14, "MEDIA": 0}
-ONO_MAX = 2                     # onomatopeias ao mesmo tempo
 
 # placa de LED do topo (moldura fixa em y 79..87 desenhada em _draw_static)
 LED_X, LED_Y, LED_W, LED_H = PITCH.left + 1, 79, PITCH.w - 2, 8
@@ -312,43 +312,11 @@ LED_HEAD = {"ginasio": "GINASIO DO BAIRRO", "arena": "ARENA LIMPEX", "estadio": 
 LED_AMBER = (255, 176, 48)
 LED_SPEED, LED_GOAL_SPEED, LED_GOAL_S = 45, 150, 3.5
 
-# "som visual": onomatopeias (spec 2.6), via Game.text_img, 4 degraus de cor pre-cacheados
-WORDS = {"goal": "GOOOL!", "no": "NÃOOO!", "go": "VAAAI!", "ole": "OLÉ!", "uh": "UHHH!", "oh": "OOOH!",
-         "clang": "CLANG!", "clap": "CLAP CLAP", "win": "OLÉ, OLÉ!"}
-ROBOT_WORDS = dict(WORDS, go="BIP BIP!", uh="BZZZT!", ole="OLÉ.EXE", no="ERRO 404!", clap="CLIC CLIC")
-WORD_SIZE = {"goal": 52}        # demais: 36
-ONO_FADE = (1.0, 0.78, 0.55, 0.32)
-ONO_S, ONO_RISE, ONO_Y = 1.0, 30, 632
-
-# telao (spec 2.7): legendas de 2 locutores, so em partidas assistidas
+# telao (spec 2.7): caixinha "AO VIVO" da transmissao, so em partidas assistidas. As falas do narrador
+# (Tonho) e da comentarista (Cleide) ficam na faixa de TV de game/narration.py.
 TELAO = pygame.Rect(236, 665, 356, 26)
 TELAO_SIZE = 20
-SPEAKERS = (("TONHO:", (255, 214, 90)), ("CLEIDE:", (255, 140, 200)))
-CAPTIONS = {
-    "goal": (("Que lance, Cleide!", "O chinelo ainda está no lugar, Tonho."),
-             ("É GOL! Pode varrer a rede!", "Nenhum grão de pó resistiu, Tonho."),
-             ("Entrou! A sala inteira vibra!", "Até o tapete levantou, Tonho!")),
-    "chance": (("Lá vem ele, lá vem ele...", "Bateria no talo, Tonho!"),
-               ("Chute perigoso!", "Quase aspirou a trave, Tonho."),
-               ("Olha o chute, Cleide!", "Esse foi com vontade!")),
-    "save": (("Que defesa, Cleide!", "Goleiro com sucção máxima, Tonho."),
-             ("Pegou! Pegou!", "Parece que tem ímã nas luvas."),
-             ("Defesaça!", "Não deixa passar nem migalha.")),
-    "post": (("Na trave! Na trave!", "Fez barulho de panela, Tonho."),
-             ("Trave! Por um fio de cabelo!", "Fio de cabelo ele aspira, Tonho.")),
-    "kickoff": (("Rola a bola, Cleide!", "Filtros limpos e motores ligados."),
-                ("Começa o jogo!", "Torcida em festa, Tonho!")),
-    "win": (("Acabou! Que vitória!", "A torcida vai limpar a casa hoje."),
-            ("Fim de papo, Cleide!", "Missão cumprida, sala impecável.")),
-    "draw": (("Fim de jogo: empate!", "Cada um varreu metade, Tonho."),),
-    "idle": (("Clima de decisão aqui, Cleide.", "Cheiro de cera nova no ar, Tonho."),
-             ("A bola corre limpinha.", "Gramado sem um farelo sequer."),
-             ("Recado do patrocinador...", "Aspire com moderação!"),
-             ("Que torcida, Cleide!", "Até os robôs do vô estão de pé.")),
-}
-CAP_PRIO = {"goal": 3, "win": 4, "draw": 4, "save": 2, "post": 2, "chance": 1, "kickoff": 1, "idle": 0}
-CAP_LINE_S = (2.2, 2.6)         # Tonho, depois Cleide
-CAP_IDLE_GAP = 7.0
+TELAO_TEXT = (("AO VIVO", (255, 120, 110)), ("TONHO & CLEIDE NA TRANSMISSÃO", (236, 242, 248)))
 
 # LOD automatico (A7): media de Game.draw em janelas de LOD_WINDOW quadros de partida (1x-4x).
 # Acima de LOD_DOWN_MS desce um nivel (2 completo -> 1 sem ondas/confete/fumaca, poses a cada 2N
@@ -367,13 +335,13 @@ class Layout:
 
 
 PERTO = Layout("PERTO", wide=False, ui_all=UI_ALL, pitch=PITCH, goal_x=(PITCH.left, PITCH.right),
-               led=(LED_X, LED_Y, LED_W, LED_H), ono_y=ONO_Y,
+               led=(LED_X, LED_Y, LED_W, LED_H),
                flag_x=(20, W - 20 - 22), flag_ys=(112, 232, 492, 612, 172, 552),
                flare_front_y=657, flare_side=((30, W - 30), (180, 560)),
                banner_x=(SIDE_COL_X[2] + 2, W - SIDE_COL_X[2] - AH + 2), banner_cy=CY, pocket=POCKET)
 ESTADIO = Layout("ESTADIO", wide=True, ui_all=UI_ALL_WIDE, pitch=CAM_PITCH,
                  goal_x=(CAM_PITCH.left, CAM_PITCH.right),
-                 led=(CAM_PITCH.left + 1, W_LED_Y, CAM_PITCH.w - 2, LED_H), ono_y=W_BOT_Y[1] + 6,
+                 led=(CAM_PITCH.left + 1, W_LED_Y, CAM_PITCH.w - 2, LED_H),
                  flag_x=(4, W - 4 - 22), flag_ys=(150, 262, 478, 580, 206, 528),
                  flare_front_y=W_BOT_Y[0] + 4, flare_side=((44, W - 44), (200, 540)),
                  banner_x=(W_SIDE_X[0] + 2, W - W_SIDE_X[0] - AH + 2), banner_cy=(W_GAP[0] + W_GAP[1]) // 2,
@@ -780,7 +748,7 @@ class Seg:
 
 class _Bundle:
     __slots__ = ("key", "venue", "level", "camera", "lay", "static", "tarja", "segs", "people", "nbytes", "build_ms",
-                 "ex", "colors", "ono_cols", "anchors", "flags", "flares", "smoke", "star", "conf_cols", "telao",
+                 "ex", "colors", "anchors", "flags", "flares", "smoke", "star", "conf_cols", "telao",
                  "txt_id", "banners", "rails", "led_ads", "led_goal", "led_period")
 
 
@@ -1199,12 +1167,10 @@ def _puff(col, r, a):
 
 def _build_extras(b, v, ex, home, away, level, lay=PERTO):
     """Sprites e posicoes dos extras (sem texto): bandeiras, sinalizadores, fumaca, flash, confete,
-    ancoras das onomatopeias e a moldura do telao."""
+    ancoras das torcidas e a moldura do telao."""
     hs, aws = _shirt(home), _shirt(away)
     b.colors = {"home": scale(hs, 1.18), "away": scale(aws, 1.18), "neutral": (255, 230, 120)}
-    b.ono_cols = {"home": mix(b.colors["home"], (255, 255, 255), 0.35),
-                  "away": mix(b.colors["away"], (255, 255, 255), 0.35), "neutral": (255, 230, 120)}
-    # ancoras (onomatopeias, faixas, sinalizadores): centro das faixas frontais de cada torcida
+    # ancoras (faixas, sinalizadores): centro das faixas frontais de cada torcida
     anchors = {}
     for fid in FIDS:
         xs = [s.cx for s in b.segs if s.zone == "F" and s.fid == fid]
@@ -1486,8 +1452,8 @@ class Crowd:
     """Torcida de uma partida: humores por fidelidade, ola, calmaria, extras; desenho so por blits.
 
     `clock` (injetavel) devolve segundos; padrao time.perf_counter. Usa so `self.rng` (reacoes) e
-    `self.fxr` (extras): nunca o random global. `txt` = Game.text_img: as imagens de onomatopeias e
-    legendas do telao sao buscadas UMA vez aqui (nada de texto novo por quadro)."""
+    `self.fxr` (extras): nunca o random global. `txt` = Game.text_img: as imagens de texto (faixas,
+    LED, telao) sao buscadas UMA vez aqui (nada de texto novo por quadro)."""
 
     def __init__(self, bundle, clock=None, seed=20261, txt=None, telao=True, story=False):
         self.b = bundle
@@ -1535,20 +1501,13 @@ class Crowd:
         self.smoke = []             # [x, y, vx, vy, idade, fid]
         self.flare_until = {"home": 0.0, "away": 0.0}
         self.led_goal = None        # (fid, fim)
-        self.onos = []              # [chave_imgs, x, y0, inicio]
-        self.cap = None             # (tipo, variante, inicio, prioridade)
-        self.cap_n = {}
-        self.cap_last = now
-        self.idle_n = 0
         # LOD
         self.lod = 2
         self._lod_acc = 0.0
         self._lod_n = 0
         self._lod_good = 0
         # textos (pre-buscados)
-        self.ono_imgs = {}
-        self.cap_imgs = {}
-        self.spk_imgs = ()
+        self.telao_imgs = ()
         self.telao_on = False
         if txt is not None:
             self.prepare_text(txt, telao)
@@ -1561,20 +1520,9 @@ class Crowd:
     def prepare_text(self, txt, telao=True):
         """Busca (Game.text_img, com cache) todas as imagens de texto que a partida pode usar."""
         ensure_text_extras(self.b, txt)
-        words = ROBOT_WORDS if VENUES[self.b.venue]["robots"] else WORDS
-        for key, word in words.items():
-            size = WORD_SIZE.get(key, 36)
-            shadow = txt(word, size, (0, 0, 0))
-            for fid in FIDS:
-                col = self.b.ono_cols[fid]
-                self.ono_imgs[(key, fid)] = tuple((txt(word, size, scale(col, f)), shadow if k < 2 else None)
-                                                  for k, f in enumerate(ONO_FADE))
         self.telao_on = bool(telao)
         if self.telao_on:
-            self.spk_imgs = tuple(txt(name, TELAO_SIZE, col) for name, col in SPEAKERS)
-            for kind, variants in CAPTIONS.items():
-                for i, pair in enumerate(variants):
-                    self.cap_imgs[(kind, i)] = tuple(txt(line, TELAO_SIZE, (236, 242, 248)) for line in pair)
+            self.telao_imgs = tuple(txt(t, TELAO_SIZE, col) for t, col in TELAO_TEXT)
 
     # eventos ----------------------------------------------------------------------------------
     def _set(self, fid, kind, dur, prio, now, origin=None):
@@ -1598,8 +1546,6 @@ class Crowd:
             self._set(mine, "party", PARTY_S, 3, now, origin)
             self._set(other, "sad", 3.0, 3, now)
             self._set("neutral", "jump", 2.2, 3, now, origin)
-            self._ono("goal", mine, now)
-            self._ono("no", other, now)
             if ex["confetti"] and self.lod >= 2:
                 self._confetti(mine, 70)
                 self.conf_until[mine] = now + 3.5
@@ -1607,24 +1553,15 @@ class Crowd:
             if ex["flares"] and self.lod >= 1:
                 self.flare_until[mine] = now + 5.0
             self.led_goal = (mine, now + LED_GOAL_S)
-            self._caption("goal", now)
         elif kind == "chance" and mine:
             self._set(mine, "jump", 0.9, 1, now)
             self._set("neutral", "up", 0.4, 1, now)
-            self._ono("go", mine, now)
-            self._caption("chance", now)
         elif kind == "save" and mine:
             self._set(mine, "up", 0.8, 2, now)
             self._set(other, "sad", 0.8, 2, now)
-            self._ono("ole", mine, now)
-            self._ono("uh", other, now)
-            self._caption("save", now)
         elif kind == "post":
             for f in FIDS:
                 self._set(f, "up", 0.4, 1, now)
-            self._ono("clang", "neutral", now)
-            self._ono("oh", "neutral", now, dx=150)
-            self._caption("post", now)
         elif kind == "kickoff":
             self.n_kick += 1
             first = self.n_kick == 1
@@ -1633,61 +1570,28 @@ class Crowd:
                     self._set(f, "mosaic", 3.2, 1, now)
                 else:
                     self._set(f, "flags", 1.6, 1, now)
-            if first:
-                self._ono("go", "neutral", now)
-                self._caption("kickoff", now)
         elif kind == "end":
             if mine:
                 self._set(mine, "win" if self.has_mosaic else "jump", 9.0 if self.has_mosaic else 4.0, 4, now, CX)
                 self._set(other, "sad", 9.0, 4, now)
                 self._set("neutral", "up", 2.0, 4, now)
                 fids = (mine, "neutral")
-                self._ono("win", mine, now)
                 if ex["confetti"] and self.lod >= 2:
                     self._confetti(mine, 30)
                     self.conf_until[mine] = now + 3.0
                 if ex["flares"] and self.lod >= 1:
                     self.flare_until[mine] = now + 5.0
                 self.flash_until = now + 2.5
-                self._caption("win", now)
             else:
                 for f in FIDS:
                     self._set(f, "up", 2.0, 4, now)
                 fids = None
-                self._ono("clap", "neutral", now)
-                self._caption("draw", now)
             if self.waves:
                 self.ola = (now + 4.0 if mine else now + 2.0, fids)
                 self.last_ola = now
         else:
             return
         self.last_react = now
-
-    def _ono(self, key, fid, now, dx=0):
-        imgs = self.ono_imgs.get((key, fid))
-        if imgs is None:
-            return
-        onos = self.onos
-        limit = ONO_MAX if self.lod >= 1 else 1
-        while len(onos) >= limit:
-            onos.pop(0)
-        x = self.b.anchors[fid] + dx
-        y = self.lay.ono_y
-        for o in onos:                              # nao empilha no mesmo lugar
-            if abs(o[1] - x) < 120:
-                y = o[2] - 40
-        onos.append([imgs, x, y, now])
-
-    def _caption(self, kind, now):
-        if not self.telao_on:
-            return
-        cur = self.cap
-        if cur is not None and now < cur[2] + sum(CAP_LINE_S) and cur[3] > CAP_PRIO[kind]:
-            return
-        n = self.cap_n.get(kind, 0)
-        self.cap_n[kind] = n + 1
-        self.cap = (kind, n % len(CAPTIONS[kind]), now, CAP_PRIO[kind])
-        self.cap_last = now
 
     # extras ------------------------------------------------------------------------------------
     def _seg_point(self, s):
@@ -1969,26 +1873,14 @@ class Crowd:
         scr.blit(self.b.telao, TELAO.topleft)
         on = int(now * 1.5) % 2 == 0
         pygame.draw.circle(scr, (235, 50, 50) if on else (90, 20, 20), (TELAO.left + 11, TELAO.centery), 4)
-        cap = self.cap
-        if cap is None or now >= cap[2] + sum(CAP_LINE_S):
-            if now - self.cap_last < CAP_IDLE_GAP:
-                return
-            self.cap = cap = ("idle", self.idle_n % len(CAPTIONS["idle"]), now, 0)
-            self.idle_n += 1
-            self.cap_last = now
-        el = now - cap[2]
-        k = 0 if el < CAP_LINE_S[0] else 1
-        line = self.cap_imgs[(cap[0], cap[1])][k]
-        name = self.spk_imgs[k]
         x = TELAO.left + 22
         cy = TELAO.centery + 1
-        scr.blit(name, (x, cy - name.get_height() // 2))
-        scr.blit(line, (x + name.get_width() + 6, cy - line.get_height() // 2))
-        if now >= cap[2] + sum(CAP_LINE_S):
-            self.cap_last = now
+        for img in self.telao_imgs:
+            scr.blit(img, (x, cy - img.get_height() // 2))
+            x += img.get_width() + 10
 
     def draw_over(self, scr, paused=False):
-        """Camada sobre os robos: confete e onomatopeias (so blits/pygame.draw)."""
+        """Camada sobre os robos: confete (so pygame.draw)."""
         now = self.clock()
         if self.confetti:
             dr = pygame.draw.rect
@@ -2001,23 +1893,6 @@ class Crowd:
                     dr(scr, p[6], (x, y, 3, 2))
                 else:
                     dr(scr, p[7], (x, y, 2, 3))
-        if self.onos:
-            keep = []
-            for o in self.onos:
-                u = (now - o[3]) / ONO_S
-                if u >= 1.0 and not paused:
-                    continue
-                keep.append(o)
-                u = min(max(u, 0.0), 0.999)
-                k = 0 if u < 0.5 else 1 if u < 0.7 else 2 if u < 0.85 else 3
-                img, shadow = o[0][k]
-                y = o[2] - ONO_RISE * (1 - (1 - u) ** 2)
-                w, h = img.get_size()
-                x0, y0 = int(o[1] - w / 2), int(y - h / 2)
-                if shadow is not None:
-                    scr.blit(shadow, (x0 + 2, y0 + 2))
-                scr.blit(img, (x0, y0))
-            self.onos = keep
 
     def pop_sounds(self):
         """Sons que a torcida pediu desde o ultimo quadro (coro, ola). O Game toca e esvazia."""
@@ -2035,12 +1910,9 @@ class Crowd:
 
 def all_strings():
     """Todas as strings que a torcida pode mostrar (Latin-1, testes)."""
-    out = set(WORDS.values()) | set(ROBOT_WORDS.values()) | set(LED_ADS) | set(LED_HEAD.values())
-    out |= {n for n, _ in SPEAKERS}
+    out = set(LED_ADS) | set(LED_HEAD.values())
+    out |= {t for t, _ in TELAO_TEXT}
     for ex in EXTRAS.values():
         out |= set(ex["banners"])
     out |= set(GENERIC_BANNERS)
-    for variants in CAPTIONS.values():
-        for pair in variants:
-            out |= set(pair)
     return out

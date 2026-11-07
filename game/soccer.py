@@ -14,6 +14,7 @@ from pygame import Vector2 as V
 import crowd
 import fireworks
 import floors
+import narration
 import prefs
 import robot_art
 import robots
@@ -54,23 +55,20 @@ DEMO_TEAMS = (("ASPIRADORES FC", "VASSOURAS UNIDAS"), ("POEIRA ZERO", "RODO DE O
               ("FAXINA TOTAL", "PANO DE CHÃO EC"), ("TURBO ASPIRA", "CERA BRILHANTE"))
 INPUT_EVENTS = (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN, pygame.MOUSEWHEEL, pygame.FINGERDOWN,
                 pygame.FINGERMOTION, pygame.JOYBUTTONDOWN)
-GOAL_SFX = ("goal", "goal_opp", "boo", "crowd_cheer")   # sons do gol cortados (fade) no reinicio
+GOAL_SFX = ("goal", "goal_opp", "lament", "boo", "crowd_cheer")   # sons do gol cortados (fade) no reinicio
 GOAL_PAUSE_S = 2.4                     # comemoracao do gol (tempo de jogo) antes do novo pontape
 GOAL_FLASH_S = 0.35
 GOAL_ROCKETS, WIN_ROCKETS = 7, 10
 EVENT_SFX = {"kickoff": "whistle", "chance": "ooh", "save": "save", "goal": "goal", "post": "post",
              "end": "whistle_end"}
 CROWD_LABELS = {"ALTA": "ALTA", "MEDIA": "MÉDIA", "OFF": "DESLIGADA"}
-# Camera (prefs "camera", tecla C no menu e na pausa). Regra: sem escolha do jogador (AUTO) as partidas
-# ASSISTIDAS (campanha, Modo Robos, carreira) usam ESTADIO e o Amistoso com humano (modos 1/2) usa PERTO;
-# escolhida, vale para todas. No menu C gira AUTO -> ESTADIO -> PERTO -> AUTO; na pausa alterna a camera
-# da partida (grava a escolha). ESTADIO so existe com torcida (OFF = campo cheio) e fora do MAX.
+# Camera: TODA partida comeca em ESTADIO (Game.camera_start; nada e gravado nas prefs). Na pausa, C alterna
+# ESTADIO <-> PERTO so na partida atual; a seguinte volta ao ESTADIO. O jogo NUNCA troca a camera sozinho
+# (nao ha LOD de camera: no gol o custo de desenho subia e a partida caia para PERTO). ESTADIO so existe com
+# torcida (OFF = campo cheio, sem arquibancadas) e, em MAX, desenha o minimo (campo cheio) sem mudar o modo.
 CAMERA_MODES = ("ESTADIO", "PERTO")
-CAMERA_MENU_CYCLE = (None, "ESTADIO", "PERTO")
-CAMERA_LABELS = {None: "AUTO", "ESTADIO": "ESTÁDIO", "PERTO": "PERTO"}
-# LOD da camera: media do tempo de desenho (ms) em janelas de CAM_LOD_WINDOW quadros em ESTADIO; acima de
-# CAM_LOD_MS a partida cai para PERTO ate o fim (re-warm unico da torcida; a pausa/C pode voltar).
-CAM_LOD_WINDOW, CAM_LOD_MS = 60, 8.0
+CAMERA_START = "ESTADIO"
+CAMERA_LABELS = {"ESTADIO": "ESTÁDIO", "PERTO": "PERTO"}
 # Escala do mundo por quadro, sempre com destino pre-alocado: f(src, size, dest) existe com essa assinatura
 # no pygame 2.6.1 (desktop) e no pygame-ce 2.5.7 (navegador). Medido (desktop, 1068x596 -> 854x477):
 # smoothscale 1,1-1,7 ms (pygame) / 0,8-0,9 ms (ce, SSE2) contra scale 0,25-0,3 / 0,12-0,2 ms. O WASM nao
@@ -329,6 +327,12 @@ class Game:
         self.sk_imgs = {}
         self.sk_pilha_on = False
         self.crowd = None                         # torcida da partida assistida (crowd.Crowd) ou None
+        self.narr = None                          # narrador + comentarista da partida (narration.Narration)
+        self.narr_n = 0                           # partidas narradas (semente do RNG privado da narracao)
+        self.narr_clock = None
+        self.narr_kicks = 0
+        self.narr_trail = [False, False]          # o time ja esteve atras no placar (virada)
+        self.narr_top = False                     # PERTO: faixa no alto do campo (bola embaixo)
         self.crowd_clock = None                   # relogio injetavel da torcida (testes); None = perf_counter
         self.crowd_venue = None                   # local da partida assistida atual (re-warm na pausa)
         self.crowd_story = False                  # partida da campanha: faixas da torcida citam o Ze Poeira
@@ -344,8 +348,8 @@ class Game:
         self.world_src = self.world.subsurface(crowd.CAM_CROP)
         self.world_dst = pygame.Surface(crowd.CAM_SIZE).convert()
         self.cam_scale = CAM_SCALERS[CAM_SCALER]
-        self.cam_fallback = False                 # LOD da camera: caiu para PERTO nesta partida
-        self.cam_acc, self.cam_n = 0.0, 0
+        self.camera_start = CAMERA_START          # camera do inicio de toda partida (testes de geometria: PERTO)
+        self.cam_choice = None                    # C na pausa: camera escolhida SO para a partida atual
         self.last_draw_ms = 0.0                   # ultimo quadro de partida medido (informativo)
         self.world_dirty = []                     # retangulos desenhados no mundo no quadro anterior
         self.world_full = True                    # proximo quadro ESTADIO repinta o campo inteiro
@@ -431,6 +435,7 @@ class Game:
         self.cam_reset()
         if venue is not None:
             self.warm_crowd(venue)
+        self.narr_warm()
         self.kickoff(0)
 
     def start_career_match(self, home, away, venue=None, user_side=0):
@@ -478,6 +483,7 @@ class Game:
         self.pick_floor()
         self.cam_reset()
         self.warm_crowd(venue)
+        self.narr_warm()
         self.state = "kickoff"
         self.kickoff(0)
 
@@ -485,6 +491,7 @@ class Game:
         self.career_match = False
         self.arena = None
         self.crowd = None
+        self.narr = None
         self.fx.clear()
         self.fw.clear()
         sink, self.match_sink = self.match_sink, None
@@ -553,6 +560,8 @@ class Game:
         self.teams[0].human = None
         for t, n in zip(self.teams, names):
             t.name = n
+        self.narr_warm()                          # nomes da demo na narracao
+        self.narr_hook("kickoff", None)
         self.user_side = None                     # demo: todo gol e comemorado
         self.speed_idx = 0
         self.demo = True
@@ -598,7 +607,7 @@ class Game:
             if self.state == "menu":
                 if e.key in (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4, pygame.K_5, pygame.K_6):
                     sfx.play("click")
-                elif e.key in (pygame.K_t, pygame.K_c):
+                elif e.key == pygame.K_t:
                     sfx.play("toggle")
                 if e.key == pygame.K_1:
                     self.new_match(1, crowd.FRIENDLY_VENUE)
@@ -614,8 +623,6 @@ class Game:
                     self.campaign_ui.open()
                 elif e.key == pygame.K_t:
                     self.toggle_crowd()
-                elif e.key == pygame.K_c:
-                    self.toggle_camera()
             elif self.career_match:
                 if e.key in (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4):
                     self.speed_idx = e.key - pygame.K_1
@@ -858,7 +865,7 @@ class Game:
         if power > 450:                                 # chance: chute forte perto do gol, na direcao dele
             t = p.team
             if d.x * t.dir > 0.5 and abs(b.pos.x - t.target_x) < 300:
-                self.crowd_event("chance", t.idx)
+                self.crowd_event("chance", t.idx, p)
 
     def pass_ball(self, p, aim):
         best, best_score = None, 1e9
@@ -933,6 +940,7 @@ class Game:
                         o.cd = 0.7
                         self.fx_emit("tackle", b.pos)
                         self.snd("steal")
+                        self.narr_hook("steal", q.team.idx, q)
                         if self.sk_on:
                             self.on_steal(q, o)
                         break
@@ -964,7 +972,7 @@ class Game:
                         self.deflect(p, 0.6, spread=25)
                         p.cd = 0.35
                     if speed >= CATCH_SPEED:                       # defesa de chute forte
-                        self.crowd_event("save", t.idx)
+                        self.crowd_event("save", t.idx, p)
                     return
                 cs = p.f.catch_speed
                 if speed < cs:
@@ -1036,7 +1044,7 @@ class Game:
             self.fx_celebrate((lo.vis.get("look") or {}).get("celebration"), self.ball.pos)
         self.state = "goal"
         self.timer = GOAL_PAUSE_S
-        self.crowd_event("goal", team_idx)
+        self.crowd_event("goal", team_idx, lo)
         self.fireworks_show(GOAL_ROCKETS, self.teams[team_idx].color)
 
     # ---------------------------------------------------------- movement
@@ -1486,6 +1494,7 @@ class Game:
         if "bat_add" in ex:                            # Recarga: carga imediata
             p.bat = min(1.0, p.bat + ex["bat_add"])
         self.snd("dash" if s["fx"] in ("dash", "wheel") else "skill")
+        self.narr_hook("skill", p.team.idx, p, sid)
         if s["dur"] <= 0:                              # efeito imediato (Choque): sem variante
             return
         p.sk_cur = sid
@@ -1620,6 +1629,7 @@ class Game:
         q.vel = q.vel * 0.2
         o.sk_ev = ("evade", t + 0.6)
         self.snd("dribble")
+        self.narr_hook("dribble", o.team.idx, o)
         if self.speed_idx != 3 and not self.is_rival(o.team.idx):
             sfx.play("ole")                                              # drible do jogador: "olé!"
         self.sk_count["drible_evade"] = self.sk_count.get("drible_evade", 0) + 1
@@ -1752,7 +1762,7 @@ class Game:
             b = self.ball                            # trave: batida no fundo, rente a boca do gol
             if (abs(b.pos.x - CX) > PITCH.w / 2 - BR - 2
                     and GOAL_HALF - BR <= abs(b.pos.y - CY) < GOAL_HALF + 18):
-                self.crowd_event("post")
+                self.crowd_event("post", None, self.last_owner)
 
     # --------------------------------------------------------------- torcida
     def warm_crowd(self, venue=None):
@@ -1800,23 +1810,9 @@ class Game:
         return "T: torcida " + CROWD_LABELS[self.crowd_level()]
 
     # ------------------------------------------------------------- camera
-    def camera_pref(self):
-        """Escolha gravada (prefs "camera"): "ESTADIO", "PERTO" ou None (AUTO, nunca escolhida)."""
-        try:
-            c = prefs.get("camera")
-        except Exception:  # noqa: BLE001
-            c = None
-        return c if c in CAMERA_MODES else None
-
     def camera_mode(self):
-        """Camera da partida atual. AUTO: assistida ESTADIO, amistoso com humano (modos 1/2) PERTO.
-        O LOD da camera (cam_fallback) forca PERTO ate a proxima partida."""
-        if self.cam_fallback:
-            return "PERTO"
-        c = self.camera_pref()
-        if c is None:
-            c = "PERTO" if (not self.career_match and self.mode in (1, 2)) else "ESTADIO"
-        return c
+        """Camera da partida atual: a escolhida na pausa (so esta partida) ou camera_start (ESTADIO)."""
+        return self.cam_choice or self.camera_start
 
     def camera_on(self):
         """Camera ESTADIO desenhando agora: torcida larga existe e nao esta em MAX."""
@@ -1824,32 +1820,22 @@ class Game:
         return cr is not None and cr.b.camera == "ESTADIO" and self.speed_idx != 3
 
     def cam_reset(self):
-        self.cam_fallback = False
-        self.cam_acc, self.cam_n = 0.0, 0
+        """Inicio de partida: volta a camera de inicio (ESTADIO)."""
+        self.cam_choice = None
 
     def toggle_camera(self):
-        """Tecla C. Menu: AUTO -> ESTADIO -> PERTO -> AUTO (gravado). Pausa da partida (com torcida):
-        alterna a camera atual, grava a escolha e aplica na hora (re-warm aqui, no evento)."""
+        """Tecla C na pausa da partida (com torcida): alterna ESTADIO <-> PERTO so nesta partida (nada nas
+        prefs) e aplica na hora (re-warm aqui, no evento). No menu nao faz nada."""
         if self.state == "menu":
-            cur = self.camera_pref()
-            nxt = CAMERA_MENU_CYCLE[(CAMERA_MENU_CYCLE.index(cur) + 1) % len(CAMERA_MENU_CYCLE)]
-            try:
-                prefs.set("camera", nxt) if nxt is not None else prefs.unset("camera")
-            except Exception:  # noqa: BLE001
-                pass
-            return nxt
+            return None
         nxt = "PERTO" if self.camera_mode() == "ESTADIO" else "ESTADIO"
-        try:
-            prefs.set("camera", nxt)
-        except Exception:  # noqa: BLE001
-            pass
-        self.cam_reset()
+        self.cam_choice = nxt
         if self.career_match or self.crowd_venue is not None:
             self.warm_crowd(self.crowd_venue)
         return nxt
 
-    def camera_label(self, menu=False):
-        return "C: câmera " + CAMERA_LABELS[self.camera_pref() if menu else self.camera_mode()]
+    def camera_label(self):
+        return "C: câmera " + CAMERA_LABELS[self.camera_mode()]
 
     def world_restore(self):
         """Fundo do mundo (ESTADIO): o campo inteiro so quando preciso (world_full); senao repinta do
@@ -1883,31 +1869,21 @@ class Game:
         for p in self.fx:
             d.append(R(int(p[0]) - 24, int(p[1]) - 24, 48, 48))
 
-    def cam_feed(self, ms):
-        """LOD da camera: amostra do quadro em ESTADIO; media da janela > CAM_LOD_MS -> PERTO (uma vez)."""
-        self.cam_acc += ms
-        self.cam_n += 1
-        if self.cam_n < CAM_LOD_WINDOW:
-            return
-        avg = self.cam_acc / self.cam_n
-        self.cam_acc, self.cam_n = 0.0, 0
-        if avg > CAM_LOD_MS and not self.cam_fallback:
-            self.cam_fallback = True
-            self.warm_crowd(self.crowd_venue)     # torcida PERTO (custo unico; nada por quadro depois)
-
     def crowd_on(self):
         """Torcida desenhada/reagindo agora: partida assistida, existe e nao esta em MAX."""
         return self.crowd is not None and self.speed_idx != 3
 
-    def crowd_event(self, kind, team=None):
-        """Hook do motor: so escreve no estado da torcida e toca o som do lance (nunca na simulacao nem
-        no RNG global). Em MAX nada acontece."""
+    def crowd_event(self, kind, team=None, who=None):
+        """Hook do motor: so escreve no estado da torcida/narracao e toca o som do lance (nunca na
+        simulacao nem no RNG global). who = robo do lance (narracao). Em MAX nada acontece."""
         if self.speed_idx == 3:
             return
+        self.narr_hook(kind, team, who)
         if kind == "goal":
             rival = self.is_rival(team)
             sfx.play("goal_opp" if rival else "goal")                    # gritos variados por lado
-            sfx.play("boo" if rival else "crowd_cheer")                  # torcida vaia o rival / aplaude
+            own = bool(self.events and self.events[-1].get("own") and self.events[-1].get("team") == team)
+            sfx.play(("boo" if own else "lament") if rival else "crowd_cheer")   # lamento (gol contra: vaia) / palmas
         else:
             sfx.play(EVENT_SFX.get(kind))
         if kind in ("save", "post"):                                     # quase gol (de quem atacou)
@@ -1921,6 +1897,87 @@ class Game:
             sfx.play("crowd_cheer")
         if self.crowd is not None:
             self.crowd.event(kind, team)
+
+    # ------------------------------------------------------------- narracao
+    def narr_warm(self):
+        """Narrador/comentarista da partida: todas as imagens de texto saem aqui (nada por quadro)."""
+        self.narr_n += 1
+        self.narr_kicks = 0
+        self.narr_trail = [False, False]
+        self.narr_clock = None
+        teams = [(t.name, led_color(t.color), [p.name for p in t.players]) for t in self.teams]
+        names = {sid: sk["name"] for sid, sk in skills.ALL.items()}
+        self.narr = narration.Narration(teams, self.text_img, seed=20263 + self.narr_n, skill_names=names)
+        return self.narr
+
+    def narr_hook(self, kind, team=None, who=None, skill=None):
+        """Lance -> fala (so estado; RNG privado da narracao). Em MAX nada."""
+        n = self.narr
+        if n is None or self.speed_idx == 3:
+            return
+        sc, mn = self.score, self.minute()
+        rid = getattr(who, "idx", None)
+        if kind == "kickoff":
+            self.narr_kicks += 1
+            if self.narr_kicks == 1:
+                n.event("start", 0, None, score=sc, minute=mn)
+            return
+        if kind == "goal":
+            t, o = team, 1 - team
+            ev = self.events[-1] if self.events else {}
+            before = list(sc)
+            before[t] -= 1
+            if before[t] < before[o]:
+                self.narr_trail[t] = True
+            if sc[o] < sc[t] and before[t] < before[o]:
+                self.narr_trail[o] = True
+            if ev.get("own"):
+                k = "own"
+            elif sc[t] == sc[o]:
+                k = "equalize"
+            elif sc[t] > sc[o] and before[t] <= before[o] and self.narr_trail[t]:
+                k = "turn"
+            else:
+                k = "goal"
+            n.event(k, t, rid, score=sc, minute=mn)
+            return
+        if kind == "end":
+            n.event("end_draw" if team is None else "end_win", 0 if team is None else team, None,
+                    score=sc, minute=mn)
+            return
+        if kind == "post":
+            team = getattr(getattr(who, "team", None), "idx", None)
+            if team is None:
+                team = 1 - self.defender_at(self.ball.pos.x) if self.defender_at(self.ball.pos.x) is not None else 0
+        n.event(kind, team, rid, skill=skill, score=sc, minute=mn)
+
+    def draw_narration(self, cam):
+        """Faixa de TV do narrador/comentarista. ESTADIO: logo abaixo do campo (sobre a arquibancada de
+        baixo, nunca sobre o jogo). PERTO/sem torcida: dentro do campo, no alto ou embaixo, sempre do lado
+        oposto ao da bola. So blits."""
+        n = self.narr
+        if n is None or self.speed_idx == 3:
+            return
+        now = time.perf_counter()
+        dt = 0.0 if self.paused or self.narr_clock is None else now - self.narr_clock
+        self.narr_clock = now
+        prev = n.cur
+        cur = n.tick(dt)
+        if cur is None:
+            return
+        bw, bh = narration.BAND_W, narration.BAND_H
+        x = (W - bw) // 2
+        if cam:
+            y = crowd.CAM_RECT.bottom + 5
+        else:
+            b = self.ball.pos
+            if cur is not prev:
+                self.narr_top = b.y > CY
+            y = PITCH.top + 8 if self.narr_top else PITCH.bottom - bh - 8
+            if abs(b.y - (y + bh / 2)) < bh / 2 + 34 and abs(b.x - CX) < bw / 2 + 24:
+                self.narr_top = not self.narr_top           # a bola chegou: a faixa troca de lado
+                y = PITCH.top + 8 if self.narr_top else PITCH.bottom - bh - 8
+        n.draw(self.screen, x, y)
 
     def is_rival(self, team):
         """O time `team` e o adversario do jogador? (2 jogadores / sem lado: nunca.)"""
@@ -1949,8 +2006,15 @@ class Game:
             self.fireworks_show(WIN_ROCKETS, self.teams[0 if a > c else 1].color)
         if self.speed_idx != 3:
             sfx.play("robot_off")                       # apito final: os robos desligam
-            lost = a != c and self.is_rival(0 if a > c else 1)
-            sfx.play("boo" if lost else "applause")     # derrota do jogador: vaia; senao palmas
+            win = 0 if a > c else 1
+            lost = a != c and self.is_rival(win)
+            if lost:                                    # derrota do jogador: lamento + vaia
+                sfx.play("lose_crowd")
+                sfx.play("boo")
+            else:                                       # vitoria (ou empate): festa + palmas
+                if a != c and self.user_side is not None:
+                    sfx.play("win_crowd")
+                sfx.play("applause")
         if not self.career_match and self.speed_idx != 3 and not self.demo:   # amistoso: jingle (modo 1 = visao do humano)
             if self.mode == 1:
                 sfx.result(a, c)
@@ -2322,14 +2386,14 @@ class Game:
                 self.banner(title, None, col)
             else:
                 self.banner(title, "ENTER = jogar de novo   |   ESC = menu", col)
+        self.draw_narration(cam)                        # faixa de TV por cima do clarao do gol
         if self.demo:
             self.draw_demo_overlay()
         if cr is not None and not self.paused:          # LOD automatico: tempo do quadro de partida
             ms = (time.perf_counter() - t_draw) * 1000
             self.last_draw_ms = ms
             cr.lod_feed(ms)
-            if cam:
-                self.cam_feed(ms)
+            self.fw.lod = cr.lod                        # degrada fogos junto com a torcida (nunca a camera)
 
     def draw_demo_overlay(self):
         """Faixa do modo demo (pisca) no lugar das dicas de controle."""
@@ -2665,12 +2729,8 @@ class Game:
                   (225, 210, 250), center=(r.centerx, r.centery + 18), shadow=False)
         self.text("clique ou aperte 1 / 2 / 3 / 4 / 5 / 6" if self.has_save else "clique ou aperte 1 / 2 / 3 / 5 / 6",
                   28, (200, 225, 235), center=(cx, 640))
-        a, c = "F11: tela cheia  |  " + self.crowd_label(), "  |  " + self.camera_label(menu=True)
         col = (120, 160, 185)
-        wa, wc = self.text_img(a, 22, col).get_width(), self.text_img(c, 22, col).get_width()
-        x0 = cx - (wa + wc) // 2
-        self.text(a, 22, col, midleft=(x0, 664), shadow=False)
-        self.text(c, 22, col, midleft=(x0 + wa, 664), shadow=False)
+        self.text("F11: tela cheia  |  " + self.crowd_label(), 22, col, center=(cx, 664), shadow=False)
         self.text(self.audio_label(), 22, col, center=(cx, 688), shadow=False)
 
 

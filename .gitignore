@@ -3,3 +3,4 @@ __pycache__/
 *.pyc
 game/build/
 .playwright-mcp/
+game/audio/*-pygbag.*

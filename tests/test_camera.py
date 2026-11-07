@@ -1,10 +1,10 @@
-"""Testes da CAMERA DE ESTADIO (game/crowd.py: Layout/VENUES_WIDE/CAM_*; soccer.py: mundo reduzido, prefs
-"camera", tecla C, LOD da camera). Rodar da raiz:
+"""Testes da CAMERA DE ESTADIO (game/crowd.py: Layout/VENUES_WIDE/CAM_*; soccer.py: mundo reduzido, toda
+partida comeca em ESTADIO, tecla C na pausa so para a partida atual, o jogo nunca troca a camera sozinho). Rodar da raiz:
     SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy .venv/bin/python tests/test_camera.py [teste ...]
 
 NUNCA toca ~/.soccerpy_*.json: prefs/campaign/garage/career usam stores em memoria (trocados ANTES de
 criar o Game) e store.write e uma sentinela que FALHA se chamada. Screenshots so se SOCCERPY_SHOTS_DIR
-estiver definido (bairro, ginasio, estadio, mundial com gol e confete em ESTADIO; o Amistoso em PERTO).
+estiver definido (bairro, ginasio, estadio, mundial com gol e confete em ESTADIO; o Amistoso tambem).
 """
 import json
 import os
@@ -59,12 +59,11 @@ VIS_ORDER = ("bairro", "quadra", "ginasio", "arena", "estadio", "mundial")
 
 
 def set_prefs(level="ALTA", camera=None):
-    """camera None = AUTO (o jogador nunca escolheu: campo ausente do JSON)."""
-    d = {"v": 1, "crowd": level}
-    if camera is not None:
-        d["camera"] = camera
-    PREFS["raw"] = json.dumps(d)
+    """Torcida no nivel pedido. camera: camera de INICIO das proximas partidas (Game.camera_start; None =
+    a do jogo, ESTADIO). Nada disso vai para as prefs: a camera nao e mais uma preferencia gravada."""
+    PREFS["raw"] = json.dumps({"v": 1, "crowd": level})
     prefs.reset_cache()
+    g.camera_start = camera or soccer.CAMERA_START
 
 
 def cfg(name, color, ovr=65):
@@ -114,99 +113,96 @@ def key(k):
     g.handle_event(pygame.event.Event(pygame.KEYDOWN, key=k, mod=0, unicode=""))
 
 
-# --- prefs e regra AUTO ------------------------------------------------------------------------------
-def test_camera_rule_auto_and_explicit():
-    set_prefs("ALTA")                                        # AUTO
-    assert prefs.get("camera") is None and prefs.load() == {"crowd": "ALTA", "sfx_vol": "2", "music_vol": "2", "mute": "0"}
-    assert start("arena").b.camera == "ESTADIO" and g.camera_on()          # assistida -> ESTADIO
-    g.new_match(1, crowd.FRIENDLY_VENUE)                     # amistoso com humano -> PERTO
-    assert g.crowd.b.camera == "PERTO" and not g.camera_on()
-    g.new_match(2, crowd.FRIENDLY_VENUE)
-    assert g.crowd.b.camera == "PERTO"
-    set_prefs("ALTA", "PERTO")                               # escolhida: vale para tudo
-    assert start("arena", camera="PERTO").b.camera == "PERTO"
-    set_prefs("ALTA", "ESTADIO")
-    g.new_match(1, crowd.FRIENDLY_VENUE)
-    assert g.crowd.b.camera == "ESTADIO" and g.camera_on()
-    called = []                                              # Modo Robos / campanha: assistidas
+# --- toda partida comeca em ESTADIO ------------------------------------------------------------------
+def test_every_match_starts_in_estadio():
     set_prefs("ALTA")
+    assert soccer.CAMERA_START == "ESTADIO" and g.camera_start == "ESTADIO"
+    assert prefs.load() == {"crowd": "ALTA", "sfx_vol": "2", "music_vol": "2", "mute": "0"}
+    assert start("arena").b.camera == "ESTADIO" and g.camera_on()          # carreira
+    for mode in (1, 2):                                      # amistoso com humano tambem
+        g.new_match(mode, crowd.FRIENDLY_VENUE)
+        assert g.crowd.b.camera == "ESTADIO" and g.camera_mode() == "ESTADIO" and g.camera_on(), mode
+    called = []                                              # Modo Robos / campanha
     g.start_robot_match(cfg("A", (50, 120, 255)), cfg("B", (235, 65, 65)), called.append, venue="bairro")
     assert g.crowd.b.camera == "ESTADIO"
     g.start_robot_match(cfg("A", (50, 120, 255)), cfg("B", (235, 65, 65)), called.append,
                         return_state="campaign", venue="mundial")
     assert g.crowd.b.camera == "ESTADIO"
     g.match_sink = None
-    assert start("mundial", "OFF") is None and not g.camera_on()           # sem torcida: campo cheio
-    # prefs: valores invalidos caem para AUTO; AUTO nao vai para o JSON
-    for raw in ('{"v": 1, "camera": "LONGE"}', '{"v": 1, "camera": 1}', '{"v": 1, "camera": null}'):
+    g.start_demo()                                           # demo do menu
+    assert g.crowd.b.camera == "ESTADIO"
+    g.stop_demo()
+    # torcida desligada: nao ha estadio (campo cheio, sem arquibancada); o modo continua ESTADIO
+    assert start("mundial", "OFF") is None and not g.camera_on() and g.camera_mode() == "ESTADIO"
+    g.new_match(1, crowd.FRIENDLY_VENUE)
+    assert g.crowd is None
+    # a antiga pref "camera" (JSON de quem ja jogou) e ignorada e some no proximo save
+    for raw in ('{"v": 1, "crowd": "ALTA", "camera": "PERTO"}', '{"v": 1, "camera": "LONGE"}'):
         PREFS["raw"] = raw
         prefs.reset_cache()
-        assert prefs.get("camera") is None and g.camera_pref() is None, raw
-    set_prefs("ALTA")
-    assert prefs.set("camera", "ESTADIO") and json.loads(PREFS["raw"])["camera"] == "ESTADIO"
-    assert not prefs.set("camera", "LONGE") and prefs.get("camera") == "ESTADIO"
-    assert prefs.unset("camera") and "camera" not in json.loads(PREFS["raw"]) and prefs.get("camera") is None
-    assert not prefs.unset("crowd")                          # so campos opcionais
+        assert prefs.get("camera") is None and "camera" not in prefs.load(), raw
+        assert start("arena").b.camera == "ESTADIO", raw
+    assert prefs.set("crowd", "MEDIA") and "camera" not in json.loads(PREFS["raw"])
+    assert not prefs.set("camera", "PERTO") and "camera" not in json.loads(PREFS["raw"])
     g.state = "menu"
 
 
 def test_key_c_menu_and_pause():
     set_prefs("ALTA")
     g.state = "menu"
+    raw = PREFS["raw"]
     btns = [r.copy() for r in g.menu_btns] + [g.continue_btn.copy(), g.robots_btn(), g.campaign_btn()]
-    seen = []
-    for _ in range(3):                                       # AUTO -> ESTADIO -> PERTO -> AUTO
+    for _ in range(3):                                       # menu: C nao faz nada (nao ha mais escolha)
         key(pygame.K_c)
-        seen.append(prefs.get("camera"))
         g.text_cache.clear()
         g.draw()
         assert ("F11: tela cheia  |  T: torcida ALTA", 22, (120, 160, 185)) in g.text_cache
-        lab = "  |  C: câmera " + soccer.CAMERA_LABELS[seen[-1]]
-        assert (lab, 22, (120, 160, 185)) in g.text_cache, lab
-    assert seen == ["ESTADIO", "PERTO", None], seen
-    assert "camera" not in json.loads(PREFS["raw"])
+        assert not any("câmera" in k[0] for k in g.text_cache)
+    assert PREFS["raw"] == raw
     assert [r.copy() for r in g.menu_btns] + [g.continue_btn.copy(), g.robots_btn(), g.campaign_btn()] == btns
-    w = g.font(22).size("F11: tela cheia  |  T: torcida DESLIGADA  |  C: câmera ESTÁDIO")[0]
-    assert w < soccer.W - 40
-    # pausa da partida assistida: alterna e aplica na hora (re-warm no evento)
+    # pausa da partida assistida: alterna SO esta partida e aplica na hora (re-warm no evento)
     cr = start("mundial")
     assert cr.b.camera == "ESTADIO"
     key(pygame.K_c)                                          # fora da pausa: nada
-    assert g.crowd is cr and prefs.get("camera") is None
+    assert g.crowd is cr
     key(pygame.K_p)
     key(pygame.K_c)
-    assert prefs.get("camera") == "PERTO" and g.crowd.b.camera == "PERTO" and '"PERTO"' in PREFS["raw"]
+    assert g.camera_mode() == "PERTO" and g.crowd.b.camera == "PERTO" and PREFS["raw"] == raw
     g.text_cache.clear()
     g.draw()
     assert ("C: câmera PERTO", 28, (255, 230, 120)) in g.text_cache
     assert any(k[0].startswith("T: torcida") for k in g.text_cache)
     key(pygame.K_c)
-    assert prefs.get("camera") == "ESTADIO" and g.crowd.b.camera == "ESTADIO" and g.camera_on()
+    assert g.camera_mode() == "ESTADIO" and g.crowd.b.camera == "ESTADIO" and g.camera_on()
     with SurfaceCounter() as c:                              # pausado em ESTADIO: nada por quadro
         for _ in range(30):
             g.draw()
     assert c.n == 0
+    key(pygame.K_c)                                          # deixa em PERTO...
     key(pygame.K_p)
-    assert not g.paused
+    assert not g.paused and g.camera_mode() == "PERTO"
+    assert start("mundial").b.camera == "ESTADIO"            # ...e a partida seguinte volta ao ESTADIO
     # amistoso sem torcida: a pausa nao oferece camera
     g.new_match(1)
     g.state = "play"
     g.paused = True
     key(pygame.K_c)
-    assert prefs.get("camera") == "ESTADIO"
+    assert g.camera_mode() == "ESTADIO"
     g.text_cache.clear()
     g.draw()
     assert not any(k[0].startswith("C: câmera") for k in g.text_cache)
     g.paused = False
-    # amistoso com torcida (menu): a pausa oferece e aplica
-    set_prefs("ALTA")
+    # amistoso com torcida (menu): comeca em ESTADIO; a pausa oferece e aplica; o proximo volta
     g.state = "menu"
     key(pygame.K_1)
-    assert g.crowd.b.camera == "PERTO"
+    assert g.crowd.b.camera == "ESTADIO"
     g.paused = True
     key(pygame.K_c)
-    assert g.crowd.b.camera == "ESTADIO" and prefs.get("camera") == "ESTADIO"
+    assert g.crowd.b.camera == "PERTO" and PREFS["raw"] == raw
     g.paused = False
+    g.state = "over"
+    key(pygame.K_RETURN)                                     # jogar de novo
+    assert g.crowd.b.camera == "ESTADIO"
     g.state = "menu"
 
 
@@ -361,6 +357,7 @@ def _count(v, camera, level="ALTA"):
     g.state = "play"
     cr.react.clear()
     cr.next_upd = 0
+    g.narr = None                                            # a faixa do narrador e passageira (cobre a frente)
     g.draw()
     g.draw()
     return _visible_people(cr, crowd.ui_rects_cam(True, camera))
@@ -417,7 +414,7 @@ class Pressed:
 
 
 def test_friendly_keyboard_in_estadio():
-    set_prefs("ALTA", "ESTADIO")
+    set_prefs("ALTA")
     random.seed(5)
     g.state = "menu"
     key(pygame.K_1)
@@ -444,41 +441,69 @@ def test_friendly_keyboard_in_estadio():
     assert g.state == "menu"
 
 
-# --- LOD da camera ---------------------------------------------------------------------------------------
-def test_camera_lod_falls_to_perto():
-    cr = start("mundial")
-    g.state = "play"
-    assert cr.b.camera == "ESTADIO" and not g.cam_fallback
-    for _ in range(soccer.CAM_LOD_WINDOW - 1):
-        g.cam_feed(soccer.CAM_LOD_MS + 5)
-    assert g.crowd is cr                                     # janela incompleta: nada
-    g.cam_feed(soccer.CAM_LOD_MS + 5)
-    assert g.cam_fallback and g.crowd.b.camera == "PERTO" and g.camera_mode() == "PERTO"
-    assert prefs.get("camera") is None                       # o LOD nao grava nada nas prefs
-    with SurfaceCounter() as c:
-        for _ in range(60):
-            g.draw()
-    assert c.n == 0
-    # integracao: Game.draw mede o quadro (limite forcado para baixo)
+# --- a camera nunca muda sozinha (nem no gol, nem com quadro pesado) ---------------------------------------
+class SlowTime:
+    """time do soccer com perf_counter que anda `step` s a cada chamada: todo quadro parece pesado."""
+
+    def __init__(self, real, step):
+        self.t = real.perf_counter()
+        self.step = step
+
+    def perf_counter(self):
+        self.t += self.step
+        return self.t
+
+
+def test_goal_never_changes_camera():
+    assert not hasattr(g, "cam_feed") and not hasattr(soccer, "CAM_LOD_MS")   # nao ha LOD de camera
+    for cam in ("ESTADIO", "PERTO"):
+        cr = start("mundial", camera=cam)
+        g.state = "play"
+        assert g.camera_mode() == cam
+        old = soccer.time
+        soccer.time = SlowTime(old, 0.006)                   # ~12+ ms medidos por quadro (muito acima do LOD)
+        try:
+            for k in range(60 * 8):                          # 8 s: gols, fim de jogo, festa, fogos
+                g.step(1 / 60)
+                if k % 90 == 10:
+                    g.goal(k // 90 % 2)
+                if k == 400:
+                    g.crowd_end()
+                g.draw()
+                assert g.camera_mode() == cam and g.crowd is cr and cr.b.camera == cam, (cam, k)
+        finally:
+            soccer.time = old
+        assert cr.lod == 0 and g.fw.lod == 0                  # o que degrada: torcida e fogos
+        assert sum(g.score) >= 4
+    set_prefs("ALTA")
+    # gol direto pelo hook, desenho normal: idem
     cr = start("estadio")
-    assert cr.b.camera == "ESTADIO" and not g.cam_fallback   # partida nova: volta ao estadio
-    old = soccer.CAM_LOD_MS
-    soccer.CAM_LOD_MS = -1.0
-    try:
-        for _ in range(soccer.CAM_LOD_WINDOW + 1):
+    g.state = "play"
+    for _ in range(3):
+        g.goal(0)
+        for _ in range(200):
+            g.step(1 / 60)
             g.draw()
-    finally:
-        soccer.CAM_LOD_MS = old
-    assert g.cam_fallback and g.crowd.b.camera == "PERTO" and not g.camera_on()
-    g.paused = True                                          # C na pausa: escolha explicita volta
-    key(pygame.K_c)
-    assert g.crowd.b.camera == "ESTADIO" and not g.cam_fallback
-    g.paused = False
-    # media abaixo do limite: nao cai
-    start("estadio")
-    for _ in range(soccer.CAM_LOD_WINDOW * 3):
-        g.cam_feed(soccer.CAM_LOD_MS * 0.5)
-    assert not g.cam_fallback and g.crowd.b.camera == "ESTADIO"
+    assert g.camera_mode() == "ESTADIO" and g.crowd is cr and g.camera_on()
+
+
+def test_fireworks_degrade_with_crowd_lod():
+    import fireworks
+    fw = fireworks.Fireworks(seed=1)
+    peaks = {}
+    for lod in (2, 1, 0):
+        fw.clear()
+        fw.lod = lod
+        t = 0.0
+        fw.show(t, 10, [(255, 0, 0)], pygame.Rect(100, 100, 800, 400))
+        peak = 0
+        for _ in range(300):
+            t += 1 / 60
+            fw.update(t, 1 / 60)
+            peak = max(peak, len(fw.sparks))
+        peaks[lod] = peak
+        assert peak <= int(fireworks.SPARK_MAX * fireworks.LOD_SPARKS[lod]), (lod, peak)
+    assert peaks[2] > peaks[1] > peaks[0] > 0, peaks
 
 
 # --- repintura parcial do mundo == repintura completa -------------------------------------------------------
@@ -587,7 +612,7 @@ def test_screenshots_optional():
     for _ in range(90):
         g.step(1 / 60)
     g.draw()
-    pygame.image.save(screen, os.path.join(SHOTS_DIR, "camera_amistoso_perto.png"))
+    pygame.image.save(screen, os.path.join(SHOTS_DIR, "camera_amistoso_estadio.png"))
     g.state = "menu"
 
 

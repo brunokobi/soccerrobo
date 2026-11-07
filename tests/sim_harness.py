@@ -12,11 +12,11 @@ O golden confere o MODO LEGADO: ele aplica LEGACY_TUNING + BATTERY_ON=False expl
 (o padrao do jogo agora e TUNING + BATTERY_ON=True) e tem de ficar 80/80.
   ... tests/sim_harness.py draw
   ... tests/sim_harness.py draw --crowd [ALTA|MEDIA] [ESTADIO|PERTO]
-        (draw_ms por local da torcida, partida assistida; camera padrao = AUTO = ESTADIO nas assistidas)
+        (draw_ms por local da torcida, partida assistida; camera padrao = ESTADIO, a de toda partida)
   ... tests/sim_harness.py shot out.png
   ... tests/sim_harness.py crowd-shots [local ...]     (PNGs em $SOCCERPY_SHOTS_DIR ou num tempdir)
   ... tests/sim_harness.py camera-shots [local ...]    (camera ESTADIO x PERTO por local, com gol e confete)
-  ... tests/sim_harness.py ui-shots                    (gol/confete, telao, LED, pausa e menu: A4-A7)
+  ... tests/sim_harness.py ui-shots                    (gol/confete, faixa do narrador, LED, pausa e menu)
   ... tests/sim_harness.py robot-shots                 (robos A9-A11: grade de chassis, zoom, estadio, bairro)
 """
 import json
@@ -172,12 +172,12 @@ def draw_ms(n=300):
 
 def _crowd_prefs(level="ALTA", camera=None):
     """Torcida no nivel pedido sem ler nem gravar ~/.soccerpy_prefs.json (store em memoria).
-    camera None = AUTO (partida assistida -> ESTADIO)."""
+    camera = camera de inicio das proximas partidas (Game.camera_start); None = ESTADIO (a do jogo)."""
     import prefs
-    cam = ', "camera": "%s"' % camera if camera else ""
-    prefs._store_get = lambda: '{"v": 1, "crowd": "%s"%s}' % (level, cam)
+    prefs._store_get = lambda: '{"v": 1, "crowd": "%s"}' % level
     prefs._store_set = lambda text: False
     prefs.reset_cache()
+    g.camera_start = camera or soccer.CAMERA_START
 
 
 def _prep_crowd(venue, warm=120):
@@ -326,8 +326,8 @@ def _zoom(rect, path, k=3):
 
 
 def ui_shots():
-    """Capturas da Onda A4-A7: gol com confete/onomatopeia (mundial), mosaico e sinalizadores (estadio),
-    telao, placa de LED (zoom), pausa com a opcao TORCIDA e menu com a linha "T: torcida"."""
+    """Capturas: gol com confete e a faixa do narrador/comentarista (mundial), mosaico e sinalizadores
+    (estadio), placa de LED (zoom), pausa com a opcao TORCIDA e menu com a linha "T: torcida"."""
     import tempfile
     out = os.environ.get("SOCCERPY_SHOTS_DIR") or tempfile.mkdtemp(prefix="soccerpy_shots_")
     os.makedirs(out, exist_ok=True)
@@ -343,7 +343,7 @@ def ui_shots():
     g.start_career_match(cfg("A", 65), cfg("B", 65), venue="estadio")
     _run_for(0.4)
     save("a4_mosaico_estadio.png")
-    # gol: confete, flashes, onomatopeia, LED de gol, telao (mundial)
+    # gol: confete, flashes, LED de gol, faixa do narrador e da comentarista (mundial)
     _prep_crowd("mundial", warm=200)
     g.crowd.react.clear()
     _run_for(0.2)
@@ -354,9 +354,9 @@ def ui_shots():
     _zoom((soccer.PITCH.left, 74, 500, 18), os.path.join(out, "a5_led_gol_zoom.png"), 3)
     _run_for(1.2)
     save("a4_gol_mundial_1s.png")
-    _zoom((200, 640, 420, 60), os.path.join(out, "a6_telao_zoom.png"), 3)
-    _run_for(1.5)
-    save("a6_telao_cleide.png")
+    _zoom((100, 600, 900, 100), os.path.join(out, "narracao_zoom.png"), 2)
+    _run_for(2.0)
+    save("narracao_comentarista.png")
     # sinalizadores e fumaca (estadio), placa de LED comum
     _prep_crowd("estadio", warm=200)
     _run_for(0.2)
