@@ -23,6 +23,7 @@ Personagens (A12)
 Dados vem de story.CHARACTERS / HAIR_STYLES / ACCESSORIES / OUTFITS / MOODS / BGS.
 """
 import math
+import os
 import random
 from collections import OrderedDict
 
@@ -46,6 +47,10 @@ BLINK_PERIOD = 3.5                    # s entre piscadas
 BLINK_DUR = 0.12                      # s de olho fechado
 TALK_FRAME = 0.12                     # s por quadro de boca durante a fala
 BG_CACHE_MAX = 6                      # LRU de cenarios (cada um ~2 MB)
+# Estilo dos personagens: "classico" (formas lisas, desenhado por quadro) ou "pixel" (prototipo em
+# pixel art com cache, game/portraits_pixel.py; so os personagens de portraits_pixel.SPECS - os demais
+# continuam no classico). SOCCERPY_PORTRAITS=pixel liga o prototipo sem mexer no codigo.
+STYLE = os.environ.get("SOCCERPY_PORTRAITS", "classico")
 
 
 # ---------------------------------------------------------------------------------- cores
@@ -2382,6 +2387,10 @@ def draw_character(scr, cid, mood="neutro", cx=550, feet_y=470, R=40, k=1.0, bob
     breath = 0
     if t is not None and not talking and not bust:
         breath = -1 if math.sin(t * 2.2 + _phase(cid)) > 0.3 else 0
+    if STYLE == "pixel":
+        import portraits_pixel as PX
+        if PX.supports(cid):
+            return PX.draw(scr, cid, mood, cx, feet_y, R, k, bob, bust, b, m, tt, breath)
     draw_look(scr, ch, mood, cx, feet_y, R, k, bob, bust, b, m, tt, breath)
 
 

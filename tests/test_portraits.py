@@ -286,6 +286,55 @@ def test_dialog_like_frame_draw_time():
         assert v < 25.0, (k, v)
 
 
+def test_pixel_style_prototype():
+    """Prototipo pixel art (portraits.STYLE = "pixel"): todos os humores x quadros x k, palco e busto,
+    zero Surface depois do aquecimento, quadros de piscar/fala diferentes, cache limitado."""
+    import portraits_pixel as PX
+    assert P.STYLE == "classico" or os.environ.get("SOCCERPY_PORTRAITS")    # padrao do jogo continua classico
+    old = P.STYLE
+    P.STYLE = "pixel"
+    try:
+        PX.clear_cache()
+        for cid in PX.SPECS:
+            assert PX.supports(cid)
+            for mood in story.MOODS:
+                def frame(t):
+                    for blink, mouth in FRAMES:
+                        for k in (1.0, 0.5):
+                            P.draw_character(screen, cid, mood, 550, 470, 40, k, bob=-2, blink=blink, mouth=mouth, t=t)
+                        P.draw_bust(screen, (46, 490, 150, 166), cid, mood, blink=blink, mouth=mouth, t=t)
+                    P.draw_character(screen, cid, mood, 550, 470, 40, 1.0, 0, t=t, talking=True)
+                frame(0.0)                                          # aquecimento (monta os 4 quadros)
+                with SurfaceCounter() as c:
+                    for t in (0.13, 1.7, 3.49):
+                        frame(t)
+                assert c.n == 0, (cid, mood, c.n)
+                base = snap(lambda s: P.draw_bust(s, (0, 0, 170, 190), cid, mood, blink=False, mouth=0))
+                talk = snap(lambda s: P.draw_bust(s, (0, 0, 170, 190), cid, mood, blink=False, mouth=1))
+                assert base != talk, (cid, mood)
+                if mood not in P._CLOSED_EYES:
+                    blink = snap(lambda s: P.draw_bust(s, (0, 0, 170, 190), cid, mood, blink=True, mouth=0))
+                    assert base != blink, (cid, mood)
+            a, b = pygame.Surface((200, 300)), pygame.Surface((200, 300))
+            P.draw_character(a, cid, "neutro", 100, 290, 40, 1.0)
+            P.draw_character(b, cid, "neutro", 100, 290, 40, 0.5)
+            sa = sum(pygame.transform.average_color(a)[:3])
+            sb = sum(pygame.transform.average_color(b)[:3])
+            assert sb < sa, cid                                     # esmaecido e mais escuro
+        assert len(PX._GROUPS) <= PX.PX_CACHE_MAX
+        assert PX.cache_bytes() < 8 * 1024 * 1024, PX.cache_bytes()
+        P.draw_character(screen, "vivi", "feliz")                   # sem versao pixel: cai no classico
+        P.draw_character(screen, "ze", "feliz")
+        if SHOTS:
+            screen.fill((8, 14, 24))
+            for i, m in enumerate(story.MOODS):
+                P.draw_bust(screen, ((i % 8) * 136 + 6, (i // 8) * 176 + 6, 130, 150), tuple(PX.SPECS)[i % 3], m, t=0.5)
+            save("portraits_pixel_moods")
+    finally:
+        P.STYLE = old
+        PX.clear_cache()
+
+
 def test_screenshots():
     if not SHOTS:
         return
