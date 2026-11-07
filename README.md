@@ -25,17 +25,18 @@ pelas habilidades dos robôs.
 | ![Campanha: diálogo](docs/img/campanha-dialogo.png) | ![Campanha: mapa dos capítulos](docs/img/campanha-mapa.png) |
 | **Campanha** - diálogos com personagens e cenários em pixel art animados (torcida com rostos, piso de tábuas, luzes) | **Mapa da campanha** - da escola ao Mundial de Aspiradores |
 | ![Campanha: torneio](docs/img/campanha-torneio.png) | ![Modo Robôs: liga](docs/img/modo-robos-liga.png) |
-| **Torneio** - grupo, chaveamento e final contra o chefe (ASSISTIR ou SIMULAR) | **Modo Robôs** - liga de 6 times em 4 tiers |
+| **Torneio** - grupo, chaveamento, final contra o chefe, formação e ASSISTIR ou SIMULAR | **Modo Robôs** - liga de 6 times em 4 tiers, com a formação do próximo jogo |
 | ![Garagem: bancada com 8 slots](docs/img/garagem-bancada.png) | ![Árvore de habilidades](docs/img/habilidades.png) |
 | **Garagem** - 8 slots (com Módulo), sets, relíquias e o antes/depois de cada peça | **Habilidades** - árvore Ataque/Controle/Defesa, skills equipadas e tática do time |
 | ![Mochila de itens](docs/img/mochila.png) | ![Galeria de cosméticos](docs/img/visual-cosmeticos.png) |
 | **Mochila** - até 2 itens de partida, gastos ao jogar | **Visual** - adesivo, antena, rastro e comemoração por robô |
 
-![Amistoso: escolha de times e formações](docs/img/amistoso-escolha.png)
-
-**Amistoso** - antes da partida, o time e a formação de cada lado (escudo, força e mini-campo com a posição dos robôs).
+| ![Amistoso: escolha de times e formações](docs/img/amistoso-escolha.png) | ![Seletor de formação na campanha](docs/img/formacao-campanha.png) |
+|---|---|
+| **Amistoso** - antes da partida, o time e a formação de cada lado (escudo, força e mini-campo com a posição dos robôs) | **Formação** - o mesmo seletor na campanha, no Modo Robôs e na carreira |
 
 | ![Mapa do Ato 2](docs/img/campanha-mapa-ato2.png) | ![Superliga em pontos corridos](docs/img/campanha-superliga.png) |
+|---|---|
 | **Ato 2** - mapa por Ato (Ato 1 escola ao Mundial, Ato 2 Superliga Limpex, Ato 3 Copa dos Campeões) | **Superliga** - liga em pontos corridos, os 4 primeiros vão à semifinal |
 
 ![Missões secundárias](docs/img/campanha-missoes.png)
@@ -112,13 +113,14 @@ início do jogo, aos poucos) somados a sons gravados em `game/audio/` (OGG mono,
 - **Reações da torcida (tabela única `FILE_SFX` em `game/sfx.py`):** cada reação tem de 3 a 9
   variações (gravações + variações derivadas delas em tempo de execução: outro tom/andamento ou outro
   trecho, sem arquivo novo), sorteadas em "saco embaralhado" (toca todas antes de repetir, nunca a
-  mesma duas vezes seguidas). Grito de gol do jogador (9), do adversário (6), lamento da torcida no gol
-  sofrido (4; gol contra do nosso time: vaia), "uuuh" da chance (4), quase gol (4 / 3), defesa (4),
+  mesma duas vezes seguidas). Grito de gol do jogador (9), do adversário (7, com um "não!"), lamento da
+  torcida no gol sofrido (4; gol contra do nosso time: vaia), "uuuh" da chance (6), quase gol (6 / 3), defesa (4),
   trave (4, junto do CLANG), olé no drible e na defesa do jogador (4), palmas (3-4), vaia (3),
   início "começou!" (3), festa da vitória (3) e lamento da derrota (3). Vozes faladas têm intervalo
   próprio maior para não cansar. Detalhes em [docs/specs/som.md](docs/specs/som.md).
-- **Outros efeitos gravados:** apito final, robôs desligando no fim, palmas nos cânticos e na ola da
-  torcida e o clique dos menus.
+- **Outros efeitos gravados:** apito final com o "acabou!", robôs desligando no fim, caixa registradora
+  no card do resumo da partida (qualquer placar), palmas nos cânticos e na ola da torcida e o clique dos
+  menus.
 - **Motor dos robôs:** `robo_motor.ogg` em loop, baixo, enquanto a bola rola (para na pausa e no MAX).
 - Se algum arquivo faltar ou não abrir, entra o som sintetizado equivalente.
 
@@ -126,10 +128,9 @@ Ligados por padrão em volume médio.
 
 - **Efeitos:** chute e toque na bola, roubo e drible, trave (CLANG), apito de início e de fim, gol
   (explosão da torcida + buzina), "uuuh" da chance, defesa, palmas, skill (BUZZ), arrancada (ZOOM),
-  cliques de menu, avanço de diálogo, vitória/derrota/empate, recompensa, compra e upgrade na loja.
+  cliques de menu, avanço de diálogo, recompensa, compra e upgrade na loja.
 - **Música** chiptune em loop (só se faltarem os arquivos): uma trilha para menus/campanha e outra, mais
-  animada e mais baixa, para a partida; "acabou!" no apito final e caixa registradora no card do resumo
-  da partida.
+  animada e mais baixa, para a partida.
 - **Teclas:** **M** liga/desliga o mudo geral (em qualquer tela); **S** gira o volume dos efeitos e
   **N** o da música (DESL. / BAIXO / MÉDIO / ALTO), no menu ou na pausa. Tudo fica gravado nas
   preferências. No modo MAX a partida fica sem efeitos.
@@ -139,8 +140,9 @@ Ligados por padrão em volume médio.
 **Robôs e cenas:** cada chassi tem desenho próprio (o Orbital com satélites, o
 Titã octogonal), as peças equipadas aparecem no robô (turbina, canhão, para-choque
 blindado, radar...), as escovas giram e a bateria baixa solta faíscas e fumaça.
-Na campanha, os personagens piscam e mexem a boca ao falar, e os cenários têm
-camadas, luz e animação.
+Na campanha, personagens e cenários são **pixel art** desenhada por código (`game/portraits_pixel.py`,
+`game/scenes_pixel.py`): os personagens piscam e mexem a boca ao falar, com expressão por humor, e os
+cenários têm torcida, luz e animação.
 
 ## Modos
 No menu (teclas 1-6): `1 - AMISTOSO`, `2 - AMISTOSO`, `3 - NOVA CARREIRA`, `4 - CONTINUAR CARREIRA`, `5 - MODO ROBÔS` e `6 - CAMPANHA`.
@@ -157,9 +159,10 @@ torcida, ~1 min) sem trocar a música do menu. Qualquer tecla, clique, toque ou 
    escudo, cor e força (os robôs entram em campo com a força do time). O mesmo time não pode estar dos
    dois lados; cores parecidas fazem o lado da direita trocar de cor, como nas outras partidas.
    Formações (mini-campo com a posição dos 5 robôs): **EQUILIBRADA 1-2-1** (a de sempre), **RETRANCA
-   2-1-1** (dois zagueiros, bloco recuado), **OFENSIVA 1-1-2** (dois atacantes abertos), **QUADRADO 2-2**
+   2-1-1** (dois zagueiros fechando o meio), **OFENSIVA 1-1-2** (dois atacantes abertos), **QUADRADO 2-2**
    e **PRESSÃO 1-2-1** (linha alta). A formação muda onde cada robô fica e para onde volta durante o jogo
-   (posição base + avanço/recuo do bloco); os papéis e atributos dos robôs não mudam.
+   (posição base + avanço/recuo do bloco); os papéis e atributos dos robôs não mudam. A mesma escolha
+   de formação existe na carreira, no Modo Robôs e na campanha (ver **Formação** abaixo).
    Teclas: setas/WASD escolhem (no modo 1 você escolhe os dois lados; TAB troca de lado; no modo 2 o J1
    usa WASD no lado esquerdo e o J2 as setas no direito, ao mesmo tempo), **R** = aleatório, **ENTER** =
    jogar, **ESC** = menu; com o mouse: setas < >, roda sobre a linha e os botões. A última escolha fica
@@ -171,7 +174,8 @@ torcida, ~1 min) sem trocar a música do menu. Qualquer tecla, clique, toque ou 
    salários, premiação), **promoção/rebaixamento** (sobem/descem 2) e evolução
    dos jogadores entre temporadas. Suas partidas são **jogadas automaticamente
    no campo** (você assiste; velocidade 1x/2x/4x/MAX nas teclas 1-4); as dos
-   outros clubes são simuladas. O progresso é salvo sozinho (`localStorage` no
+   outros clubes são simuladas. Na aba INÍCIO, o seletor de **formação** do seu clube fica no
+   painel da próxima partida. O progresso é salvo sozinho (`localStorage` no
    navegador; `~/.soccerpy_career.json` no desktop).
 4. **Continuar carreira** (aparece quando há save)
 5. **Modo Robôs**: você monta uma **equipe de robôs persistente** e disputa ligas.
@@ -191,7 +195,8 @@ torcida, ~1 min) sem trocar a música do menu. Qualquer tecla, clique, toque ou 
    - **Liga:** 6 times, ida e volta (10 rodadas), em 4 tiers de dificuldade. Em cada
      rodada você escolhe **assistir** (partida jogada no motor) ou **simular**
      (resultado estatístico). Terminar em 3º ou melhor libera o próximo tier, e a
-     premiação em sucata depende da colocação.
+     premiação em sucata depende da colocação. A **formação** do time é escolhida no painel do
+     próximo jogo, na aba LIGA.
    - **Habilidades, itens e visual (Fase 4, Onda B)** - liberados ao concluir o tier 1 do
      Modo Robôs ou o Ato 1 da campanha (antes disso tudo joga exatamente como antes):
      - **8º slot "Módulo"**, 30 modelos de peça, 6 relíquias únicas e 5 sets (Faxineiro,
@@ -227,7 +232,7 @@ torcida, ~1 min) sem trocar a música do menu. Qualquer tecla, clique, toque ou 
      Campeões) e 13 (O Chip Zero, contra o X-Ômega), com **3 finais** conforme as escolhas (um
      deles secreto). Mais **14 missões secundárias** no botão MISSÕES do mapa (as 4 "Fitas do Vô"
      levam ao final secreto). São ~160 cenas de diálogo. Retratos e
-     cenários são **desenhados por código** (sem imagens externas). O mapa tem uma aba por Ato
+     cenários são **pixel art desenhada por código** (sem imagens externas). O mapa tem uma aba por Ato
      e um botão de **MISSÕES** secundárias.
    - **Escolhas:** algumas cenas oferecem 2-3 opções que mudam falas seguintes e podem dar
      recompensas (sucata, XP, peça). Esc na cena abre um mini-menu; PULAR CENA pede
@@ -235,6 +240,7 @@ torcida, ~1 min) sem trocar a música do menu. Qualquer tecla, clique, toque ou 
    - **Torneios:** grupo de 4 + mata-mata com pênaltis (o Mundial tem também quartas).
      Você é sempre o mandante. Em cada partida escolhe **ASSISTIR** (partida jogada no
      motor, velocidade 1x/2x/4x/MAX nas teclas 1-4) ou **SIMULAR** (resultado estatístico).
+   - **Formação:** escolhida no painel da partida do torneio, no TREINO e na Torre do Pó.
    - **Chefes e "ajuda":** a cada derrota seguida contra o chefe ele perde 1 de Força
      (até -3); zera ao vencer.
    - **TREINO:** partidas ilimitadas contra um adversário mais fraco, na garagem ou no
@@ -267,6 +273,17 @@ torcida, ~1 min) sem trocar a música do menu. Qualquer tecla, clique, toque ou 
        do NG+ e da Torre (a loja e os drops nunca sorteiam). Sete cosméticos novos (antenas Para-raios,
        Coroa do Pó e Auréola; rastros Poeira Dourada e Cometa; comemorações Troféu e Relâmpagos) aparecem
        na loja como "prêmio" e não se compram.
+
+### Formação (todos os modos)
+Cinco formações: **EQUILIBRADA 1-2-1** (padrão), **RETRANCA 2-1-1**, **OFENSIVA 1-1-2**, **QUADRADO 2-2** e
+**PRESSÃO 1-2-1**. Fora do amistoso, o seletor `FORMAÇÃO: < EQUILIBRADA 1-2-1 >` (com mini-campo) fica
+acima do ASSISTIR: na campanha (torneio, treino e Torre do Pó), no Modo Robôs (aba LIGA) e na carreira
+(aba INÍCIO). Clique nas setas ou no seletor, ou use as setas esquerda/direita, **F** (próxima) e
+**Shift+F** (anterior). A escolha fica no save de cada modo (campo opcional `formation`; saves antigos
+carregam com a EQUILIBRADA). Só o seu time muda: a CPU joga com a formação padrão. Medido no motor: com robôs
+fracos as formações ficam perto da EQUILIBRADA; com robôs fortes RETRANCA, OFENSIVA e QUADRADO pioram e a
+PRESSÃO melhora. Esse efeito entra na "Sua Força" e no SIMULAR. Detalhes em
+[docs/specs/formacoes.md](docs/specs/formacoes.md).
 
 ### Controles (modos 1 e 2)
 | Ação | Modo 1 jogador | J1 | J2 |
@@ -326,9 +343,10 @@ do Pó.
 | 3 | **Campanha** "A Garagem do Vô": história, diálogos, torneios, chefes e treino (escola -> mundial) | pronta e jogável |
 | 4 | **Campanha Expandida**: torcida realista, câmera de estádio e desenhos mais detalhados (Onda A), peças/sets/relíquias/itens/cosméticos e 16 skills dos robôs (Onda B), Atos 2 e 3, missões secundárias e 3 finais (Onda C), NG+ "Turnê Lendária", Torre do Pó e peças Míticas (Onda D) | Ondas A, B, C e D (pós-campanha) prontas e publicadas ([docs/roadmap.md](docs/roadmap.md)) |
 | 5 | Editor de firmware (regras da IA em blocos) | planejada |
-| 6 | **Som**: efeitos e música sintetizados por código, mudo (M) e volumes (S/N) | pronta |
+| 6 | **Som**: efeitos e música sintetizados por código, sons gravados (torcida, gol, apito, "acabou!", caixa registradora), música "Into the Iron Horizon" nas partidas com a torcida de fundo em loop, mudo (M) e volumes (S/N) | pronta, ainda não publicada |
 
-O planejamento detalhado fica em [`docs/`](docs/INDEX.md).
+Também prontos e ainda não publicados: amistoso com escolha de times e formações e a escolha de
+formação na campanha, no Modo Robôs e na carreira. O planejamento detalhado fica em [`docs/`](docs/INDEX.md).
 
 **Robôs (Fase 1):** 6 chassis (Disco, Tanque, Velocista, Goleiro, Orbital, Titã) e 8 atributos
 (velocidade, aceleração, chute, controle/sucção, defesa, visão, bateria, QI) que
@@ -350,9 +368,9 @@ cd game && pygbag --template ../web/copaaspirador.tmpl --width 1100 --height 700
 # gerar build estático para publicar (itch.io, GitHub Pages...): game/build/web/
 cd game && pygbag --template ../web/copaaspirador.tmpl --width 1100 --height 700 --title "Copa Aspirador" --build .
 
-# antes de publicar: versiona os pacotes no index.html (game.apk?v=<sha>), para cada deploy
-# aparecer na hora (nem o Cloudflare nem o navegador servem o pacote antigo do cache)
-cd .. && tools/versionar_build.sh
+# antes de publicar: versiona os pacotes no index.html (game.apk?v=<sha>, cache busting), para
+# cada deploy aparecer na hora (nenhum cache serve o pacote antigo)
+cd .. && tools/versionar_build.sh            # ou: tools/versionar_build.sh <pasta_do_build>
 ```
 
 ## Testes
@@ -366,20 +384,20 @@ export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy
 .venv/bin/python tests/test_parts_v2.py               # catálogo novo: modelos, relíquias, módulos e sets
 .venv/bin/python tests/test_skills.py                  # dados das skills, árvore, carga, tática e força calibrada
 .venv/bin/python tests/test_skills_engine.py           # skills no motor: cada uma muda o lance, disparos, FX (~minutos)
-.venv/bin/python tests/test_robots_ui.py               # telas do Modo Robôs
+.venv/bin/python tests/test_robots_ui.py               # telas do Modo Robôs e seletor de formação (Modo Robôs, carreira, save)
 .venv/bin/python tests/test_visual.py                  # cores dos clubes, efeitos, pausa, save
 .venv/bin/python tests/test_story.py                   # dados da campanha (cenas, textos, torneios, capítulos, recompensas)
 .venv/bin/python tests/test_campaign.py                # lógica da campanha (torneios, pity, treino, recompensas)
 .venv/bin/python tests/test_campaign_save.py           # save da campanha (validação, reparo, save inválido)
 .venv/bin/python tests/test_campaign_migration.py      # migração v1 -> v2 -> v3 (4 saves reais do cap. 5, save terminado) e builds antigos lendo o save novo
-.venv/bin/python tests/test_campaign_ui.py             # telas da campanha (menu, mapa por Ato, missões, diálogo, torneio, fim e galeria)
+.venv/bin/python tests/test_campaign_ui.py             # telas da campanha (menu, mapa por Ato, missões, diálogo, torneio, fim e galeria, formação)
 .venv/bin/python tests/test_portraits.py               # retratos e cenários desenhados por código
 .venv/bin/python tests/test_prefs.py                   # preferências do jogador (store, valor inválido -> padrão)
 .venv/bin/python tests/test_friendly.py                # amistoso: times/formações, padrão idêntico ao motor antigo, tela, prefs, zero Surface
 .venv/bin/python tests/test_sfx.py                     # som: buffers sintetizados, arquivos OGG (trilhas, efeitos, motor), música + torcida da partida, throttle, mudo
 .venv/bin/python tests/test_crowd.py                   # torcida: locais, reações, extras, LOD, zero Surface por quadro
 .venv/bin/python tests/test_fireworks.py                # fogos do gol/vitória, modo demo, pisos do campo, nomes em caixa alta
-.venv/bin/python tests/test_camera.py                  # câmera de estádio: começa sempre em ESTÁDIO, tecla C, gol não troca, zero Surface
+.venv/bin/python tests/test_camera.py                  # câmera de estádio: começa sempre em ESTÁDIO, C só na pausa, gol não troca, zero Surface
 .venv/bin/python tests/test_narration.py               # narrador/comentarista: catálogo, fila sem spam, nomes, faixa, zero Surface
 .venv/bin/python tests/test_robot_art.py               # robôs: chassis, peças visíveis, cache, FX, local da torcida por modo
 .venv/bin/python tests/test_arena.py                   # modificadores de arena da Torre do Pó (desligados fora dela, efeito, zero Surface)
@@ -400,6 +418,7 @@ Os testes da campanha também não gravam nos saves reais. Os de partida são le
 .venv/bin/python tests/calib_campaign.py [--n 200] [--skills] [--procs 4]  # calibra a simulação da campanha (SIM_BIAS) contra o motor; pesado, opcional
 .venv/bin/python tests/calib_campaign.py --post --n 100  # NG+ e Torre do Pó (com modificadores) no motor x SIMULAR (~20 min)
 .venv/bin/python tests/calib_skills.py               # mede a força de cada skill no motor (tabela SKILL_FORCE); muito pesado
+.venv/bin/python tests/calib_formations.py [--n 300] [--procs 4] [--mode robots|friendly] [--all]  # balanceamento das formações no motor (CPU x CPU); pesado
 ```
 Utilitários do harness (`tests/sim_harness.py`): `golden`/`golden-new` com
 `--write` (regrava a baseline) ou `--check`, `run <ovrA> <ovrB> <n> [seed0] [legacy]`
@@ -418,11 +437,14 @@ Utilitários do harness (`tests/sim_harness.py`): `golden`/`golden-new` com
 - `game/store.py`: armazenamento de texto (`localStorage` no navegador, arquivo em `~` no desktop)
 - `game/prefs.py`: preferências do jogador (`soccerpy_prefs_v1`: torcida ALTA/MEDIA/OFF, tecla T; som `sfx_vol`/`music_vol` 0-3 e `mute`, teclas S/N/M; última escolha do amistoso `fr_t0/fr_t1/fr_f0/fr_f1`), com sanitize e padrão
 - `game/friendly.py` / `game/friendly_ui.py`: amistoso com escolha de times (29, de todos os modos) e formações (5), puro, e a tela de escolha
+- `game/formations.py`: as 5 formações (dados puros, compartilhados por amistoso, campanha, Modo Robôs e carreira; sanitize e o que o motor recebe)
+- `game/formation_ui.py`: mini-campo e seletor `FORMAÇÃO: < ... >` (clique e teclado) usados nas telas de partida
 - `game/sfx.py`: efeitos sonoros sintetizados, tabela única reação -> sons gravados (`FILE_SFX`, com variações derivadas em runtime e saco embaralhado), conversão para o formato do mixer, throttle, volumes/mudo, a música no canal reservado e a playlist do menu (`game/audio/*.ogg`, via `pygame.mixer.music`)
 - `game/music.py`: trilhas chiptune (menu, partida, jingles de vitória/derrota) escritas como texto e sintetizadas compasso a compasso
 - `game/crowd.py`: torcida (locais, espectadores pré-renderizados, reações, confete/LED/telão "AO VIVO", LOD) e a geometria das câmeras PERTO/ESTÁDIO
 - `game/narration.py`: narrador (Tonho) e comentarista (Cleide): catálogo de falas, fila sem spam e a faixa de TV da partida
 - `tools/normalizar_audio.sh`: deixa os áudios de `game/audio/` compactos e com o volume nivelado (ffmpeg; ver `docs/specs/som.md`)
+- `tools/versionar_build.sh`: versiona `game.apk`/`game.tar.gz` no `index.html` do build (`?v=<sha256 curto do game.apk>`; cache busting a cada deploy)
 - `tools/torcida_loop.sh`: gera `game/audio/torcida_loop.ogg` (torcida de fundo da partida, 24 s em loop sem emenda) a partir das 3 gravações de torcida
 - `game/robots_ui.py`: telas do Modo Robôs (hub, garagem, banco, loja, habilidades, mochila, visual, liga)
 - `game/career.py` / `game/career_ui.py`: carreira de clubes (liga, mercado, finanças, save) e suas telas

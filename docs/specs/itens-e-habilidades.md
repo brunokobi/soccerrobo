@@ -204,7 +204,7 @@ marca; RNG de FX), não por time, para não subir a versão do save. Catálogo d
 provisório. Partida idêntica com e sem cosméticos (teste); goldens 80/80.
 
 ## 10. Garage v2 (save)
-- `garage.VERSION` 1 -> 2. `MIGRATIONS[1] = fn(dict) -> dict`: para cada robô, `slots["modulo"] = None`, `skills = {"learned": {}, "equipped": [], "pts": 0}`, `look = {}`; no topo, `items = {}`, `cosmetics = []`, `cap = 10`; `v = 2`. `FIELDS` ganha `items`, `cosmetics`, `cap`. A chave de armazenamento continua `soccerpy_robots_v1`.
+- `garage.VERSION` 1 -> 2. `MIGRATIONS[1] = fn(dict) -> dict`: para cada robô, `slots["modulo"] = None`, `skills = {"learned": {}, "equipped": [], "pts": 0}`, `look = {}`; no topo, `items = {}`, `cosmetics = []`, `cap = 10`; `v = 2`. `FIELDS` ganha `items`, `cosmetics`, `cap`. A chave de armazenamento continua `soccerpy_robots_v1`. Depois, ainda na v2 e sem subir a versão, entrou o campo opcional `formation` (ausente/inválido -> `"equilibrada"`; ver [formacoes.md](formacoes.md)).
 - `_robot()` (sanitize): `skills.learned` é dict `{id: rank}` só com ids conhecidos e rank 1-3; `equipped` é subconjunto de `learned` (e de módulos equipados), sem duplicatas, com soma de `load` <= `LOAD_MAX`; `pts` int 0..99; `look` só com ids conhecidos; `level` 1..15 (e <= `cap`). `slots` aceita `modulo` (peça existente do slot certo).
 - `_piece()`: aceita modelos novos e `unique` + `uid` (relíquias, máx 1 de cada), `lvl` 0..5.
 - `MAX_FLAGS` 64 -> 128 e `MAX_INVENTORY` fica 200.

@@ -2,7 +2,7 @@
 
 ## 1. Estado atual
 
-Tabela original do planejamento (HEAD fd5e17b); a linha da Fase 4 está atualizada.
+Tabela original do planejamento (HEAD fd5e17b); as linhas das Fases 4 e 6 e a do Amistoso estão atualizadas.
 
 | Fase | Conteúdo | Situação |
 |---|---|---|
@@ -11,11 +11,12 @@ Tabela original do planejamento (HEAD fd5e17b); a linha da Fase 4 está atualiza
 | 3 | Campanha "A Garagem do Vô": Prólogo + 5 capítulos + epílogo, 53 cenas / 626 falas, 27 times, 12 personagens, 6 escolhas, torneios (grupo de 4 + mata-mata), chefes com pity, treino, save próprio `soccerpy_campaign_v1` (v1, sv1) | pronta e jogável |
 | 4 (nova) | **Campanha Expandida**: torcida + desenhos detalhados, itens/skills, campanha 3 atos | Ondas A (visual, torcida, câmera de estádio), B (peças, sets, módulo, 16 skills, itens, cosméticos) e C (campanha Prólogo + 13 capítulos em 3 Atos, 3 finais, 14 missões, calibrada no motor) e D (NG+ "Turnê Lendária", Torre do Pó, peças Míticas) prontas e publicadas |
 | 5 | Editor de firmware (regras da IA em blocos) | planejada (era a antiga Fase 4) |
-| 6 | **Som**: efeitos sonoros e música sintetizados por código (stdlib), mudo e volumes nas prefs | pronta ([specs/som.md](specs/som.md)) |
+| 6 | **Som**: efeitos sonoros e música sintetizados por código (stdlib), sons gravados, música nas partidas com a torcida de fundo em loop, mudo e volumes nas prefs | pronta, ainda não publicada ([specs/som.md](specs/som.md)) |
+| - | **Amistoso** com escolha de times e formações; **formação** também na Campanha, no Modo Robôs e na Carreira | pronto, ainda não publicado ([specs/formacoes.md](specs/formacoes.md)); balanceamento medido em `tests/calib_formations.py` (sem formação dominante até Força ~75; efeito no SIMULAR) |
 
 Números do código hoje:
-- ~17,9 mil linhas (game ~9,5 mil, tests ~8,4 mil).
-- Desenho em partida: 0,7 ms/frame.
+- ~48,9 mil linhas (game ~28,9 mil, tests ~20,0 mil); 532 testes.
+- Desenho em partida (câmera ESTÁDIO, gol em curso): 1,9-2,5 ms/frame; PERTO 1,0-1,3 ms (ver [specs/visual-desenhos-e-torcida.md](specs/visual-desenhos-e-torcida.md), 2.8).
 - Motor: 0,037 ms/step.
 - Goldens `golden` e `golden-new`: 80/80.
 - Calibração da campanha: F 44 -> 66 em 6 unidades. Metas medidas no motor: regulares 58-66%, SF 52-58%, chefes 45-52%.
@@ -40,11 +41,13 @@ Quatro frentes entregues em ondas jogáveis:
 
 ## 4. Fora de escopo
 - ~~Áudio ou música~~: saiu do "fora de escopo" e virou a **Fase 6 - Som** (pronta): efeitos e
-  música sintetizados por código, sem arquivos de áudio; o "som visual" continua. Ver
-  [specs/som.md](specs/som.md).
-- Imagens, fontes ou arquivos de áudio externos. Tudo continua desenhado (e sintetizado) por código.
+  música sintetizados por código e, depois, sons gravados em `game/audio/` (a síntese virou o plano B);
+  o "som visual" da torcida deu lugar à faixa do narrador. Ver [specs/som.md](specs/som.md).
+- Imagens e fontes externas. Tudo continua desenhado por código (áudio: ver acima).
 - Editor de firmware (Fase 5), multiplayer online, tradução.
-- Mudar o motor legado, os goldens, a carreira de clubes (`career.py`) ou os modos 1/2.
+- Mudar o motor legado, os goldens, a carreira de clubes (`career.py`) ou os modos 1/2 (na Fase 4; depois
+  dela vieram o Amistoso com escolha de times/formações e a formação na carreira, com o padrão idêntico ao
+  motor de sempre e os goldens 80/80).
 - Mudar a chave dos saves (`soccerpy_robots_v1` e `soccerpy_campaign_v1` continuam; só o campo `v` interno sobe).
 
 ## 5. Princípios (o que não pode quebrar)

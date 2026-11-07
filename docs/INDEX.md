@@ -10,8 +10,9 @@ Planejamento e especificações do jogo. O código e os comandos do dia a dia es
 | [specs/itens-e-habilidades.md](specs/itens-e-habilidades.md) | Peças de 14 para ~36 modelos, 8º slot "Módulo", sets, relíquias únicas, consumíveis de partida, cosméticos e o sistema de 16 skills dos robôs (gatilhos, efeitos no motor, cooldown, custo de bateria, como se ganham), integração no motor sem quebrar os goldens, calibração e garage v2 |
 | [specs/visual-desenhos-e-torcida.md](specs/visual-desenhos-e-torcida.md) | Torcida nas arquibancadas (geometria, técnica sem Surface por frame, orçamento de desempenho, reações por evento, densidade por capítulo, narrador e comentarista na faixa de TV, telão AO VIVO, câmera ESTÁDIO em toda partida), robôs com peças visíveis e animações, retratos e cenários mais detalhados, personagens em pixel art (estilo padrão: técnica, roupas/acessórios por personagem, humores, busto, cache e custo), e como testar |
 | [specs/som.md](specs/som.md) | Fase 6 - Som: catálogo de efeitos e onde tocam, trilhas chiptune, síntese (stdlib, 22050 Hz), formato do mixer, prefs (M/S/N), limites de vozes e throttle, navegador (pygbag) e medições; reações da torcida (tabela única, variações derivadas, saco embaralhado), música da partida + torcida de fundo em loop tocando juntas (volumes, RAM, `tools/torcida_loop.sh`) e áudios compactos com volume nivelado (`tools/normalizar_audio.sh`) |
+| [specs/formacoes.md](specs/formacoes.md) | Formações (5) em todos os modos: dados compartilhados (`formations.py`), seletor com mini-campo (`formation_ui.py`) no Amistoso, na Campanha (torneio, treino, Torre), no Modo Robôs (aba LIGA) e na Carreira (aba INÍCIO), teclas, motor (padrão = motor de sempre), campo opcional `formation` nos saves, CPU na padrão; balanceamento medido em `tests/calib_formations.py` (sem formação dominante até Força ~75; efeito no SIMULAR) |
 | [baseline-fase4.md](baseline-fase4.md) | Medições de referência antes da Fase 4 (commit 8a467a3): `draw_ms`, `menu_ms`, `ms_step`, goldens e resumo da calibragem da campanha |
-| [img/](img/) | Capturas de tela usadas no README (menu, partida, amistoso, campanha, garagem, habilidades, Mochila, cosméticos). Para regerar: rode `tests/test_robots_ui.py`, `tests/test_campaign_ui.py` e `tests/sim_harness.py camera-shots` com `SOCCERPY_SHOTS_DIR=<pasta>` e copie as imagens escolhidas |
+| [img/](img/) | Capturas de tela usadas no README (menu, partida com a faixa do narrador, amistoso, formação, campanha, garagem, habilidades, Mochila, cosméticos, Torre). Para regerar, com `SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy SOCCERPY_SHOTS_DIR=<pasta>`: `tests/sim_harness.py ui-shots` (menu `a7_menu.png`, gol e narração) e `camera-shots`; `tests/test_campaign_ui.py <teste>` (ex.: `test_tourney_group_table_bracket_and_labels` -> `tourney_knockout.png`, `test_tower_screen_sim_watch_marks_and_restart` -> `d2_torre_tela.png`, `test_formation_selector_tourney_training_and_save` -> `formacao_torneio.png`); `tests/test_robots_ui.py test_formation_selector_robots_hub_and_save` (`formacao_robos.png`, aba LIGA); `tests/test_friendly.py` (tela do amistoso). A partida do README é um Modo Robôs no `estadio` com a garagem `sim_harness.loaded_garage()`, capturada após ~12 s de jogo. Confira cada imagem e copie só as escolhidas |
 | [specs/plano-de-implementacao.md](specs/plano-de-implementacao.md) | Ondas 0, A (visual), B (itens/skills), C (campanha), D (pós-campanha) em passos pequenos com arquivos e validação; estratégia de testes; riscos; decisões para o dev |
 
 ## Estado
@@ -41,7 +42,20 @@ Planejamento e especificações do jogo. O código e os comandos do dia a dia es
     [specs/plano-de-implementacao.md](specs/plano-de-implementacao.md)).
 - Fase 5 (Editor de firmware): planejada
 - Amistoso com escolha de times (29, de todos os modos) e formações (5) antes da partida (`game/friendly.py`,
-  `game/friendly_ui.py`; padrão idêntico ao motor antigo, goldens 80/80) e música nas partidas
-  (`partida_musica.ogg`) junto da torcida de fundo em loop: prontos, ainda não publicados.
+  `game/friendly_ui.py`; padrão idêntico ao motor antigo, goldens 80/80): pronto, ainda não publicado.
+- Formação em todos os modos (branch `feat/formacao-todos-os-modos`): o mesmo seletor na Campanha
+  (torneio, treino, Torre), no Modo Robôs (aba LIGA) e na Carreira (aba INÍCIO), salvo como campo opcional
+  `formation` (garage v2 sem subir versão; carreira idem), CPU na padrão
+  ([specs/formacoes.md](specs/formacoes.md)): pronta, ainda não publicada; balanceamento medido em
+  `tests/calib_formations.py` (sem formação dominante até Força ~75; o efeito por Força entra no SIMULAR).
 - Fase 6 (Som): **pronta** — efeitos e música sintetizados por código (`game/sfx.py`, `game/music.py`),
-  sons gravados em `game/audio/` (músicas de menu/robôs/copas, torcida, gol, apito, trave, motor e desligar dos robôs), mudo (M) e volumes (S/N) nas prefs, testado no desktop e no navegador (pygbag); ainda não publicada
+  sons gravados em `game/audio/` (músicas de menu/robôs/copas, torcida com variações em saco embaralhado,
+  gol, apito, "acabou!", caixa registradora no card do resumo, trave, motor e desligar dos robôs), música
+  "Into the Iron Horizon" (`partida_musica.ogg`) nas partidas junto da torcida de fundo em loop
+  (`tools/torcida_loop.sh`), áudios nivelados (`tools/normalizar_audio.sh`), mudo (M) e volumes (S/N) nas
+  prefs, testado no desktop e no navegador (pygbag); ainda não publicada.
+- Partida e campanha: câmera ESTÁDIO em toda partida, sem troca automática (C só na pausa, só naquela
+  partida), faixa do narrador Tonho e da comentarista Cleide (`game/narration.py`), personagens e
+  cenários da campanha em pixel art (`game/portraits_pixel.py`, `game/scenes_pixel.py`).
+- Deploy: build do pygbag + `tools/versionar_build.sh` (cache busting do `game.apk`); ver o README.
+- Código: ~48,9 mil linhas (game ~28,9 mil, tests ~20,0 mil); 532 testes (`def test_` em `tests/test_*.py`).
