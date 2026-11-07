@@ -18,7 +18,7 @@ set -euo pipefail
 
 IN="${1:?uso: tools/normalizar_audio.sh <pasta_de_entrada> [pasta_de_saida]}"
 OUT="${2:-game/audio}"
-MUSIC="menu1 menu2 menu3 copas interno1 interno2 submenus torcida torcida_boca torcida_estadio"
+MUSIC="menu1 menu2 menu3 copas interno1 interno2 submenus torcida torcida_boca torcida_estadio partida_musica"
 LOOPS="robo_motor"
 mkdir -p "$OUT"
 TMP="$(mktemp -d)"

@@ -643,6 +643,89 @@ def test_game_hooks_and_keys():
         reset_prefs()
 
 
+def test_match_music_and_crowd_bed_together():
+    """Partida: musica (partida_musica, stream em loop) + torcida de fundo (Sound em loop no canal 2) juntas.
+    Musica segue N/music_vol, torcida segue S/sfx_vol; M corta as duas; fora da partida a torcida para."""
+    assert sfx.STREAMS["match"] == ("partida_musica.ogg",)
+    for f in ("partida_musica.ogg", sfx.BED_FILE):
+        p = os.path.join(sfx.AUDIO_DIR, f)
+        assert os.path.isfile(p), f
+    assert os.path.getsize(os.path.join(sfx.AUDIO_DIR, "partida_musica.ogg")) < 1_200_000   # 179 s mono 22 kHz q2
+    assert os.path.getsize(os.path.join(sfx.AUDIO_DIR, sfx.BED_FILE)) < 300_000
+    for old in ("torcida.ogg", "torcida_boca.ogg", "torcida_estadio.ogg"):   # viraram o loop (fora do apk)
+        assert not os.path.isfile(os.path.join(sfx.AUDIO_DIR, old)), old
+    reset_prefs()
+    try:
+        if not _init_or_skip():
+            return
+        while not sfx.pump(50.0):
+            pass
+        bed = sfx.S.bed
+        assert bed is not None
+        assert abs(bed.get_length() - 24.0) < 0.05, bed.get_length()       # ~24 s de loop
+        assert len(bed.get_raw()) < 5_000_000                               # RAM decodificada (~4,2 MB)
+        assert sfx.S.bed_chan is not None and pygame.mixer.get_num_channels() == sfx.N_CHANNELS
+        sfx.tick("menu")
+        assert sfx.S.stream == "menu" and not sfx.S.bed_on
+        sfx.tick("match")
+        assert sfx.S.stream == "match" and sfx.S.bed_on and sfx.S.bed_chan.get_busy()
+        assert pygame.mixer.music.get_busy()
+        sfx.tick("match")                                                   # quadro seguinte: nada muda
+        assert sfx.S.stream == "match" and sfx.S.pl_idx["match"] == 1
+        mg = sfx.music_gain("match")
+        assert abs(mg - sfx.LEVEL_GAIN["2"] * sfx.MATCH_MUSIC_GAIN) < 1e-9
+        assert sfx.S.bed_chan.get_volume() <= sfx.BED_VOL * sfx.LEVEL_GAIN["2"] + 0.01   # (fade-in em curso)
+        assert mg < sfx.BED_VOL * sfx.sfx_gain()                             # musica por baixo da torcida
+        prefs.set("music_vol", "0")                                         # N: musica desligada...
+        sfx._apply_volumes()
+        sfx.tick("match")
+        assert sfx.S.stream is None and sfx.S.bed_on                        # ...a torcida continua
+        prefs.set("music_vol", "2")
+        prefs.set("sfx_vol", "0")                                           # S: efeitos/torcida desligados...
+        sfx._apply_volumes()
+        sfx.tick("match")
+        assert sfx.S.stream == "match" and not sfx.S.bed_on                 # ...a musica continua
+        prefs.set("sfx_vol", "2")
+        sfx.tick("match")
+        assert sfx.S.bed_on
+        sfx.toggle_mute()                                                   # M: as duas param
+        sfx.tick("match")
+        assert sfx.S.stream is None and not sfx.S.bed_on
+        sfx.toggle_mute()
+        sfx.tick("match")
+        assert sfx.S.stream == "match" and sfx.S.bed_on
+        sfx.tick("cups")                                                    # saiu da partida: torcida para
+        assert sfx.S.stream == "cups" and not sfx.S.bed_on
+    finally:
+        sfx.shutdown()
+        reset_prefs()
+
+
+def test_crowd_bed_loops_without_seam():
+    """O loop da torcida emenda o fim no comeco sem salto (crossfade do tools/torcida_loop.sh)."""
+    reset_prefs()
+    try:
+        if not _init_or_skip():
+            return
+        while not sfx.pump(50.0):
+            pass
+        rate, chans, kind = sfx.S.fmt
+        a = array("h" if kind == "h" else "f")
+        a.frombytes(sfx.S.bed.get_raw())
+        mono = a[0::chans]
+        d = sorted(abs(mono[i + 1] - mono[i]) for i in range(0, len(mono) - 1, 7))
+        p99 = d[int(len(d) * 0.99)]
+        assert abs(mono[0] - mono[-1]) <= p99, (mono[0], mono[-1], p99)
+        w = rate // 2                                                       # 0,5 s das pontas: mesmo volume
+        def rms(x):
+            return (sum(v * v for v in x) / len(x)) ** 0.5
+        r0, r1 = rms(mono[:w]), rms(mono[-w:])
+        assert 0.6 < r0 / r1 < 1.6, (r0, r1)
+    finally:
+        sfx.shutdown()
+        reset_prefs()
+
+
 def test_never_touched_real_store():
     assert FORBIDDEN == []
 

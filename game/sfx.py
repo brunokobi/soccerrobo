@@ -3,7 +3,9 @@
 
 Trilhas em arquivo (STREAMS, tocadas em stream por pygame.mixer.music, uma faixa depois da outra):
 "menu" = menu1/menu2 alternando (comeca logo apos o clique da tela de carregamento), "sub" = tela de
-robos, "cups" = carreira e campanha, "match" = torcida durante a partida. Efeitos em arquivo
+robos, "cups" = carreira e campanha, "match" = musica da partida (partida_musica, em loop). A torcida de
+fundo da partida (BED_FILE, ~24 s em loop sem emenda) toca JUNTO, como Sound num canal reservado (o stream
+e um so). Efeitos em arquivo
 (FILE_SFX): grito de gol, apito final, torcida na trave (soma ao CLANG sintetizado) e o robo
 desligando; o motor dos robos (AMB_FILE) roda em loop num canal proprio enquanto a bola rola.
 Faltou arquivo ou nao abriu -> volta o som sintetizado equivalente (music.py / receitas daqui).
@@ -15,8 +17,8 @@ Uso pelo jogo (soccer.py / *_ui.py):
     sfx.pre_init()            antes de pygame.init() (pede 22050 Hz estereo ao mixer)
     sfx.init()                depois de criar o Game: abre o mixer (falhou -> tudo vira no-op)
     sfx.tick(track, amb)      1x por quadro: gera/carrega os buffers aos poucos (orcamento de ms),
-                              troca a trilha ("menu", "sub", "cups", "match" ou None) e liga/desliga
-                              o motor dos robos (amb)
+                              troca a trilha ("menu", "sub", "cups", "match" ou None), liga/desliga
+                              o motor dos robos (amb) e a torcida de fundo (com a trilha "match")
     sfx.play(id)              efeito (com throttle por id e limite de vozes); id desconhecido = nada
     sfx.result(meus, deles)   jingle de vitoria/derrota (empate = efeito curto)
     sfx.toggle_mute() / cycle("sfx_vol" | "music_vol")   prefs gravadas (tecla M / S / N)
@@ -42,8 +44,9 @@ MIXER_RATE = 44100
 TWO_PI = 2.0 * math.pi
 LEVEL_GAIN = {"0": 0.0, "1": 0.35, "2": 0.65, "3": 1.0}
 LEVEL_NAMES = {"0": "DESL.", "1": "BAIXO", "2": "MÉDIO", "3": "ALTO"}
-MATCH_MUSIC_GAIN = 0.85                      # torcida de fundo da partida (um pouco abaixo dos efeitos)
-N_CHANNELS = 16                              # canal 0 = musica, 1 = motor dos robos; 14 vozes de efeito
+MATCH_MUSIC_GAIN = 0.5                       # musica da partida: por baixo da torcida, dos efeitos e dos gritos
+N_CHANNELS = 17                              # canal 0 = musica sintetizada/jingle, 1 = motor, 2 = torcida; 14 vozes
+N_RESERVED = 3
 MUSIC_FADE_MS = 400
 PUMP_MS = 5.0                                # orcamento de geracao por quadro (ms de relogio)
 WEB = sys.platform == "emscripten"
@@ -52,8 +55,12 @@ STREAMS = {                                  # trilha -> faixas (em ciclo; uma d
     "menu": ("menu1.ogg", "menu2.ogg", "menu3.ogg"),            # menu principal
     "sub": ("interno1.ogg", "interno2.ogg", "submenus.ogg"),     # robos
     "cups": ("copas.ogg", "interno1.ogg", "interno2.ogg"),       # carreira e campanha
-    "match": ("torcida.ogg", "torcida_boca.ogg", "torcida_estadio.ogg"),   # torcida de fundo, alternando
+    "match": ("partida_musica.ogg",),                                       # musica das partidas (loop)
 }
+# torcida de fundo da partida: Sound em loop no canal 2 enquanto a trilha e "match" (volume = sfx_vol, nao a
+# musica). Feito por tools/torcida_loop.sh com as 3 gravacoes de torcida (crossfade, sem emenda audivel);
+# decodificado (44,1 kHz estereo 16-bit) ocupa ~4,1 MB. Sem o arquivo: partida so com a musica.
+BED_FILE, BED_VOL, BED_FADE_MS = "torcida_loop.ogg", 0.85, 600
 SYNTH_TRACK = {"menu": "menu", "sub": "menu", "cups": "menu", "match": "match"}   # sem arquivo
 # TABELA UNICA reacao -> sons gravados. id -> (variacoes, throttle s, vozes max, volume). Cada variacao e
 # um arquivo de game/audio ("x.ogg") ou uma variacao DERIVADA em runtime dele: ("x.ogg", velocidade,
@@ -480,6 +487,9 @@ class _State:
         self.amb = None              # Sound do motor dos robos
         self.amb_chan = None         # canal reservado do motor
         self.amb_on = False
+        self.bed = None              # Sound da torcida de fundo (BED_FILE)
+        self.bed_chan = None         # canal reservado da torcida
+        self.bed_on = False
 
 
 S = _State()
@@ -573,9 +583,10 @@ def init():
         else:
             raise RuntimeError("formato de audio nao suportado: %r" % (size,))
         mx.set_num_channels(N_CHANNELS)
-        mx.set_reserved(2)
+        mx.set_reserved(N_RESERVED)
         S.chan = mx.Channel(0)
         S.amb_chan = mx.Channel(1)
+        S.bed_chan = mx.Channel(2)
         S.fmt = (int(rate), max(1, int(chans)), kind)
         _mixer = mx
         S.stream_ok = {t: _stream_ok(t) for t in STREAMS}
@@ -596,8 +607,10 @@ def shutdown():
     try:
         if S.ok and _mixer is not None:
             _mixer.stop()                       # efeitos longos (gritos, vaias) nao seguram canais
-        elif S.amb_chan is not None:
-            S.amb_chan.stop()
+        else:
+            for ch in (S.amb_chan, S.bed_chan):
+                if ch is not None:
+                    ch.stop()
     except Exception:  # noqa: BLE001
         pass
     S.__init__()
@@ -629,7 +642,8 @@ def _stream_next(track, gain):
     try:
         _mixer.music.load(_path(name))
         _mixer.music.set_volume(gain)
-        _mixer.music.play(fade_ms=MUSIC_FADE_MS)
+        # faixa unica (partida): loop no proprio stream, sem a pausa de recarregar o arquivo no fim
+        _mixer.music.play(loops=-1 if len(names) == 1 else 0, fade_ms=MUSIC_FADE_MS)
         S.stream = track
         return True
     except Exception as e:  # noqa: BLE001  (arquivo nao abriu: cai para a trilha sintetizada)
@@ -790,6 +804,17 @@ def _load_amb():
         _log("[som] motor dos robos falhou: %r" % (e,))
 
 
+def _load_bed():
+    """Torcida de fundo da partida (loop). Vazio ou falhou -> partida so com a musica."""
+    try:
+        if os.path.isfile(_path(BED_FILE)):
+            snd = _mixer.Sound(_path(BED_FILE))
+            if snd.get_length() > 0:
+                S.bed = snd
+    except Exception as e:  # noqa: BLE001
+        _log("[som] torcida de fundo falhou: %r" % (e,))
+
+
 def _build_sfx(sid):
     t = time.perf_counter()
     snd = _mixer.Sound(buffer=fit(render(sid), *S.fmt))
@@ -822,6 +847,8 @@ def _builder():
                 _log("[som] variacao %s %r falhou: %r" % (sid, spec, e))
     S.src.clear()                               # fontes so de derivadas (ex.: ole2 de 14 s) saem da memoria
     _load_amb()
+    yield
+    _load_bed()
     yield
     need = {SYNTH_TRACK[t] for t in STREAMS if not S.stream_ok.get(t)}   # so as trilhas sem arquivo
     replaced = {k for k in S.files if k not in FILE_LAYER}              # gravado substitui
@@ -983,6 +1010,12 @@ def _apply_volumes():
                 S.amb_on = False
             else:
                 S.amb_chan.set_volume(AMB_VOL * g)
+        if S.bed_chan is not None:
+            if g <= 0.0:
+                S.bed_chan.stop()
+                S.bed_on = False
+            else:
+                S.bed_chan.set_volume(BED_VOL * g)
         if S.stream:
             mg = music_gain(S.stream)
             if mg <= 0.0:
@@ -1052,14 +1085,31 @@ def amb_tick(on):
         S.amb_on = False
 
 
+def bed_tick(on):
+    """Torcida de fundo em loop no canal 2 enquanto `on` (trilha "match"), no volume dos efeitos."""
+    if S.bed is None or S.bed_chan is None:
+        return
+    g = sfx_gain()
+    if on and g > 0.0:
+        if not S.bed_on:
+            S.bed_chan.set_volume(BED_VOL * g)
+            S.bed_chan.play(S.bed, loops=-1, fade_ms=BED_FADE_MS)
+            S.bed_on = True
+            _log("[som] partida: torcida de fundo (canal 2) + musica %s" % (S.stream or S.cur,))
+    elif S.bed_on:
+        S.bed_chan.fadeout(BED_FADE_MS)
+        S.bed_on = False
+
+
 def tick(track, amb=False):
-    """1x por quadro (loop principal): geracao em segundo plano + musica + motor. Nunca levanta."""
+    """1x por quadro (loop principal): geracao em segundo plano + musica + torcida + motor. Nunca levanta."""
     if not S.ok:
         return
     try:
         if S.gen is not None:
             pump()
         music_tick(track)
+        bed_tick(track == "match")
         amb_tick(amb)
     except Exception as e:  # noqa: BLE001
         S.err = repr(e)
