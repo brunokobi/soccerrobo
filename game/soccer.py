@@ -2006,6 +2006,7 @@ class Game:
             self.fireworks_show(WIN_ROCKETS, self.teams[0 if a > c else 1].color)
         if self.speed_idx != 3:
             sfx.play("robot_off")                       # apito final: os robos desligam
+            sfx.play("end_voice")                       # "acabou!"
             win = 0 if a > c else 1
             lost = a != c and self.is_rival(win)
             if lost:                                    # derrota do jogador: lamento + vaia
@@ -2016,12 +2017,7 @@ class Game:
                     sfx.play("win_crowd")
                 sfx.play("applause")
         if not self.career_match and self.speed_idx != 3 and not self.demo:   # amistoso: jingle (modo 1 = visao do humano)
-            if self.mode == 1:
-                sfx.result(a, c)
-            elif a != c:
-                sfx.result(1, 0)
-            else:
-                sfx.play("draw")
+            sfx.result(a, c)                            # card do resumo: caixa registradora
 
     def snd(self, sid):
         """Efeito sonoro de lance do motor (no-op em MAX e antes de sfx.init)."""

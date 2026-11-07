@@ -230,11 +230,14 @@ def test_runtime_build_throttle_and_mute():
         assert sfx.S.stream == "menu" and sfx.S.cur is None
         sfx.music_tick("match")
         assert sfx.S.stream == "match"                     # torcida em arquivo
-        assert sfx.result(3, 1) is True and sfx.S.jingle and sfx.S.cur == "win"
+        assert sfx.jingle("win") is True and sfx.S.jingle and sfx.S.cur == "win"
         sfx.music_tick("match")                            # jingle em curso: nao troca
         assert sfx.S.cur == "win" and sfx.S.stream == "match"   # torcida segue por baixo
         clk.t += 5.0
-        assert sfx.result(1, 1) is True                    # empate = efeito "draw"
+        assert sfx.result(3, 1) is True                    # card do resumo = caixa registradora
+        assert sfx.S.cur == "win"                          # nao mexe no canal da musica
+        clk.t += 5.0
+        assert sfx.result("x", 1) is False                 # placar invalido: nada
         prefs.set("music_vol", "0")
         sfx._apply_volumes()
         sfx.S.chan.stop()

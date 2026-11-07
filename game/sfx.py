@@ -67,7 +67,7 @@ FILE_SFX = {
     "goal": (("gol.ogg", "gol_grito.ogg", "gol_e_gol.ogg", "gol_olha_o_gol.ogg", "gol_brasil.ogg", "gol_we.ogg",
               ("gol_grito.ogg", 0.92, 0.0, 1.0), ("gol_e_gol.ogg", 1.08, 0.0, 1.0), ("gol.ogg", 0.94, 0.0, 1.0)),
              1.5, 1, 1.0),
-    "goal_opp": (("gol_adv1.ogg", "gol_adv2.ogg", "gol_adv3.ogg", "gol_adv4.ogg",
+    "goal_opp": (("gol_adv1.ogg", "gol_adv2.ogg", "gol_adv3.ogg", "gol_adv4.ogg", "gol_adv_nao.ogg",
                   ("gol_adv1.ogg", 0.93, 0.0, 1.0), ("gol_adv3.ogg", 1.07, 0.0, 1.0)), 1.5, 1, 1.0),
     # quase gol: do jogador (defesa/trave do rival) e contra o jogador
     "near": (("quase_uh.ogg", "defesa1.ogg", "defesa3.ogg", "derrota2.ogg", ("quase_uh.ogg", 0.9, 0.0, 1.0),
@@ -96,12 +96,15 @@ FILE_SFX = {
     "lose_crowd": (("derrota1.ogg", "derrota2.ogg", ("derrota2.ogg", 0.93, 0.0, 1.0)), 4.0, 1, 0.85),
     "click": (("click.ogg",), 0.05, 2, 0.8),
     "whistle_end": (("apito_final.ogg",), 1.5, 1, 0.8),
+    "end_voice": (("acabou.ogg",), 3.0, 1, 0.9),            # "acabou!" no apito final
+    "cash": (("caixa_registradora.ogg",), 0.5, 1, 0.9),     # card do resumo da partida
     "post": (("trave_torcida.ogg", "trave2.ogg", "trave3.ogg", ("trave_torcida.ogg", 0.9, 0.0, 0.9)), 0.4, 1, 0.85),
     "robot_off": (("robo_desligar.ogg",), 3.0, 1, 0.7),
 }
 # vozes faladas (repetidas cansam): arquivo -> intervalo minimo (s) entre duas vezes dele
 SPOKEN = {"inicio2.ogg": 60.0, "lamento3.ogg": 45.0, "defesa3.ogg": 35.0, "trave3.ogg": 35.0,
-          "derrota2.ogg": 35.0}
+          "derrota2.ogg": 35.0,
+          "gol_adv_nao.ogg": 20.0}
 DERIVE_MAX_S = 3.0
 DERIVE_CHUNK = 6000             # quadros por pedaco da geracao (um yield do _builder)
 DERIVE_FADE_S = 0.03
@@ -954,14 +957,12 @@ def jingle(jid):
 
 
 def result(mine, theirs):
-    """Fim de partida do ponto de vista do jogador: vitoria/derrota = jingle, empate = efeito."""
+    """Card do resumo da partida (qualquer placar): som de caixa registradora."""
     try:
         a, b = int(mine), int(theirs)
     except (TypeError, ValueError):
         return False
-    if a == b:
-        return play("draw")
-    return jingle("win" if a > b else "lose")
+    return play("cash")                       # card do resumo: caixa registradora (vitoria, empate ou derrota)
 
 
 def _apply_volumes():
