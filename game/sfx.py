@@ -35,6 +35,10 @@ from array import array
 import prefs
 
 SR = 22050                                   # taxa interna de sintese (mono, 16-bit)
+# taxa pedida ao mixer: 44,1 kHz (a mesma do navegador). Com 22 kHz o SDL_mixer do pygame 2.6.1 devolve
+# Sound VAZIO (get_length() == 0) para algumas gravacoes de 44,1 kHz (ex.: vaias, gol, inicio3, palmas3).
+# A sintese continua em SR e o fit() converte uma vez (44100 = 2 x 22050: repeticao por fatia).
+MIXER_RATE = 44100
 TWO_PI = 2.0 * math.pi
 LEVEL_GAIN = {"0": 0.0, "1": 0.35, "2": 0.65, "3": 1.0}
 LEVEL_NAMES = {"0": "DESL.", "1": "BAIXO", "2": "MÉDIO", "3": "ALTO"}
@@ -51,27 +55,57 @@ STREAMS = {                                  # trilha -> faixas (em ciclo; uma d
     "match": ("torcida.ogg", "torcida_boca.ogg", "torcida_estadio.ogg"),   # torcida de fundo, alternando
 }
 SYNTH_TRACK = {"menu": "menu", "sub": "menu", "cups": "menu", "match": "match"}   # sem arquivo
-FILE_SFX = {          # id -> (variacoes, throttle s, vozes max, volume); sorteia sem repetir a anterior
-    "goal": (("gol.ogg", "gol_grito.ogg", "gol_e_gol.ogg", "gol_olha_o_gol.ogg", "gol_brasil.ogg",
-              "gol_we.ogg"), 1.5, 1, 1.0),                    # gol do jogador (ou de qualquer um no 2P)
-    "goal_opp": (("gol_adv1.ogg", "gol_adv2.ogg", "gol_adv3.ogg", "gol_adv4.ogg"), 1.5, 1, 1.0),
-    "near": (("quase_uh.ogg",), 3.0, 1, 0.9),                # quase gol do jogador (defesa/trave)
-    "near_opp": (("quase_nao.ogg",), 3.0, 1, 0.9),           # quase leva um gol
+# TABELA UNICA reacao -> sons gravados. id -> (variacoes, throttle s, vozes max, volume). Cada variacao e
+# um arquivo de game/audio ("x.ogg") ou uma variacao DERIVADA em runtime dele: ("x.ogg", velocidade,
+# inicio, fim[, max_s]) = reamostra (velocidade != 1 muda tom e andamento: outra "torcida"), recorta o
+# trecho [inicio, fim) (fracoes da duracao), no maximo max_s (DERIVE_MAX_S) e suaviza as pontas. As
+# derivadas nao viram arquivo (o game.apk nao cresce) e sao geradas aos poucos no _builder. Sorteio:
+# "saco embaralhado" por id (RNG privado): toca todas antes de repetir e nunca a mesma duas vezes
+# seguidas. Vozes faladas (SPOKEN) tem intervalo proprio maior. Para trocar um som: mexa so aqui.
+FILE_SFX = {
+    # grito de gol a favor (jogador; no 2P, de qualquer um) e do adversario
+    "goal": (("gol.ogg", "gol_grito.ogg", "gol_e_gol.ogg", "gol_olha_o_gol.ogg", "gol_brasil.ogg", "gol_we.ogg",
+              ("gol_grito.ogg", 0.92, 0.0, 1.0), ("gol_e_gol.ogg", 1.08, 0.0, 1.0), ("gol.ogg", 0.94, 0.0, 1.0)),
+             1.5, 1, 1.0),
+    "goal_opp": (("gol_adv1.ogg", "gol_adv2.ogg", "gol_adv3.ogg", "gol_adv4.ogg",
+                  ("gol_adv1.ogg", 0.93, 0.0, 1.0), ("gol_adv3.ogg", 1.07, 0.0, 1.0)), 1.5, 1, 1.0),
+    # quase gol: do jogador (defesa/trave do rival) e contra o jogador
+    "near": (("quase_uh.ogg", ("quase_uh.ogg", 0.9, 0.0, 1.0), ("uhhh_torcida.ogg", 1.06, 0.0, 0.45)), 3.0, 1, 0.9),
+    "near_opp": (("quase_nao.ogg", ("quase_nao.ogg", 0.88, 0.0, 1.0), ("quase_nao.ogg", 1.12, 0.0, 1.0)),
+                 3.0, 1, 0.9),
     "kickoff_voice": (("comecou.ogg",), 2.0, 1, 0.9),        # "comecou!" no 1o pontape
-    "applause": (("palmas.ogg",), 4.0, 1, 0.6),              # palmas no fim da partida
-    "crowd_chant": (("palmas.ogg",), 6.0, 1, 0.5),         # coro/ola da torcida (palmas no ritmo)
-    # reacoes da torcida gravadas (sorteadas sem repetir): "uuuh" da chance no lugar do sintetizado,
-    # palmas junto da defesa e a torcida aplaudindo o pontape inicial e o gol do jogador
-    "ooh": (("uhhh_torcida.ogg", "quase_uh.ogg"), 1.6, 1, 0.75),   # 2 opcoes: sempre intercala
-    "ole": (("ole.ogg",), 3.0, 1, 0.8),                     # "olé!" da torcida (drible/defesa do jogador)
-    "boo": (("vaias.ogg",), 6.0, 1, 0.6),                   # vaia: gol do rival / derrota do jogador
-    "save": (("palmas.ogg",), 2.5, 1, 0.45),
-    "crowd_cheer": (("palmas.ogg",), 5.0, 1, 0.55),
+    "applause": (("palmas.ogg", ("palmas.ogg", 0.94, 0.0, 0.45), ("palmas.ogg", 1.06, 0.5, 1.0)), 4.0, 1, 0.6),
+    "crowd_chant": (("palmas.ogg", ("palmas.ogg", 0.94, 0.0, 0.45), ("palmas.ogg", 1.06, 0.5, 1.0)), 6.0, 1, 0.5),
+    "ooh": (("uhhh_torcida.ogg", "quase_uh.ogg", ("uhhh_torcida.ogg", 0.9, 0.0, 0.55),
+             ("quase_uh.ogg", 1.12, 0.0, 1.0)), 1.6, 1, 0.75),          # "uuuh" da chance
+    "ole": (("ole.ogg", ("ole.ogg", 0.92, 0.0, 1.0), ("ole.ogg", 1.08, 0.0, 1.0)), 3.0, 1, 0.8),
+    "boo": (("vaias.ogg", ("vaias.ogg", 0.9, 0.0, 0.33), ("vaias.ogg", 1.1, 0.4, 0.8)), 6.0, 1, 0.6),
+    "save": (("palmas.ogg", ("palmas.ogg", 1.0, 0.35, 0.6), ("palmas.ogg", 1.1, 0.62, 0.9)), 2.5, 1, 0.45),
+    "crowd_cheer": (("palmas.ogg", ("palmas.ogg", 1.08, 0.0, 0.45), ("palmas.ogg", 0.95, 0.4, 0.85)), 5.0, 1, 0.55),
     "click": (("click.ogg",), 0.05, 2, 0.8),
     "whistle_end": (("apito_final.ogg",), 1.5, 1, 0.8),
-    "post": (("trave_torcida.ogg",), 0.4, 1, 0.85),
+    "post": (("trave_torcida.ogg", ("trave_torcida.ogg", 0.9, 0.0, 0.9), ("trave_torcida.ogg", 1.1, 0.0, 0.8)),
+             0.4, 1, 0.85),
     "robot_off": (("robo_desligar.ogg",), 3.0, 1, 0.7),
 }
+SPOKEN = {}                     # arquivo de voz falada -> intervalo minimo (s) entre duas vezes dele
+DERIVE_MAX_S = 3.0
+DERIVE_CHUNK = 6000             # quadros por pedaco da geracao (um yield do _builder)
+DERIVE_FADE_S = 0.03
+
+
+def file_names(sid=None):
+    """Arquivos de game/audio usados pelos efeitos (de `sid` ou de todos), sem repetir."""
+    out = []
+    for k, v in FILE_SFX.items():
+        if sid is None or k == sid:
+            for f in v[0]:
+                name = f if isinstance(f, str) else f[0]
+                if name not in out:
+                    out.append(name)
+    return out
+
+
 FILE_LAYER = ("post", "save")                       # o arquivo soma ao sintetizado; os outros substituem
 SYNTH_ALIAS = {"goal_opp": "goal"}           # sem arquivo: o efeito sintetizado equivalente
 AMB_FILE, AMB_VOL, AMB_FADE_MS = "robo_motor.ogg", 0.35, 300
@@ -422,6 +456,11 @@ class _State:
         self.files = {}              # id -> [Sound] carregados de arquivo (variacoes de FILE_SFX)
         self.var_last = {}           # id -> indice da ultima variacao tocada
         self.vrng = random.Random(4242)   # sorteio das variacoes (nunca o random global)
+        self.src = {}                # arquivo -> Sound carregado (fonte das variacoes derivadas)
+        self.derived = {}            # (id, especificacao derivada) -> Sound
+        self.names = {}              # id -> [arquivo de cada variacao carregada] (vozes faladas)
+        self.bag = {}                # id -> indices ainda nao tocados nesta volta (saco embaralhado)
+        self.spoke = {}              # arquivo falado -> instante em que tocou
         self.amb = None              # Sound do motor dos robos
         self.amb_chan = None         # canal reservado do motor
         self.amb_on = False
@@ -493,10 +532,10 @@ def labels():
 
 
 def pre_init():
-    """Antes de pygame.init(): pede 22050 Hz estereo 16-bit (o navegador pode impor outro formato)."""
+    """Antes de pygame.init(): pede MIXER_RATE (44,1 kHz) estereo 16-bit (o navegador pode impor outro)."""
     try:
         import pygame
-        pygame.mixer.pre_init(SR, -16, 2, 2048 if WEB else 512)
+        pygame.mixer.pre_init(MIXER_RATE, -16, 2, 2048 if WEB else 512)
     except Exception:  # noqa: BLE001
         pass
 
@@ -509,7 +548,7 @@ def init():
         import pygame
         mx = pygame.mixer
         if not mx.get_init():
-            mx.init(SR, -16, 2, 2048 if WEB else 512)
+            mx.init(MIXER_RATE, -16, 2, 2048 if WEB else 512)
         rate, size, chans = mx.get_init()
         if abs(size) == 16:
             kind = "h"
@@ -601,28 +640,129 @@ def _stream_stop():
 def _load_file(sid):
     """Carrega as variacoes do efeito `sid` (FILE_SFX). Nenhuma abriu -> fica o sintetizado."""
     names, _thr, _voices, vol = FILE_SFX[sid]
-    out = []
+    out, used = [], []
     for name in names:
+        if not isinstance(name, str):
+            continue                            # derivada: gerada depois (_derive)
         try:
             if os.path.isfile(_path(name)):
                 snd = _mixer.Sound(_path(name))
+                if snd.get_length() <= 0:       # nao decodificou (ex.: ogg 44,1 kHz num mixer de 22 kHz)
+                    raise RuntimeError("arquivo vazio depois de decodificar")
                 snd.set_volume(vol * sfx_gain())
+                S.src.setdefault(name, snd)
                 out.append(snd)
+                used.append(name)
         except Exception as e:  # noqa: BLE001
             _log("[som] efeito %s em arquivo falhou: %r" % (name, e))
     if out:
         S.files[sid] = out
+        S.names[sid] = used
+
+
+def _source(name):
+    """Sound da gravacao `name` (o carregado pelo FILE_SFX ou um novo). None se nao abrir."""
+    snd = S.src.get(name)
+    if snd is None:
+        try:
+            snd = _mixer.Sound(_path(name)) if os.path.isfile(_path(name)) else None
+            if snd is not None and snd.get_length() <= 0:
+                snd = None
+        except Exception:  # noqa: BLE001
+            snd = None
+        S.src[name] = snd
+    return snd
+
+
+def derive_frames(src, speed, a, b, chans, rate, maxs=DERIVE_MAX_S, chunk=DERIVE_CHUNK, fade_s=DERIVE_FADE_S):
+    """Gerador puro (sem pygame): `src` = array intercalado (chans canais). Reamostra o trecho [a, b) com
+    passo `speed` (vizinho mais proximo; so o canal 0, copiado nos outros: as gravacoes sao mono),
+    no maximo maxs segundos, com rampa de fade_s nas pontas. Cada yield = um pedaco; o ultimo valor
+    gerado e o array pronto (use `for out in ...: pass`)."""
+    frames = len(src) // chans
+    f0 = max(0, min(frames - 1, int(frames * a)))
+    f1 = max(f0 + 1, min(frames, int(frames * b)))
+    n = max(1, min(int((f1 - f0) / speed), int(maxs * rate)))
+    tc = src.typecode
+    mono = array(tc, bytes(n * src.itemsize))
+    j = 0
+    while j < n:
+        m = min(chunk, n - j)
+        mono[j:j + m] = array(tc, [src[(f0 + int((j + i) * speed)) * chans] for i in range(m)])
+        j += m
+        if j < n:
+            yield None
+    fl = min(n // 4, int(fade_s * rate))
+    conv = int if tc == "h" else float
+    for i in range(fl):
+        g = i / fl
+        mono[i] = conv(mono[i] * g)
+        mono[n - 1 - i] = conv(mono[n - 1 - i] * g)
+    if chans == 1:
+        yield mono
+        return
+    out = array(tc, bytes(n * chans * src.itemsize))
+    for c in range(chans):
+        out[c::chans] = mono
+    yield out
+
+
+def _derive(sid, spec):
+    """Gera (aos poucos) a variacao derivada `spec` e a soma as variacoes de `sid`."""
+    snd = S.derived.get((sid, spec))
+    if snd is None:
+        base = _source(spec[0])
+        if base is None or not S.files.get(sid):
+            return
+        rate, chans, kind = S.fmt
+        tc = "h" if kind == "h" else "f"
+        raw = base.get_raw()
+        step = array(tc).itemsize * chans
+        src = array(tc)
+        src.frombytes(raw[:len(raw) // step * step])
+        if len(src) < chans * 8:
+            return
+        out = None
+        maxs = spec[4] if len(spec) > 4 else DERIVE_MAX_S
+        for out in derive_frames(src, spec[1], spec[2], spec[3], chans, rate, maxs):
+            if out is None:
+                yield
+        snd = S.derived[(sid, spec)] = _mixer.Sound(buffer=out.tobytes())
+    snd.set_volume(FILE_SFX[sid][3] * sfx_gain())
+    S.files[sid].append(snd)
+    S.names[sid].append(spec[0])
+    yield
+
+
+def n_variants(sid):
+    """Quantas variacoes o id tem agora (gravadas + derivadas carregadas)."""
+    return len(S.files.get(sid, ()))
 
 
 def _pick_variant(sid, n):
-    """Indice da variacao: sorteado, nunca igual a anterior quando ha mais de uma."""
+    """Indice da variacao: "saco embaralhado" (RNG privado) -- toca todas antes de repetir e nunca a mesma
+    duas vezes seguidas; voz falada (SPOKEN) so volta depois do seu intervalo."""
     if n <= 1:
         return 0
+    names = S.names.get(sid) or ()
     last = S.var_last.get(sid)
-    k = S.vrng.randrange(n - 1 if last is not None else n)
-    if last is not None and k >= last:
-        k += 1
+    now = clock()
+
+    def ok(k):
+        nm = names[k] if k < len(names) else None
+        t = S.spoke.get(nm)
+        return nm not in SPOKEN or t is None or now - t >= SPOKEN[nm]
+
+    bag = [k for k in S.bag.get(sid, ()) if k < n]
+    if not any(k != last and ok(k) for k in bag):
+        bag = list(range(n))                    # volta nova (variacoes derivadas entram aqui tambem)
+    cand = [k for k in bag if k != last and ok(k)] or [k for k in range(n) if k != last] or [0]
+    k = cand[S.vrng.randrange(len(cand))]
+    bag.remove(k) if k in bag else None
+    S.bag[sid] = bag
     S.var_last[sid] = k
+    if k < len(names) and names[k] in SPOKEN:
+        S.spoke[names[k]] = now
     return k
 
 
@@ -656,6 +796,14 @@ def _builder():
         if sid not in S.files:
             _load_file(sid)
             yield
+    for sid, (variants, _t, _v, _g) in FILE_SFX.items():   # variacoes derivadas das gravacoes (runtime)
+        for spec in variants:
+            if isinstance(spec, str):
+                continue
+            try:
+                yield from _derive(sid, spec)
+            except Exception as e:  # noqa: BLE001  (sem a variacao: ficam as gravadas)
+                _log("[som] variacao %s %r falhou: %r" % (sid, spec, e))
     _load_amb()
     yield
     need = {SYNTH_TRACK[t] for t in STREAMS if not S.stream_ok.get(t)}   # so as trilhas sem arquivo
