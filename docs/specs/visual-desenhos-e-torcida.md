@@ -54,7 +54,7 @@ Estado: `crowd.mood` por fidelidade (home/away/neutral) com `level` (0-1) e `tim
 
 | Evento | Hook | Reação |
 |---|---|---|
-| Gol | `goal()` | segmentos do time que marcou: pose 1/2 por 3 s com onda do campo; outros: pose 3; confete (arena+), flashes de câmera (8 por 2 s), sinalizadores (estádio+), onomatopeia "GOOOL!" |
+| Gol | `goal()` | segmentos do time que marcou: pose 1/2 por 3 s com onda do campo; outros: pose 3; confete (arena+), flashes de câmera (8 por 2 s), sinalizadores (estádio+); a fala vai para a faixa do narrador (2.6) |
 | Chance (chute com perigo) | `kick()` quando a bola vai ao gol a > 450 px/s e < 300 px | `level` sobe a 0,6 (murmúrio: pose 1 nos segmentos do time atacante, 0,6 s); "OOOH!" |
 | Defesa do goleiro | `ball_interactions` ramo do GK com `speed >= CATCH_SPEED` | torcida do time que atacava: pose 3; do que defendeu: pose 1; "UUUH!/OLÉ!" |
 | Bola na trave (`ball_bounds`, y fora da boca com impacto > 200) | `fx_wall` | "OOOH!", 0,4 s |
@@ -97,11 +97,39 @@ Campo novo `venue` na ação de partida da campanha (derivado do `bg` do torneio
 | Carreira de clubes | Div. 1 `estadio`, Div. 2 `arena`, Div. 3 `ginasio` |
 | Amistoso (modos 1/2, pelo menu) | `bairro` leve, só se prefs TORCIDA != OFF (T na pausa alterna); sem telão |
 
-### 2.6 "Som visual"
-Onomatopeias e letreiros no lugar de áudio, sempre via `text_img` (cache) em tamanhos fixos {26, 36, 52}: "GOOOL!", "OOOH!", "UUUH!", "OLÉ!", "CLAP CLAP", "BUZZ!" (skill), "ZOOM" (arrancada), "CLANG!" (trave). Surgem acima da arquibancada da fidelidade que reage, sobem 30 px em 0,8 s e desaparecem por troca de cor em 4 passos (sem `set_alpha` em Surfaces compartilhadas: o fade usa `scale_color` no `text_img` com os 4 degraus pré-cacheados). No máximo 2 onomatopeias ao mesmo tempo.
+### 2.6 Narrador e comentarista (substitui o antigo "som visual")
+As onomatopeias da torcida ("GOOOL!", "NÃOOO!", "UHHH!", "OLÉ!", "CLAP CLAP"...) **saíram**. No lugar,
+`game/narration.py` faz o narrador **Tonho** e a comentarista **Cleide** (os locutores que já existiam
+no telão) falarem numa **faixa de TV** (860x46 px: etiqueta colorida NARRADOR/COMENTARISTA com o nome à
+esquerda, texto à direita, barrinha do tempo restante embaixo, entrada deslizando 24 px).
+
+- **Lances narrados** (`Game.narr_hook`, chamado por `crowd_event` e pelos ganchos de desarme, drible e
+  skill): saída, chute (`chance`), defesa, trave, gol (normal, empate, virada, gol contra), desarme,
+  drible, skill, fim (vitória/empate). Depois de lance grande a comentarista emenda análise, piada ou o
+  placar ("Placar: POEIRA FC 1 x 0 RODO UNITED."). Sem lance por 8,5 s, um dos dois puxa assunto
+  (estatística de finalizações, patrocinador, piada).
+- **Catálogo**: `narration.LINES` (>= 6 falas do narrador e >= 4 da comentarista por lance; calmaria,
+  placar e estatística à parte), com fichas `{T}` time do lance, `{O}` o outro, `{R}` robô, `{K}`
+  skill, `{GT}/{GO}` gols, `{N}/{M}` estatística, `{MIN}` minuto. Nomes reais dos times e robôs da
+  partida (amistoso: "VOCÊ" vira "SEU TIME" e os robôs sem nome ganham apelidos, `FALLBACK_ROBOTS`).
+  Falas com estatística só a partir de 2. Sorteio em saco embaralhado com RNG privado; fala que não
+  cabe na faixa (nomes longos) é pulada.
+- **Fila sem spam**: uma fala por vez (2,0-4,2 s, pelo tamanho), no máximo 3 esperando; gol/fim cortam o
+  que estiver passando; desarme/drible/skill/chute só entram com a faixa livre e respeitando o intervalo
+  por tipo (`MINOR_COOLDOWN`). Relógio próprio que para na pausa; em MAX nada.
+- **Posição**: câmera ESTADIO = logo abaixo do campo (y 610..656, sobre a arquibancada de baixo; nunca
+  sobre o jogo). PERTO ou torcida desligada = dentro do campo, no alto ou embaixo, sempre do lado oposto
+  ao da bola (troca de lado se a bola chegar). Desenhada depois do clarão do gol (fica legível).
+- **Desempenho**: todo texto vira imagem no início da partida (trechos fixos num cache da sessão,
+  nomes/números por partida, guardados na própria `Narration`); uma fala é uma tupla de imagens
+  blitadas lado a lado; o fundo da faixa é criado uma vez por sessão. Zero Surface por quadro e nada
+  de texto novo no `text_img` durante a partida (`tests/test_narration.py`).
 
 ### 2.7 Telão (HUD de estádio)
-Mostrador pré-renderizado de ~450x34 px na tarja do rodapé (x 270..720, y 658..692), só em partidas assistidas (`career_match`). Conteúdo: linha 1 placar compacto + minuto; linha 2 legenda do locutor (Tonho/Cleide) por evento ("Que lance, Cleide!", "O chinelo ainda está no lugar, Tonho."), até 3 variações por tipo escolhidas por `event_index % n`. Textos pré-renderizados via `text_img`. Placas de LED no campo mostram a marca do local (Limpex, Santa Faísca, Superliga, Copa dos Campeões) em uma tira longa scrollada com `blit(..., area=Rect(off, 0, 980, 10))`.
+Caixinha pré-renderizada na tarja do rodapé (`crowd.TELAO`), só em partidas assistidas: bolinha vermelha
+piscando + "AO VIVO  TONHO & CLEIDE NA TRANSMISSÃO" (`TELAO_TEXT`). As falas ficam na faixa do narrador
+(2.6). Placas de LED no campo mostram a marca do local (Limpex, Santa Faísca, Superliga, Copa dos
+Campeões) em uma tira longa scrollada com `blit(..., area=Rect(off, 0, 980, 10))`.
 
 ### 2.8 Câmera de estádio (ESTADIO x PERTO)
 O campo ocupa quase toda a tela, então a torcida da geometria 2.1 (câmera **PERTO**) fica em faixas de ~60 px. Na câmera **ESTADIO** o "mundo" (campo, gols, robôs, bola e FX do jogo: tudo que usa coordenadas do jogo) é desenhado como sempre numa Surface fora da tela, **pré-alocada** (`Game.world`, 1100x700, criada uma vez), e reduzido para a tela; em volta sobram arquibancadas largas, desenhadas pela torcida em resolução cheia. Física, IA e coordenadas não mudam (goldens 80/80; `test_camera.test_scores_identical_estadio_perto_off`).
@@ -114,13 +142,13 @@ O campo ocupa quase toda a tela, então a torcida da geometria 2.1 (câmera **PE
 | Laterais (`L`/`R`, giradas como em PERTO) | até 6 colunas (x 103/84/65/46/27/8 e o espelho), y 128..604; coluna 0 com o vão da faixa de pano atrás do gol (y 270..462) |
 | Arquibancada de baixo (`F`, de costas, lado da câmera) | até 6 fileiras (y 610..670; as 4 primeiras acima do rodapé) |
 | Placa de LED | colada ao muro do campo, em cima (y 118..126, largura do campo reduzido) |
-| Fica fora do mundo (resolução cheia, por cima) | placar/HUD, rodapé (P: pausa, telão, velocidade), faixas GOL/PAUSADO/fim, onomatopeias, confete, flashes, sinalizadores, bandeiras, faixas de pano, LED |
+| Fica fora do mundo (resolução cheia, por cima) | placar/HUD, rodapé (P: pausa, telão, velocidade), faixas GOL/PAUSADO/fim, faixa do narrador, confete, flashes, sinalizadores, bandeiras, faixas de pano, LED |
 
 **Lotação (`crowd.VENUES_WIDE`, pessoas desenhadas incl. as distantes estáticas)**: bairro 200 < quadra 280 < ginásio 430 < arena 640 < estádio/superliga 1000 < mundial/coliseu 1180 (laboratório/fábrica 300, dojo/aeroporto 210). Os pequenos têm arquibancadas curtas (`sspan`, `top`/`bottom` com vão) e muro de tijolos no resto. Visíveis fora da UI (ALTA, `test_visible_estadio_much_more_than_perto`): bairro 176 (PERTO 85), quadra 275 (100), ginásio 423 (138), arena 634 (166), estádio 832 (190), mundial 925 (213). Casa à esquerda/visitante à direita (laterais, frente e cima pelo `x`).
 
-**Regra da câmera (prefs `camera`)**: campo opcional; ausente = **AUTO** → partidas assistidas (campanha, Modo Robôs, carreira) em ESTADIO e o Amistoso com humano (modos 1/2) em PERTO. Escolhida (ESTADIO ou PERTO), vale para todas. Tecla **C**: no menu gira AUTO → ESTÁDIO → PERTO → AUTO (rótulo ao lado de "F11: tela cheia | T: torcida ..."); na pausa (partidas com torcida) alterna a câmera da partida, grava e aplica na hora (re-warm no evento). Sem torcida (OFF) não há ESTADIO.
+**Regra da câmera**: TODA partida (amistoso 1/2, carreira, Modo Robôs, campanha, demo) começa em **ESTADIO** (`soccer.CAMERA_START`, `Game.camera_start`; os testes de geometria PERTO trocam esse atributo). Tecla **C** só na pausa (partidas com torcida): alterna ESTADIO ↔ PERTO **só na partida atual** e aplica na hora (re-warm no evento); a seguinte volta ao ESTADIO. Nada vai para as prefs: o antigo campo `camera` saiu de `prefs.FIELDS` (o sanitize descarta o valor de quem já tinha escolhido) e o C do menu não faz mais nada. Sem torcida (OFF) não há ESTADIO: o campo fica cheio (o modo continua ESTADIO e volta a valer se a torcida for ligada na pausa); decisão: respeitar o OFF de quem desligou a torcida em vez de religá-la.
 
-**Técnica e desempenho**: por quadro, 4 blits da arena composta só FORA de `CAM_RECT` (`CAM_STRIPS`), faixas da torcida, repintura parcial do mundo (só os retângulos desenhados no quadro anterior: robôs, bola/rastro, partículas; `Game.world_restore/world_mark`; o campo inteiro só após warm/troca de câmera), escala com destino pronto `pygame.transform.scale(src, CAM_SIZE, dest)` e 1 blit. A assinatura `f(src, size, dest)` de `scale` e `smoothscale` foi conferida no pygame 2.6.1 e no pygame-ce 2.5.7. Medido (desktop): `smoothscale` 1,1-1,7 ms (ce 0,8-0,9) contra `scale` 0,25-0,3 ms (ce 0,12-0,2); com `smoothscale` o quadro passava de 3,5 ms, e o WASM não tem o caminho SIMD, então o padrão é `scale` (vizinho mais próximo, coerente com o visual pixelado; `soccer.CAM_SCALER`). `draw_ms` (gol em curso, `sim_harness.py draw --crowd ALTA ESTADIO`): 1,9-2,5 ms por local (mundial 2,4-2,5; PERTO 1,0-1,3). Build do pacote ESTADIO 16-55 ms; atlas até ~5,5 MB por chave (acima dos 4 MB do PERTO), LRU de 3 chaves (a câmera entra na chave). **MAX**: desenha o mínimo (campo cheio `pitch_surf`, sem torcida e sem escala). **LOD da câmera**: média do quadro em janelas de 60 (`CAM_LOD_WINDOW`) acima de `CAM_LOD_MS` = 8 ms → a partida cai para PERTO até o fim (um re-warm; nada é gravado nas prefs; C na pausa volta). O LOD da torcida (2.3) continua valendo nas duas câmeras.
+**Técnica e desempenho**: por quadro, 4 blits da arena composta só FORA de `CAM_RECT` (`CAM_STRIPS`), faixas da torcida, repintura parcial do mundo (só os retângulos desenhados no quadro anterior: robôs, bola/rastro, partículas; `Game.world_restore/world_mark`; o campo inteiro só após warm/troca de câmera), escala com destino pronto `pygame.transform.scale(src, CAM_SIZE, dest)` e 1 blit. A assinatura `f(src, size, dest)` de `scale` e `smoothscale` foi conferida no pygame 2.6.1 e no pygame-ce 2.5.7. Medido (desktop): `smoothscale` 1,1-1,7 ms (ce 0,8-0,9) contra `scale` 0,25-0,3 ms (ce 0,12-0,2); com `smoothscale` o quadro passava de 3,5 ms, e o WASM não tem o caminho SIMD, então o padrão é `scale` (vizinho mais próximo, coerente com o visual pixelado; `soccer.CAM_SCALER`). `draw_ms` (gol em curso, `sim_harness.py draw --crowd ALTA ESTADIO`): 1,9-2,5 ms por local (mundial 2,4-2,5; PERTO 1,0-1,3). Build do pacote ESTADIO 16-55 ms; atlas até ~5,5 MB por chave (acima dos 4 MB do PERTO), LRU de 3 chaves (a câmera entra na chave). **MAX**: desenha o mínimo (campo cheio `pitch_surf`, sem torcida e sem escala). **Sem LOD de câmera** (removido): ele trocava para PERTO quando a média do quadro passava de 8 ms em 60 quadros, e o gol fazia exatamente isso. Medido no navegador (Chromium headless, pygbag, amistoso em ESTADIO): ~4,0-4,7 ms por quadro em jogo, **7,5 / 7,3 / 7,0 ms** nas janelas da festa do gol (clarão, GOOOOL!, fogos, confete) — colado no limite numa máquina rápida, acima dele em máquinas mais lentas — e a 1ª janela da partida (aquecimento) já derrubava a câmera. Agora a câmera nunca muda sozinha; a proteção de desempenho é o LOD da torcida (2.3), que também reduz os fogos (`Fireworks.lod`: 100/55/30% das faíscas). `test_camera.test_goal_never_changes_camera` força quadros de >= 12 ms com gols seguidos.
 
 ## 3. Robôs em campo
 

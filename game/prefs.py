@@ -13,8 +13,9 @@ Uso: prefs.get("crowd") -> "ALTA"; prefs.set("crowd", "OFF") -> True se gravou.
 Som (Fase 6): "sfx_vol"/"music_vol" em "0".."3" (padrao "2" = medio) e "mute" "0"/"1" (padrao "0").
 
 Campos OPCIONAIS (padrao None em FIELDS): ausentes = "o jogador nunca escolheu". Nao aparecem em
-load()/no JSON gravado ate o primeiro set(); unset(campo) volta ao automatico. Ex.: "camera"
-(ESTADIO / PERTO): sem escolha, a partida decide pelo modo (ver soccer.Game.camera_mode).
+load()/no JSON gravado ate o primeiro set(); unset(campo) volta ao automatico. Hoje nao ha nenhum: o antigo
+"camera" saiu (toda partida comeca na camera ESTADIO; ver soccer.Game.camera_mode) e, se ainda estiver num
+JSON antigo, o sanitize o descarta.
 """
 import json
 import os
@@ -27,14 +28,12 @@ VERSION = 1
 MAX_CHARS = 10_000                          # prefs sao minusculas; maior que isso = lixo
 
 CROWD_LEVELS = ("ALTA", "MEDIA", "OFF")     # torcida: completa / sem ondas / desligada
-CAMERA_MODES = ("ESTADIO", "PERTO")         # camera da partida: campo reduzido + arquibancadas / campo cheio
 VOLUME_LEVELS = ("0", "1", "2", "3")        # som: desligado / baixo / medio / alto (ver sfx.LEVEL_GAIN)
 MUTE_VALUES = ("0", "1")                    # mudo geral (tecla M)
 
 # campo -> (valores aceitos, padrao). Campos futuros entram aqui (o sanitize ja os trata).
 FIELDS = {
     "crowd": (CROWD_LEVELS, "ALTA"),
-    "camera": (CAMERA_MODES, None),         # opcional: None = automatico (assistida ESTADIO, amistoso PERTO)
     "sfx_vol": (VOLUME_LEVELS, "2"),        # volume dos efeitos (tecla S)
     "music_vol": (VOLUME_LEVELS, "2"),      # volume da musica (tecla N)
     "mute": (MUTE_VALUES, "0"),             # mudo geral (tecla M)

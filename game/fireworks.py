@@ -17,6 +17,9 @@ import random
 import pygame
 
 SPARK_MAX = 260                 # faiscas vivas ao mesmo tempo
+# protecao de desempenho (soccer.Game copia o LOD da torcida em `lod` a cada quadro): menos faiscas por
+# estouro e teto menor. E isso que cai quando o quadro pesa; a camera da partida nunca muda.
+LOD_SPARKS = {2: 1.0, 1: 0.55, 0: 0.3}
 ROCKET_MAX = 10
 QUEUE_MAX = 24                  # agendados (partidas sem desenho, ex.: simuladas, nao acumulam)
 BURST = (26, 34)                # faiscas por estouro
@@ -52,6 +55,7 @@ class Fireworks:
         self.sparks = []        # [x, y, vx, vy, vida, vida_max, cor, cor2]
         self.flashes = []       # [x, y, fim, cor]
         self.last = None
+        self.lod = 2
 
     def clear(self):
         self.queue.clear()
@@ -59,6 +63,7 @@ class Fireworks:
         self.sparks.clear()
         self.flashes.clear()
         self.last = None
+        self.lod = 2
 
     @property
     def active(self):
@@ -87,8 +92,9 @@ class Fireworks:
 
     def _burst(self, x, y, cols, now):
         r = self.rng
-        room = SPARK_MAX - len(self.sparks)
-        n = min(r.randint(*BURST), room)
+        k = LOD_SPARKS.get(self.lod, 1.0)
+        room = int(SPARK_MAX * k) - len(self.sparks)
+        n = max(0, min(int(r.randint(*BURST) * k), room))
         c1 = r.choice(cols)
         c2 = r.choice((WHITE, GOLD) + tuple(cols))
         ring = r.random() < 0.5                   # coroa redonda ou estouro "salgueiro" (velocidades soltas)

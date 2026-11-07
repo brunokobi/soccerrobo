@@ -20,8 +20,8 @@ pelas habilidades dos robôs.
 
 | | |
 |---|---|
-| ![Menu principal](docs/img/menu.png) | ![Partida com câmera de estádio e torcida no gol](docs/img/partida-estadio-gol.png) |
-| **Menu** - amistosos, carreira de clubes, Modo Robôs e campanha | **Partida assistida** - câmera de estádio, torcida reagindo ao gol, LED e telão |
+| ![Menu principal](docs/img/menu.png) | ![Partida com câmera de estádio, gol e faixa do narrador](docs/img/partida-estadio-gol.png) |
+| **Menu** - amistosos, carreira de clubes, Modo Robôs e campanha | **Partida** - câmera de estádio, torcida reagindo ao gol, LED e faixa do narrador |
 | ![Campanha: diálogo](docs/img/campanha-dialogo.png) | ![Campanha: mapa dos capítulos](docs/img/campanha-mapa.png) |
 | **Campanha** - diálogos com retratos animados e cenários desenhados por código | **Mapa da campanha** - da escola ao Mundial de Aspiradores |
 | ![Campanha: torneio](docs/img/campanha-torneio.png) | ![Modo Robôs: liga](docs/img/modo-robos-liga.png) |
@@ -74,33 +74,42 @@ mesmo compasso, com palmas no áudio. A arquibancada tem **bandeiras e bandeirõ
 **faixas penduradas na grade** (embaixo do campo; na câmera ESTÁDIO, também em cima), com frases da
 torcida e do local.
 Ela reage a gol, chance, defesa e trave (pula, levanta os braços, faz ola e
-mosaico), com confete, flashes, sinalizadores, bandeiras, placas de LED,
-onomatopeias e um telão com os locutores Tonho Vassoura e Cleide. Tecla **T**
+mosaico), com confete, flashes, sinalizadores, bandeiras e placas de LED. Tecla **T**
 (no menu ou na pausa) alterna a torcida entre ALTA, MÉDIA e DESLIGADA; ela some
-no modo MAX. **Câmera de estádio:** nas partidas assistidas (campanha, Modo Robôs,
-carreira) o campo aparece reduzido (80%) com arquibancadas largas em volta, em cima,
-nas laterais e embaixo; no Amistoso com humano a câmera fica PERTO (campo em tela
-cheia). Tecla **C** no menu gira AUTO / ESTÁDIO / PERTO e na pausa troca a câmera da
-partida (fica gravado). **F11** abre a tela cheia.
+no modo MAX. **Câmera de estádio:** TODA partida (amistoso, carreira, Modo Robôs, campanha e demo)
+começa na câmera ESTÁDIO: o campo reduzido (80%) com arquibancadas largas em volta, em cima, nas
+laterais e embaixo. Na pausa, **C** troca para PERTO (campo em tela cheia) só naquela partida; a
+seguinte volta ao ESTÁDIO. O jogo nunca troca a câmera sozinho (nem no gol): se o quadro pesar, quem
+diminui são a torcida e os fogos. Com a torcida DESLIGADA não há estádio (campo cheio). **F11** abre a
+tela cheia.
+
+**Narração:** o narrador **Tonho** e a comentarista **Cleide** falam numa faixa de TV (tarja com o
+nome de quem fala) lance a lance: saída, chute, defesa, trave, gol (empate, virada, gol contra),
+desarme, drible, skill, placar e fim de jogo, com os nomes reais dos times e dos robôs (no amistoso os
+robôs ganham apelidos), e puxam assunto na calmaria (estatística, piada, patrocinador). Uma fala por
+vez, com fila e prioridade (gol corta o resto, lance pequeno só com a faixa livre). Na câmera ESTÁDIO a
+faixa fica sob o campo; na PERTO, dentro do campo, sempre do lado oposto ao da bola
+(`game/narration.py`). No lugar dos antigos letreiros da torcida ("GOOOL!", "UHHH!"...).
 
 ## Som
 Efeitos sintetizados por código (`game/sfx.py` e `game/music.py`, gerados com `math`/`array` no
-início do jogo, aos poucos) somados a sons gravados em `game/audio/` (OGG, ~14 MB no total):
+início do jogo, aos poucos) somados a sons gravados em `game/audio/` (OGG mono, volume nivelado por
+`tools/normalizar_audio.sh`, ~7,5 MB no total):
 
 - **Músicas (stream, uma faixa depois da outra, em loop):** menu principal = `menu1/2/3.ogg`
   (desde o clique da tela de carregamento); tela de robôs = `interno1/2.ogg` + `submenus.ogg`;
   carreira e campanha = `copas.ogg` + `interno1/2.ogg`; partida = torcida ao fundo, alternando 3 gravações (`torcida.ogg`, `torcida_boca.ogg` e
   `torcida_estadio.ogg`, com o volume igualado).
-- **Gritos de gol sorteados (nunca o mesmo duas vezes seguidas):** 6 gritos para o gol do jogador
-  (`gol*.ogg`; no 2 jogadores, para os dois) e 4 lamentos para o gol do adversário (`gol_adv*.ogg`).
-- **Outros efeitos gravados:** quase gol do jogador (`quase_uh.ogg`) e "quase leva um gol"
-  (`quase_nao.ogg`) na defesa do goleiro e na trave, "começou!" no 1º pontapé (`comecou.ogg`), apito
-  final, palmas e robôs desligando no fim, torcida na trave (junto do CLANG), palmas nos cânticos e
-  na ola da torcida e o clique dos menus.
-- **Reações da torcida gravadas:** o "uuuh" de chance intercala `uhhh_torcida.ogg` e
-  `quase_uh.ogg` (no lugar do sintetizado; a trave segue com `trave_torcida.ogg`); "olé!" (`ole.ogg`) no drible e na
-  defesa do jogador; vaia (`vaias.ogg`) no gol do adversário e na derrota; palmas no 1º pontapé, no
-  gol do jogador e nas defesas (`palmas.ogg`).
+- **Reações da torcida (tabela única `FILE_SFX` em `game/sfx.py`):** cada reação tem de 3 a 9
+  variações (gravações + variações derivadas delas em tempo de execução: outro tom/andamento ou outro
+  trecho, sem arquivo novo), sorteadas em "saco embaralhado" (toca todas antes de repetir, nunca a
+  mesma duas vezes seguidas). Grito de gol do jogador (9), do adversário (6), lamento da torcida no gol
+  sofrido (4; gol contra do nosso time: vaia), "uuuh" da chance (4), quase gol (4 / 3), defesa (4),
+  trave (4, junto do CLANG), olé no drible e na defesa do jogador (4), palmas (3-4), vaia (3),
+  início "começou!" (3), festa da vitória (3) e lamento da derrota (3). Vozes faladas têm intervalo
+  próprio maior para não cansar. Detalhes em [docs/specs/som.md](docs/specs/som.md).
+- **Outros efeitos gravados:** apito final, robôs desligando no fim, palmas nos cânticos e na ola da
+  torcida e o clique dos menus.
 - **Motor dos robôs:** `robo_motor.ogg` em loop, baixo, enquanto a bola rola (para na pausa e no MAX).
 - Se algum arquivo faltar ou não abrir, entra o som sintetizado equivalente.
 
@@ -341,7 +350,8 @@ export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy
 .venv/bin/python tests/test_sfx.py                     # som: buffers sintetizados, arquivos OGG (trilhas, efeitos, motor), throttle, mudo
 .venv/bin/python tests/test_crowd.py                   # torcida: locais, reações, extras, LOD, zero Surface por quadro
 .venv/bin/python tests/test_fireworks.py                # fogos do gol/vitória, modo demo, pisos do campo, nomes em caixa alta
-.venv/bin/python tests/test_camera.py                  # câmera de estádio: prefs/tecla C, layout largo, LOD, zero Surface
+.venv/bin/python tests/test_camera.py                  # câmera de estádio: começa sempre em ESTÁDIO, tecla C, gol não troca, zero Surface
+.venv/bin/python tests/test_narration.py               # narrador/comentarista: catálogo, fila sem spam, nomes, faixa, zero Surface
 .venv/bin/python tests/test_robot_art.py               # robôs: chassis, peças visíveis, cache, FX, local da torcida por modo
 .venv/bin/python tests/test_arena.py                   # modificadores de arena da Torre do Pó (desligados fora dela, efeito, zero Surface)
 CAMPAIGN_BAL_N=100 .venv/bin/python tests/test_campaign_balance.py   # balanço da campanha por simulação (lento, ver abaixo)
@@ -377,10 +387,12 @@ Utilitários do harness (`tests/sim_harness.py`): `golden`/`golden-new` com
 - `game/robot_league.py`: liga de 6 times (calendário, tabela, simulação estatística, premiação)
 - `game/robot_art.py`: arte dos robôs em campo (sprites pré-renderizados e cache); `Game` delega a ele
 - `game/store.py`: armazenamento de texto (`localStorage` no navegador, arquivo em `~` no desktop)
-- `game/prefs.py`: preferências do jogador (`soccerpy_prefs_v1`: torcida ALTA/MEDIA/OFF, tecla T; câmera ESTADIO/PERTO, tecla C, ausente = AUTO; som `sfx_vol`/`music_vol` 0-3 e `mute`, teclas S/N/M), com sanitize e padrão
-- `game/sfx.py`: efeitos sonoros sintetizados, conversão para o formato do mixer, throttle, volumes/mudo, a música no canal reservado e a playlist do menu (`game/audio/*.ogg`, via `pygame.mixer.music`)
+- `game/prefs.py`: preferências do jogador (`soccerpy_prefs_v1`: torcida ALTA/MEDIA/OFF, tecla T; som `sfx_vol`/`music_vol` 0-3 e `mute`, teclas S/N/M), com sanitize e padrão
+- `game/sfx.py`: efeitos sonoros sintetizados, tabela única reação -> sons gravados (`FILE_SFX`, com variações derivadas em runtime e saco embaralhado), conversão para o formato do mixer, throttle, volumes/mudo, a música no canal reservado e a playlist do menu (`game/audio/*.ogg`, via `pygame.mixer.music`)
 - `game/music.py`: trilhas chiptune (menu, partida, jingles de vitória/derrota) escritas como texto e sintetizadas compasso a compasso
-- `game/crowd.py`: torcida (locais, espectadores pré-renderizados, reações, confete/LED/telão, LOD) e a geometria das câmeras PERTO/ESTÁDIO
+- `game/crowd.py`: torcida (locais, espectadores pré-renderizados, reações, confete/LED/telão "AO VIVO", LOD) e a geometria das câmeras PERTO/ESTÁDIO
+- `game/narration.py`: narrador (Tonho) e comentarista (Cleide): catálogo de falas, fila sem spam e a faixa de TV da partida
+- `tools/normalizar_audio.sh`: deixa os áudios de `game/audio/` compactos e com o volume nivelado (ffmpeg; ver `docs/specs/som.md`)
 - `game/robots_ui.py`: telas do Modo Robôs (hub, garagem, banco, loja, habilidades, mochila, visual, liga)
 - `game/career.py` / `game/career_ui.py`: carreira de clubes (liga, mercado, finanças, save) e suas telas
 - `game/story.py`: dados da campanha (personagens, times, cenas/diálogos, torneios, capítulos, recompensas); módulo puro, sem pygame. É a fachada da campanha: guarda o Ato 1 e junta `story_a2.py` (Ato 2), `story_a3.py` (Ato 3) e `story_side.py` (missões secundárias), com os dados de cada parte; `story_post.py` guarda as cenas curtas das revanches do NG+
