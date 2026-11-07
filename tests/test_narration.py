@@ -187,6 +187,12 @@ def test_queue_priorities_no_spam_and_idle():
         imgs, _w = n._line("goal", "N", n._ctx("goal", 0, 1, None))
         seen.append(imgs)
     assert all(a != b for a, b in zip(seen, seen[1:]))
+    # saco embaralhado: todas as falas do lance saem antes de alguma repetir
+    n.used.clear()
+    for kind in ("goal", "save", "chance"):
+        k = len(nr.LINES[kind]["N"])
+        picks = [n._line(kind, "N", n._ctx(kind, 0, 1, None))[0] for _ in range(k)]
+        assert len(set(picks)) == k, kind
 
 
 def test_names_of_real_match_in_lines():

@@ -336,6 +336,7 @@ class Narration:
         self.last_any = 0.0
         self.minor_t = {}
         self.last_pick = {}         # (tipo, falante) -> indice da ultima fala (nao repete)
+        self.used = {}              # (tipo, falante) -> falas ja ditas nesta volta (saco embaralhado)
         self.stats = {"chance": [0, 0], "save": [0, 0], "steal": [0, 0]}
         self.score = [0, 0]
         self.minute = 1
@@ -424,7 +425,11 @@ class Narration:
         toks = self.tok[(kind, spk)]
         few = ctx.get("n", 2) < 2                               # estatistica so com 2 ou mais
         order = [(start + d) % n for d in range(n)]
-        pref = [i for i in order if not (i == last and n > 1) and not (few and "N" in toks[i])] or order
+        used = self.used.setdefault((kind, spk), set())
+        if len(used) >= n:
+            used.clear()                                        # volta nova: todas de novo
+        ok = [i for i in order if not (i == last and n > 1) and not (few and "N" in toks[i])] or order
+        pref = [i for i in ok if i not in used] or ok           # primeiro as que ainda nao sairam
         best = None
         for i in pref:
             imgs = tuple(img if img is not None else ctx[key] for img, key in opts[i])
@@ -435,6 +440,7 @@ class Narration:
             if best is None or w < best[2]:
                 best = (i, imgs, w)
         self.last_pick[(kind, spk)] = best[0]
+        used.add(best[0])
         return best[1], best[2]
 
     def _push(self, spk, kind, prio, ctx):
