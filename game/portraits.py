@@ -47,10 +47,11 @@ BLINK_PERIOD = 3.5                    # s entre piscadas
 BLINK_DUR = 0.12                      # s de olho fechado
 TALK_FRAME = 0.12                     # s por quadro de boca durante a fala
 BG_CACHE_MAX = 6                      # LRU de cenarios (cada um ~2 MB)
-# Estilo dos personagens: "classico" (formas lisas, desenhado por quadro) ou "pixel" (prototipo em
-# pixel art com cache, game/portraits_pixel.py; so os personagens de portraits_pixel.SPECS - os demais
-# continuam no classico). SOCCERPY_PORTRAITS=pixel liga o prototipo sem mexer no codigo.
-STYLE = os.environ.get("SOCCERPY_PORTRAITS", "classico")
+# Estilo dos personagens: "pixel" (PADRAO: pixel art com cache, game/portraits_pixel.py - humanos e
+# robos) ou "classico" (formas lisas desenhadas por quadro, mantido para comparacao).
+# SOCCERPY_PORTRAITS=classico volta ao estilo antigo sem mexer no codigo (desktop; no navegador, mude
+# a constante). Narrador sempre usa o icone do livro.
+STYLE = os.environ.get("SOCCERPY_PORTRAITS", "pixel")
 
 
 # ---------------------------------------------------------------------------------- cores
@@ -2383,7 +2384,7 @@ def draw_character(scr, cid, mood="neutro", cx=550, feet_y=470, R=40, k=1.0, bob
         m = 1 if mouth else 0
     tt = t or 0.0
     if cid == "ze" or ch["outfit"][0] == "robo":
-        return draw_robot(scr, cx, feet_y if not bust else feet_y + int(2.2 * R), R, mood, k, ch, bob, b, m, tt)
+        return _robot(scr, cid, ch, cx, feet_y if not bust else feet_y + int(2.2 * R), R, mood, k, bob, b, m, tt)
     breath = 0
     if t is not None and not talking and not bust:
         breath = -1 if math.sin(t * 2.2 + _phase(cid)) > 0.3 else 0
@@ -2392,6 +2393,23 @@ def draw_character(scr, cid, mood="neutro", cx=550, feet_y=470, R=40, k=1.0, bob
         if PX.supports(cid):
             return PX.draw(scr, cid, mood, cx, feet_y, R, k, bob, bust, b, m, tt, breath)
     draw_look(scr, ch, mood, cx, feet_y, R, k, bob, bust, b, m, tt, breath)
+
+
+def _robot(scr, cid, ch, cx, base_y, R, mood, k, bob, b, m, tt):
+    if STYLE == "pixel":
+        import portraits_pixel as PX
+        return PX.draw_robot(scr, cid, mood, cx, base_y, R, k, bob, b, m, tt)
+    return draw_robot(scr, cx, base_y, R, mood, k, ch, bob, b, m, tt)
+
+
+def prepare(cids, moods=("neutro",), ks=(1.0,)):
+    """Pre-monta (fora do draw) os quadros pixel dos personagens/humores/k dados; no-op no classico."""
+    if STYLE != "pixel":
+        return
+    import portraits_pixel as PX
+    for cid in cids:
+        if cid in story.CHARACTERS and cid != "narrador":
+            PX.warm(cid, moods, ks)
 
 
 _LED = {"robo": (0, 230, 255), "neutro": (0, 230, 255), "feliz": (110, 240, 130), "susto": (255, 90, 80),
@@ -2491,7 +2509,7 @@ def draw_bust(scr, rect, cid, mood, t=None, talking=False, blink=None, mouth=Non
             b = bool(blink)
         if mouth is not None:
             m = 1 if mouth else 0
-        draw_robot(scr, r.centerx, r.bottom - 22, int(r.w * 0.27), mood, 1.0, ch, 0, b, m, t or 0.0)
+        _robot(scr, cid, ch, r.centerx, r.bottom - 22, int(r.w * 0.27), mood, 1.0, 0, b, m, t or 0.0)
     else:
         R = int(r.w * 0.29)
         draw_character(scr, cid, mood, r.centerx, r.y + int(R * 1.9), R, 1.0, 0, bust=True, t=t, talking=talking,

@@ -658,6 +658,7 @@ class CampaignUI(RobotsUI):
         f = self.g.font(TXT_SIZE)
         d["who"], d["mood"] = who, mood
         d["moods"][who] = mood
+        portraits.prepare((who,), (mood,))          # quadros pixel do humor novo montados fora do draw
         d["lines"] = wrap_dialog(f, text)[:MAX_LINES]
         d["col"] = NARRATOR_TEXT if who == "narrador" else TEXT
         d["imgs"] = [self.g.text_img(ln, TXT_SIZE, d["col"]) for ln in d["lines"]]

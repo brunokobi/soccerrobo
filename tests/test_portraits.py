@@ -15,7 +15,14 @@ sys.path.insert(0, os.path.join(ROOT, "game"))
 import pygame  # noqa: E402
 
 import portraits as P  # noqa: E402
+import portraits_pixel as PX  # noqa: E402
 import story  # noqa: E402
+
+# O jogo usa o estilo "pixel" por padrao (portraits_pixel). Os testes ate test_lru... cobrem o desenho
+# CLASSICO (vetorial, mantido para comparacao) e por isso fixam STYLE = "classico"; os testes test_pixel_*
+# no fim cobrem o padrao com a mesma matriz (todos os personagens x humores x quadros x k).
+DEFAULT_STYLE = P.STYLE
+P.STYLE = "classico"
 
 pygame.init()
 screen = pygame.display.set_mode((1100, 700))
@@ -286,17 +293,33 @@ def test_dialog_like_frame_draw_time():
         assert v < 25.0, (k, v)
 
 
-def test_pixel_style_prototype():
-    """Prototipo pixel art (portraits.STYLE = "pixel"): todos os humores x quadros x k, palco e busto,
-    zero Surface depois do aquecimento, quadros de piscar/fala diferentes, cache limitado."""
-    import portraits_pixel as PX
-    assert P.STYLE == "classico" or os.environ.get("SOCCERPY_PORTRAITS")    # padrao do jogo continua classico
-    old = P.STYLE
-    P.STYLE = "pixel"
-    try:
+class pixel_style:
+    def __enter__(self):
+        self.old = P.STYLE
+        P.STYLE = "pixel"
         PX.clear_cache()
-        for cid in PX.SPECS:
-            assert PX.supports(cid)
+
+    def __exit__(self, *a):
+        P.STYLE = self.old
+        PX.clear_cache()
+
+
+def test_pixel_is_the_default_style():
+    assert DEFAULT_STYLE == "pixel" or os.environ.get("SOCCERPY_PORTRAITS"), DEFAULT_STYLE
+    humans = [c for c in story.CHARACTERS if c != "narrador" and not PX.is_robot(c)]
+    assert len(humans) == 15                                           # Teo + 14
+    for cid in humans:
+        assert PX.supports(cid), cid                                    # todo humano tem versao pixel
+    assert all(PX.is_robot(c) for c in ("ze", "zeperfeito", "xomega"))
+
+
+def test_pixel_every_character_mood_frame_matrix_zero_surface():
+    """Todos os personagens (humanos e robos) x todos os humores x quadros x k, palco e busto: zero
+    Surface depois do aquecimento; quadros de piscar/fala diferentes; esmaecido mais escuro."""
+    with pixel_style():
+        for cid in story.CHARACTERS:
+            if cid == "narrador":
+                continue
             for mood in story.MOODS:
                 def frame(t):
                     for blink, mouth in FRAMES:
@@ -321,18 +344,83 @@ def test_pixel_style_prototype():
             sa = sum(pygame.transform.average_color(a)[:3])
             sb = sum(pygame.transform.average_color(b)[:3])
             assert sb < sa, cid                                     # esmaecido e mais escuro
-        assert len(PX._GROUPS) <= PX.PX_CACHE_MAX
+            assert len(PX._GROUPS) <= PX.PX_CACHE_MAX
+            assert len(PX._LEGS) <= PX.LEGS_CACHE_MAX and len(PX._SCRATCH) <= PX.SCRATCH_MAX
         assert PX.cache_bytes() < 8 * 1024 * 1024, PX.cache_bytes()
-        P.draw_character(screen, "vivi", "feliz")                   # sem versao pixel: cai no classico
-        P.draw_character(screen, "ze", "feliz")
+        P.draw_character(screen, "inexistente", "neutro")
+        P.draw_bust(screen, (0, 0, 150, 166), "inexistente", "zzz")
+        P.draw_bust(screen, (0, 0, 150, 166), "narrador", "neutro")
+        P.draw_character(screen, "teo", "humor_invalido", blink=True, mouth=1)
+        P.draw_character(screen, "ze", "humor_invalido", blink=True, mouth=1)
+
+
+def test_pixel_moods_change_the_face_of_every_human():
+    with pixel_style():
+        for cid in story.CHARACTERS:
+            if cid == "narrador" or PX.is_robot(cid):
+                continue
+            imgs = {m: snap(lambda s: P.draw_bust(s, (0, 0, 150, 166), cid, m, blink=False, mouth=0), (150, 166))
+                    for m in story.MOODS}
+            distinct = len(set(imgs.values()))
+            assert distinct >= len(story.MOODS) - 2, (cid, distinct)   # neutro=robo e convencida=convencido
+            for m in ("determinado", "malicioso", "convencido"):
+                assert imgs[m] not in (imgs["neutro"], imgs["bravo"], imgs["feliz"]), (cid, m)
+            assert imgs["malicioso"] != imgs["convencido"] != imgs["determinado"], cid
+
+
+def test_pixel_bust_shows_the_whole_hair():
+    """Busto: o topo do cabelo (pontas do Teo/Kenji, coque, bone) nunca e cortado pela moldura."""
+    with pixel_style():
+        for cid in story.CHARACTERS:
+            if cid == "narrador" or PX.is_robot(cid):
+                continue
+            for w, h in ((150, 166), (130, 150)):
+                s = pygame.Surface((400, 500), pygame.SRCALPHA)
+                R = int(w * 0.29)
+                ry = 100
+                PX.draw(s, cid, "neutro", 200, ry + int(R * 1.9), R, 1.0, 0, True, False, 0, 0.0, 0)
+                top = s.get_bounding_rect().top
+                assert top >= ry + 3, (cid, w, top - ry)            # 3 = recorte interno de draw_bust
+                assert top - ry < 0.25 * h, (cid, w, top - ry)      # mas sem sobrar espaco demais no alto
+
+
+def test_pixel_dim_matches_shade():
+    src = pygame.Surface((4, 1), pygame.SRCALPHA)
+    cols = [(255, 255, 255), (220, 50, 50), (20, 30, 80), (128, 200, 40)]
+    for i, c in enumerate(cols):
+        src.set_at((i, 0), c + (255,))
+    for k in (0.72, 0.5):
+        d = PX._dim(src, k)
+        for i, c in enumerate(cols):
+            got = d.get_at((i, 0))
+            want = P.shade(c, k)
+            assert all(abs(got[j] - want[j]) <= 2 for j in range(3)), (k, c, got, want)
+            assert got[3] == 255
+
+
+def test_pixel_cache_cost():
+    """Custo: base de um personagem e um grupo de humor rapidos; quadro desenhado sem montar nada."""
+    with pixel_style():
+        t0 = time.perf_counter()
+        for cid in story.CHARACTERS:
+            if cid != "narrador":
+                PX.warm(cid, ("neutro",), (1.0, 0.5))
+        warm_ms = (time.perf_counter() - t0) * 1000
+        t0 = time.perf_counter()
+        for i in range(100):
+            for j, cid in enumerate(("teo", "vivi", "bia", "ze")):
+                P.draw_character(screen, cid, "neutro", 190 + j * 240, 466, 40, 1.0 if j == 1 else 0.5, 0,
+                                 t=i / 60.0, talking=j == 1)
+            P.draw_bust(screen, (46, 490, 150, 166), "vivi", "neutro", t=i / 60.0, talking=True)
+        frame_ms = (time.perf_counter() - t0) / 100 * 1000
+        print("pixel: aquecimento de todos (neutro x 2 k) %.0f ms, quadro %.2f ms, cache %.2f MB"
+              % (warm_ms, frame_ms, PX.cache_bytes() / 1e6))
+        assert warm_ms < 2000 and frame_ms < 10.0
         if SHOTS:
             screen.fill((8, 14, 24))
             for i, m in enumerate(story.MOODS):
-                P.draw_bust(screen, ((i % 8) * 136 + 6, (i // 8) * 176 + 6, 130, 150), tuple(PX.SPECS)[i % 3], m, t=0.5)
+                P.draw_bust(screen, ((i % 8) * 136 + 6, (i // 8) * 176 + 6, 130, 150), ("teo", "vivi", "bia")[i % 3], m, t=0.5)
             save("portraits_pixel_moods")
-    finally:
-        P.STYLE = old
-        PX.clear_cache()
 
 
 def test_screenshots():
