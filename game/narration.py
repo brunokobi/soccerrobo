@@ -25,7 +25,7 @@ import pygame
 
 QUEUE_MAX = 3
 IDLE_GAP = 8.5                  # s sem fala -> conversa de calmaria
-MINOR_GAP = 1.2                 # s livres antes de aceitar um lance pequeno
+MINOR_GAP = 2.0                 # s de faixa livre antes de aceitar um lance pequeno (respiro entre falas)
 MINOR_COOLDOWN = {"steal": 7.0, "dribble": 5.0, "skill": 6.0, "chance": 2.5}
 PRIO = {"end_win": 5, "end_draw": 5, "goal": 4, "equalize": 4, "turn": 4, "own": 4, "start": 3, "save": 3,
         "post": 3, "chance": 2, "skill": 1, "dribble": 1, "steal": 1, "idle": 0, "score": 4, "stat": 0}
@@ -385,7 +385,7 @@ class Narration:
             cur = self.cur
             if cur is not None and cur[5] >= prio:
                 return False
-            if cur is None and t - self.last_end < MINOR_GAP and kind != "chance":
+            if cur is None and t - self.last_end < MINOR_GAP:
                 return False
             self.minor_t[kind] = t
         else:                                                   # lance grande: corta o que for menor
