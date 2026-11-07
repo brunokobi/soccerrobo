@@ -52,6 +52,9 @@ BG_CACHE_MAX = 6                      # LRU de cenarios (cada um ~2 MB)
 # SOCCERPY_PORTRAITS=classico volta ao estilo antigo sem mexer no codigo (desktop; no navegador, mude
 # a constante). Narrador sempre usa o icone do livro.
 STYLE = os.environ.get("SOCCERPY_PORTRAITS", "pixel")
+# Estilo dos CENARIOS: "pixel" (PADRAO: pixel art em tela logica 1/3 ampliada x3, game/scenes_pixel.py)
+# ou "classico" (formas lisas, as funcoes _bg_/_fg_/_anim_ abaixo). SOCCERPY_SCENES=classico no desktop.
+SCENES = os.environ.get("SOCCERPY_SCENES", "pixel")
 
 
 # ---------------------------------------------------------------------------------- cores
@@ -1707,10 +1710,21 @@ _FG_CACHE = {}
 _SCRATCH = []
 
 
+def _px_scenes(bg):
+    """Modulo dos cenarios em pixel art se o estilo e "pixel" e o cenario existe nele; senao None."""
+    if SCENES != "pixel":
+        return None
+    import scenes_pixel as SP
+    return SP if bg in SP.DRAW else None
+
+
 def draw_background(surf, bg):
     """Pinta as camadas estaticas do cenario `bg` em surf (STAGE_W x STAGE_H). Id desconhecido = fundo liso."""
+    sp = _px_scenes(bg)
     fn = _DRAWERS.get(bg)
-    if fn is None:
+    if sp is not None:
+        sp.build(surf, sp.DRAW[bg])
+    elif fn is None:
         _vgrad(surf, (0, 0, STAGE_W, STAGE_H), (10, 18, 36), (20, 34, 62))
     else:
         fn(surf)
@@ -1720,7 +1734,8 @@ def draw_background(surf, bg):
 def _warm(bg):
     """Aquece tudo que a animacao/frente usam (sprites e camada de frente) fora do laco de desenho."""
     get_foreground(bg)
-    fn = _ANIMS.get(bg)
+    sp = _px_scenes(bg)
+    fn = sp.ANIM.get(bg) if sp is not None else _ANIMS.get(bg)
     if fn is not None:
         if not _SCRATCH:
             _SCRATCH.append(pygame.Surface((STAGE_W, STAGE_H)))
@@ -1753,9 +1768,13 @@ def get_foreground(bg):
     """(Surface com colorkey, (x, y)) da camada de frente do cenario, ou None (cacheado)."""
     if bg in _FG_CACHE:
         return _FG_CACHE[bg]
+    sp = _px_scenes(bg)
     fn = _FRONTS.get(bg)
     fg = None
-    if fn is not None:
+    if sp is not None:
+        fn = sp.FRONT.get(bg)
+        fg = sp.build_front(fn) if fn is not None else None
+    elif fn is not None:
         full = pygame.Surface((STAGE_W, STAGE_H))
         full.fill(KEY)
         fn(full)
@@ -1773,7 +1792,8 @@ def get_foreground(bg):
 
 def draw_scene_anim(scr, bg, t):
     """Camada animada do cenario (por quadro; so pygame.draw/blits de sprites prontos)."""
-    fn = _ANIMS.get(bg)
+    sp = _px_scenes(bg)
+    fn = sp.ANIM.get(bg) if sp is not None else _ANIMS.get(bg)
     if fn is not None:
         fn(scr, t)
 
