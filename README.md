@@ -23,7 +23,7 @@ pelas habilidades dos robôs.
 | ![Menu principal](docs/img/menu.png) | ![Partida com câmera de estádio, gol e faixa do narrador](docs/img/partida-estadio-gol.png) |
 | **Menu** - amistosos, carreira de clubes, Modo Robôs e campanha | **Partida** - câmera de estádio, torcida reagindo ao gol, LED e faixa do narrador |
 | ![Campanha: diálogo](docs/img/campanha-dialogo.png) | ![Campanha: mapa dos capítulos](docs/img/campanha-mapa.png) |
-| **Campanha** - diálogos com personagens em pixel art animados e cenários desenhados por código | **Mapa da campanha** - da escola ao Mundial de Aspiradores |
+| **Campanha** - diálogos com personagens e cenários em pixel art animados (torcida com rostos, piso de tábuas, luzes) | **Mapa da campanha** - da escola ao Mundial de Aspiradores |
 | ![Campanha: torneio](docs/img/campanha-torneio.png) | ![Modo Robôs: liga](docs/img/modo-robos-liga.png) |
 | **Torneio** - grupo, chaveamento e final contra o chefe (ASSISTIR ou SIMULAR) | **Modo Robôs** - liga de 6 times em 4 tiers |
 | ![Garagem: bancada com 8 slots](docs/img/garagem-bancada.png) | ![Árvore de habilidades](docs/img/habilidades.png) |
@@ -400,6 +400,7 @@ Utilitários do harness (`tests/sim_harness.py`): `golden`/`golden-new` com
 - `game/campaign_ui.py`: telas da campanha (menu, mapa com abas por Ato, missões secundárias, diálogo, torneio de copa/liga/série, resultado, fim de capítulo, fim com galeria de finais e entrada do NG+, Torre do Pó), reaproveitando garagem/bancada/loja do Modo Robôs
 - `game/portraits.py`: retratos e cenários da campanha, desenhados por código
 - `game/portraits_pixel.py`: personagens da campanha em pixel art (estilo padrão; `SOCCERPY_PORTRAITS=classico` volta ao desenho vetorial antigo para comparação)
+- `game/scenes_pixel.py`: cenários da campanha em pixel art (tela lógica 1/3 ampliada x3; estilo padrão; `SOCCERPY_SCENES=classico` volta aos cenários antigos para comparação)
 - `docs/`: planejamento e especificações (`docs/INDEX.md`); `docs/img/`: capturas de tela do README
 - `tests/`: testes, harness de simulação e baselines (`baseline_golden*.json`) (ficam fora de `game/` para não entrar no pacote do pygbag)
 

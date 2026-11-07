@@ -524,7 +524,7 @@ def bleachers(c, x0, x1, y0, rows, row_h, seat, rng, shirts=SHIRTS, tag="std", e
         F(c, mul(srp[1], f), x0, y + row_h - 4, x1 - x0, 3)                # assento
         F(c, mul(srp[0], f), x0, y + row_h - 4, x1 - x0, 1)
         F(c, mul(srp[3], f), x0, y + row_h - 1, x1 - x0, 1)
-        fa = _faded(atlas, round(f, 2), tint_col, (kind, tag))
+        fa = _faded(atlas, round(f * 20) / 20.0, tint_col, (kind, tag))          # niveis de 0,05: poucas copias
         x = x0 - rng.randint(0, step)
         while x < x1 - 1:
             if rng.random() > empty:
@@ -628,6 +628,8 @@ def blink(t, period, duty, phase=0.0):
 
 # ================================================================================ pecas comuns
 WOOD = ramp((178, 114, 64))
+GOLD = (255, 214, 90)
+NEON = (0, 230, 255)
 LINE = (238, 226, 204)
 
 
@@ -708,6 +710,21 @@ def bg_ginasio(c):
     F(c, (8, 12, 22), 0, 105, LW, 1)
     wood_floor(c, 106, LH, WOOD, rng)
     court(c, 106, LH)
+    for x, col in ((24, (200, 40, 50)), (70, (30, 90, 200)), (297, (230, 180, 40)), (343, (30, 150, 90))):
+        rp = ramp(col)                                                             # flamulas de campeao
+        F(c, (60, 70, 90), x - 5, 11, 11, 1)
+        F(c, INK, x - 6, 12, 13, 20)
+        F(c, rp[1], x - 5, 12, 11, 19)
+        F(c, rp[0], x - 5, 12, 2, 19)
+        F(c, rp[2], x + 4, 12, 1, 19)
+        for k in range(6):
+            F(c, rp[1], x - 5 + k, 31 + k, 11 - 2 * k, 1)
+            F(c, INK, x - 6 + k, 31 + k, 1, 1)
+            F(c, INK, x + 5 - k, 31 + k, 1, 1)
+        F(c, GOLD, x - 5, 14, 11, 1)
+        F(c, (250, 250, 250), x - 2, 18, 5, 5)
+        F(c, rp[1], x - 1, 19, 3, 3)
+        F(c, GOLD, x - 3, 26, 7, 1)
     for x in (46, 138, 230, 322):                                                  # refletores
         F(c, (40, 50, 70), x, 0, 1, 3)
         lamp_head(c, x, 4)
@@ -1450,8 +1467,6 @@ def anim_camarim(scr, t):
 
 
 # ================================================================================ ARENA / MUNDIAL
-GOLD = (255, 214, 90)
-NEON = (0, 230, 255)
 _SHIRTS_GOLD = ((236, 196, 70), (240, 240, 245), (220, 70, 70), (70, 130, 230), (255, 214, 90), (40, 44, 60))
 
 
@@ -1703,20 +1718,23 @@ def bg_coliseu(c):
             pygame.draw.rect(c, (12, 10, 18), (int(x) - 4, int(y) - 9, 8, 10), border_top_left_radius=4,
                              border_top_right_radius=4)
             F(c, (110, 86, 40), int(x) - 5, int(y), 10, 1)
-    atlas = crowd_atlas("small", _SHIRTS_DARK, "dark")
     for i in range(rings):                                                            # publico nos aneis
-        f = 0.45 + i * 0.1
-        fa = _faded(atlas, round(f, 2), (230, 210, 200), ("small", "dark"))
-        for row in range(2):
+        big = i >= 3                                                                  # aneis de baixo: mais perto
+        kind = "big" if big else "small"
+        cw, chh = (CELL_W, CELL_H) if big else (SMALL_W, SMALL_H)
+        atlas = crowd_atlas(kind, _SHIRTS_DARK, "dark")
+        f = 0.42 + i * 0.1
+        fa = _faded(atlas, round(f * 20) / 20.0, (230, 210, 200), (kind, "dark"))
+        for row in range(1 if big else 2):
             rx, ry = 268 - i * 22 - row * 7, 122 - i * 17 - row * 6
-            n = int(rx * 3.1 / 4.4)
+            n = int(rx * 3.1 / (6.2 if big else 4.4))
             for j in range(n):
                 a = math.pi * (j + rng.random() * 0.3) / n
                 x = int(cx + rx * math.cos(a))
                 y = int(cy - ry * math.sin(a))
-                if -4 <= x < LW and y < 106 and rng.random() > 0.05:
+                if -6 <= x < LW and y < 108 and rng.random() > 0.05:
                     idx = rng.randrange(ATLAS_N)
-                    c.blit(fa, (x - 2, y - 5), (idx * SMALL_W, 0, SMALL_W, SMALL_H))
+                    c.blit(fa, (x - cw // 2, y - chh + 2), (idx * cw, 0, cw, chh))
     # muro da arena com a placa OMEGA
     F(c, (14, 12, 20), 0, 106, LW, 17)
     stone_blocks = ramp((40, 34, 46))
@@ -2274,7 +2292,7 @@ def bg_aeroporto(c):
     box(c, (44, 46, 6, 34), ramp((50, 50, 80)))                                            # torre de controle
     pygame.draw.polygon(c, (60, 66, 110), [(38, 40), (56, 40), (54, 47), (40, 47)])
     F(c, (130, 210, 240), 40, 42, 14, 2)
-    plane(c, 250, 42, (60, 62, 110))
+    plane(c, 150, 30, (60, 62, 110))
     for x in range(0, LW + 1, 37):                                                         # caixilhos
         box(c, (x - 1, 0, 3, 100), ramp((36, 46, 76)), outline=None)
     F(c, (30, 40, 66), 0, 0, LW, 4)
@@ -2560,7 +2578,7 @@ def anim_fabrica(scr, t):
     j1 = (306, 44)
     j2 = (round(j1[0] - 30 * math.cos(a + 0.6)), round(j1[1] + 23 + 13 * math.sin(a)))
     j3 = (j2[0] - 7, 84)
-    for (ax, ay), (bx, by), w, col in ((j1, j2, 3, (240, 190, 40)), (j2, j3, 2, (200, 160, 40))):
+    for (ax, ay), (bx, by), w, col in ((j1, j2, 4, (240, 190, 40)), (j2, j3, 3, (200, 160, 40))):
         n = max(abs(bx - ax), abs(by - ay), 1)
         for k in range(n + 1):
             Q(scr, col, round(ax + (bx - ax) * k / n) - w // 2, round(ay + (by - ay) * k / n) - w // 2, w, w)
@@ -2647,12 +2665,12 @@ def bg_lanchonete(c):
     F(c, (60, 90, 130), wx + ww // 2 - 1, wy, 2, wh)
     F(c, (160, 200, 230), wx + 2, wy + 2, 1, 12)
     # cardapio luminoso
-    box(c, (212, 12, 141, 46), ramp((14, 16, 28)), outline=(4, 4, 10))
-    pygame.draw.rect(c, (255, 120, 180), (213, 13, 139, 44), 1)
+    box(c, (226, 12, 128, 46), ramp((14, 16, 28)), outline=(4, 4, 10))
+    pygame.draw.rect(c, (255, 120, 180), (227, 13, 126, 44), 1)
     for i, (w, p) in enumerate(((60, "890"), (50, "1250"), (70, "690"), (40, "450"))):
         y = 18 + i * 9
-        F(c, (220, 230, 245), 219, y + 2, w, 2)
-        F(c, (120, 130, 150), 219, y + 4, w - 10, 1)
+        F(c, (220, 230, 245), 233, y + 2, w - 4, 2)
+        F(c, (120, 130, 150), 233, y + 4, w - 14, 1)
         text(c, p, 346 - text_w(p), y, (255, 214, 90))
     # balcao
     F(c, (14, 18, 30), 127, 8, 80, 18)                                                    # placa do neon (apagada)
@@ -2664,11 +2682,11 @@ def bg_lanchonete(c):
     F(c, (220, 226, 236), 10, 106, 347, 1)
     box(c, (8, 92, 351, 4), ramp((214, 222, 236)))
     # cafeteira
-    box(c, (293, 70, 37, 22), ramp((170, 180, 200)))
-    F(c, (40, 50, 70), 298, 75, 27, 10)
-    F(c, (90, 100, 120), 299, 76, 8, 1)
-    F(c, (255, 80, 80), 324, 87, 2, 2)
-    box(c, (304, 86, 6, 5), ramp((240, 240, 240)))
+    box(c, (326, 70, 33, 22), ramp((170, 180, 200)))
+    F(c, (40, 50, 70), 330, 75, 25, 10)
+    F(c, (90, 100, 120), 331, 76, 8, 1)
+    F(c, (255, 80, 80), 354, 87, 2, 2)
+    box(c, (336, 86, 6, 5), ramp((240, 240, 240)))
     for x, col in ((160, (255, 150, 190)), (180, (150, 220, 255))):                       # milkshakes
         pygame.draw.polygon(c, INK, [(x - 5, 79), (x + 5, 79), (x + 3, 92), (x - 3, 92)])
         pygame.draw.polygon(c, (226, 234, 244), [(x - 4, 80), (x + 4, 80), (x + 2, 91), (x - 2, 91)])
@@ -2704,7 +2722,7 @@ def anim_lanchonete(scr, t):
     for i in range(3):                                                                    # vapor da cafeteira
         for j in range(5):
             Q(scr, (150, 166, 196) if j < 3 else (110, 124, 150),
-              303 + i * 4 + round(1.5 * math.sin(t * 3 + j * 0.8 + i)), 68 - j * 3 - int((t * 5) % 3))
+              335 + i * 4 + round(1.5 * math.sin(t * 3 + j * 0.8 + i)), 68 - j * 3 - int((t * 5) % 3))
     x = int((t * 46) % 175) - 34                                                          # carro passando
     for dx in (0, 9):
         if 13 <= x + dx < 117:
