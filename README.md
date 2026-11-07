@@ -325,6 +325,10 @@ cd game && pygbag --template ../web/copaaspirador.tmpl --width 1100 --height 700
 
 # gerar build estático para publicar (itch.io, GitHub Pages...): game/build/web/
 cd game && pygbag --template ../web/copaaspirador.tmpl --width 1100 --height 700 --title "Copa Aspirador" --build .
+
+# antes de publicar: versiona os pacotes no index.html (game.apk?v=<sha>), para cada deploy
+# aparecer na hora (nem o Cloudflare nem o navegador servem o pacote antigo do cache)
+cd .. && tools/versionar_build.sh
 ```
 
 ## Testes
