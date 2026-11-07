@@ -9,9 +9,9 @@ Planejamento e especificações do jogo. O código e os comandos do dia a dia es
 | [specs/campanha-expandida.md](specs/campanha-expandida.md) | A campanha atual vira o Ato 1; Ato 2 (Superliga Limpex, caps. 6-9) e Ato 3 (Copa dos Campeões, caps. 10-13); 7 personagens novos, formatos de torneio novos, escolhas com consequência, 3 finais, missões secundárias, migração de saves, curva de dificuldade e economia |
 | [specs/itens-e-habilidades.md](specs/itens-e-habilidades.md) | Peças de 14 para ~36 modelos, 8º slot "Módulo", sets, relíquias únicas, consumíveis de partida, cosméticos e o sistema de 16 skills dos robôs (gatilhos, efeitos no motor, cooldown, custo de bateria, como se ganham), integração no motor sem quebrar os goldens, calibração e garage v2 |
 | [specs/visual-desenhos-e-torcida.md](specs/visual-desenhos-e-torcida.md) | Torcida nas arquibancadas (geometria, técnica sem Surface por frame, orçamento de desempenho, reações por evento, densidade por capítulo, narrador e comentarista na faixa de TV, telão AO VIVO, câmera ESTÁDIO em toda partida), robôs com peças visíveis e animações, retratos e cenários mais detalhados, personagens em pixel art (estilo padrão: técnica, roupas/acessórios por personagem, humores, busto, cache e custo), e como testar |
-| [specs/som.md](specs/som.md) | Fase 6 - Som: catálogo de efeitos e onde tocam, trilhas chiptune, síntese (stdlib, 22050 Hz), formato do mixer, prefs (M/S/N), limites de vozes e throttle, navegador (pygbag) e medições; reações da torcida (tabela única, variações derivadas, saco embaralhado) e áudios compactos com volume nivelado (`tools/normalizar_audio.sh`) |
+| [specs/som.md](specs/som.md) | Fase 6 - Som: catálogo de efeitos e onde tocam, trilhas chiptune, síntese (stdlib, 22050 Hz), formato do mixer, prefs (M/S/N), limites de vozes e throttle, navegador (pygbag) e medições; reações da torcida (tabela única, variações derivadas, saco embaralhado), música da partida + torcida de fundo em loop tocando juntas (volumes, RAM, `tools/torcida_loop.sh`) e áudios compactos com volume nivelado (`tools/normalizar_audio.sh`) |
 | [baseline-fase4.md](baseline-fase4.md) | Medições de referência antes da Fase 4 (commit 8a467a3): `draw_ms`, `menu_ms`, `ms_step`, goldens e resumo da calibragem da campanha |
-| [img/](img/) | Capturas de tela usadas no README (menu, partida, campanha, garagem, habilidades, Mochila, cosméticos). Para regerar: rode `tests/test_robots_ui.py`, `tests/test_campaign_ui.py` e `tests/sim_harness.py camera-shots` com `SOCCERPY_SHOTS_DIR=<pasta>` e copie as imagens escolhidas |
+| [img/](img/) | Capturas de tela usadas no README (menu, partida, amistoso, campanha, garagem, habilidades, Mochila, cosméticos). Para regerar: rode `tests/test_robots_ui.py`, `tests/test_campaign_ui.py` e `tests/sim_harness.py camera-shots` com `SOCCERPY_SHOTS_DIR=<pasta>` e copie as imagens escolhidas |
 | [specs/plano-de-implementacao.md](specs/plano-de-implementacao.md) | Ondas 0, A (visual), B (itens/skills), C (campanha), D (pós-campanha) em passos pequenos com arquivos e validação; estratégia de testes; riscos; decisões para o dev |
 
 ## Estado
@@ -40,5 +40,8 @@ Planejamento e especificações do jogo. O código e os comandos do dia a dia es
     `tests/calib_campaign.py --post` (detalhes e desvios em
     [specs/plano-de-implementacao.md](specs/plano-de-implementacao.md)).
 - Fase 5 (Editor de firmware): planejada
+- Amistoso com escolha de times (29, de todos os modos) e formações (5) antes da partida (`game/friendly.py`,
+  `game/friendly_ui.py`; padrão idêntico ao motor antigo, goldens 80/80) e música nas partidas
+  (`partida_musica.ogg`) junto da torcida de fundo em loop: prontos, ainda não publicados.
 - Fase 6 (Som): **pronta** — efeitos e música sintetizados por código (`game/sfx.py`, `game/music.py`),
   sons gravados em `game/audio/` (músicas de menu/robôs/copas, torcida, gol, apito, trave, motor e desligar dos robôs), mudo (M) e volumes (S/N) nas prefs, testado no desktop e no navegador (pygbag); ainda não publicada

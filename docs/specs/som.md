@@ -37,7 +37,7 @@ Em **MAX** (`speed_idx == 3`) nenhum som de lance toca.
 | Trilha | Uso | Tempo / tamanho |
 |---|---|---|
 | `menu` | menu, carreira, Modo Robôs, campanha (loop) | 128 bpm, 8 compassos, ~15 s |
-| `match` | partida, inclusive pausa e fim (loop, ganho 0,55 sob os efeitos) | 150 bpm, 8 compassos, ~12,8 s |
+| `match` | partida, inclusive pausa e fim (loop, ganho 0,55 sob os efeitos); só toca se `partida_musica.ogg` faltar | 150 bpm, 8 compassos, ~12,8 s |
 | `win` / `lose` | jingles sintetizados (não tocam mais no resultado: o card usa a caixa registradora) | ~3,4 s / ~5 s |
 
 Lead em pulso (duty 25/50%), baixo em triângulo, bateria com bumbo (seno descendo), caixa, chimbal e
@@ -46,6 +46,42 @@ reservado 0 (`Sound` em loop, `loops=-1`; `pygame.mixer.music` não é usado). O
 canal e, ao terminar, a trilha pedida volta sozinha. Resultado: Modo Robôs `finish_round`, campanha
 `finish_result` (pênaltis decidem empate), carreira `make_round_info`, amistoso no fim da partida
 (modo 1 = visão do humano).
+
+## Música e torcida na partida (juntas)
+Toda partida (amistoso, carreira, Modo Robôs, campanha; inclusive pausa e fim) toca **duas camadas** de
+fundo ao mesmo tempo, por baixo dos efeitos, dos gritos e das reações da torcida:
+
+| Camada | Arquivo | Como toca | Volume |
+|---|---|---|---|
+| música | `partida_musica.ogg` ("Into the Iron Horizon", 179 s; mono 22,05 kHz q2, -20 LUFS, 857 KB) | `STREAMS["match"]` em `pygame.mixer.music` (o único stream), `play(loops=-1)` (faixa única: loop no próprio stream, sem recarregar) | `music_vol` x `MATCH_MUSIC_GAIN` 0,5 (tecla **N**) |
+| torcida de fundo | `torcida_loop.ogg` (24 s, mono 44,1 kHz q2, -20 LUFS, 172 KB) | `Sound` em loop (`loops=-1`) no canal reservado 2 (`sfx.bed_tick`), fade de 600 ms ao entrar/sair | `sfx_vol` x `BED_VOL` 0,85 (tecla **S**) |
+
+- Antes a torcida era a trilha `match` do stream (3 gravações de 42-156 s alternando), e o stream é um só:
+  com a música nele, a torcida virou um `Sound` curto em loop. `tools/torcida_loop.sh` mistura os trechos
+  mais estáveis das 3 gravações (`torcida` e `torcida_estadio` a 0,75, o canto `torcida_boca` a 0,30),
+  faz o loop com **crossfade de 3 s** (potência constante) do fim sobre o começo e aplica um **ganho
+  estático** para -20 LUFS (o `loudnorm` dinâmico mudaria o ganho ao longo do arquivo e a emenda
+  apareceria). O loop tem 517 x 2048 quadros: o libvorbis do ffmpeg completa o último bloco com
+  silêncio, e com 24 s exatos o arquivo decodificava com 32 quadros a mais (clique na emenda). Medido:
+  salto na emenda do tamanho da mediana do sinal; RMS das pontas -20,6 / -19,0 dB. As 3 gravações
+  originais saíram de `game/audio/` (estão no histórico do repositório, commit 3d6d029) e o script as lê
+  de qualquer pasta.
+- **Volumes (padrão, MÉDIO = 0,65):** música 0,65 x 0,5 = **0,33**; torcida 0,65 x 0,85 = **0,55** (o
+  mesmo nível da antiga trilha `match`); efeitos/reações 0,6-1,0 x 0,65 sobre arquivos a -16 LUFS. A
+  música fica ~4-5 dB abaixo da torcida e bem abaixo dos efeitos. **N** desliga só a música, **S**
+  desliga efeitos e a torcida (a música segue), **M** corta tudo. Fora da partida (`track != "match"`)
+  a torcida para com fade; a demo do menu continua só com a música do menu.
+- **Canais:** 17 (0 = música sintetizada/jingle, 1 = motor dos robôs, 2 = torcida; 14 vozes de efeito,
+  as mesmas de antes).
+- **RAM (áudio decodificado, mixer 44,1 kHz estéreo 16-bit = ~10,6 MB/min):** a torcida em loop ocupa
+  **4,2 MB**; o total de `Sound` na memória foi de ~49,9 MB para **~54,1 MB** (efeitos em arquivo 39,6 MB,
+  motor 7,7 MB, torcida 4,2 MB, síntese 2,5 MB). A música não é decodificada inteira (stream).
+- Sem `torcida_loop.ogg`: partida só com a música; sem `partida_musica.ogg`: a trilha sintetizada `match`.
+- **Navegador (verificado com Playwright no servidor do pygbag, AnalyserNode na saída do SDL):**
+  AudioContext `running` a 44100 Hz; console `[som] partida: torcida de fundo (canal 2) + musica match`
+  ao começar o amistoso; RMS na pausa da partida com as duas = 0,064; só a torcida (N = DESL.) = 0,060;
+  só a música (S = DESL.) = 0,042; com **M** = 0. Ou seja, as duas tocam juntas e cada uma responde à
+  sua tecla.
 
 ## Síntese e formato
 - Tudo nasce em **22050 Hz mono 16-bit** e é convertido uma vez por `sfx.fit` para
@@ -65,7 +101,7 @@ canal e, ao terminar, a trilha pedida volta sozinha. Resultado: Modo Robôs `fin
 - A geração roda **aos poucos** dentro de `tick` (orçamento de 5 ms por quadro; cada pedaço é um
   efeito ou parte de um compasso). Ordem: sons de menu, trilha do menu, efeitos, trilha da partida,
   jingles. Um `play` de algo ainda não gerado gera na hora.
-- Limites: 16 canais (1 reservado à música), intervalo mínimo por id (ex.: `kick` 60 ms, `goal`
+- Limites: 17 canais (3 reservados: música sintetizada/jingle, motor, torcida), intervalo mínimo por id (ex.: `kick` 60 ms, `goal`
   1,5 s, `ooh` 1,2 s) e vozes simultâneas por id (1-2). Custo por quadro: uma comparação de string e,
   com jingle, um `get_busy`.
 - **Falha = silêncio**: qualquer erro do mixer (sem dispositivo, formato de 8 bits etc.) deixa
@@ -141,8 +177,9 @@ Regra: todo áudio novo passa por `tools/normalizar_audio.sh <pasta_de_entrada> 
 | Tipo | Formato | Corte | Volume |
 |---|---|---|---|
 | efeitos e reações (o resto) | vorbis mono 44,1 kHz, q3 | silêncio do início (`silenceremove`, -50 dB) | `loudnorm` I=-16 LUFS, TP=-1,5 dBTP |
-| músicas e torcida de fundo (stream: `menu1-3`, `copas`, `interno1/2`, `submenus`, `torcida*`) | vorbis mono 22,05 kHz, q2 | nenhum | I=-20 LUFS (fundo: não briga com os efeitos) |
+| músicas (stream: `menu1-3`, `copas`, `interno1/2`, `submenus`, `partida_musica`; e as fontes `torcida*` do loop) | vorbis mono 22,05 kHz, q2 | nenhum | I=-20 LUFS (fundo: não briga com os efeitos) |
 | motor dos robôs (`robo_motor`, Sound em loop) | vorbis mono 44,1 kHz, q2 | nenhum | I=-20 LUFS |
+| torcida de fundo (`torcida_loop`, Sound em loop; `tools/torcida_loop.sh`) | vorbis mono 44,1 kHz, q2 | trecho de ~27 s de cada gravação | ganho estático para -20 LUFS (loop sem emenda) |
 
 Medido: fontes em `game/audio/` 14,4 MB -> 7,5 MB (48 arquivos, já com as 16 gravações novas);
 `game.apk` 10.267.824 -> 7.169.990 bytes.

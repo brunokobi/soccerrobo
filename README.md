@@ -31,6 +31,10 @@ pelas habilidades dos robôs.
 | ![Mochila de itens](docs/img/mochila.png) | ![Galeria de cosméticos](docs/img/visual-cosmeticos.png) |
 | **Mochila** - até 2 itens de partida, gastos ao jogar | **Visual** - adesivo, antena, rastro e comemoração por robô |
 
+![Amistoso: escolha de times e formações](docs/img/amistoso-escolha.png)
+
+**Amistoso** - antes da partida, o time e a formação de cada lado (escudo, força e mini-campo com a posição dos robôs).
+
 | ![Mapa do Ato 2](docs/img/campanha-mapa-ato2.png) | ![Superliga em pontos corridos](docs/img/campanha-superliga.png) |
 | **Ato 2** - mapa por Ato (Ato 1 escola ao Mundial, Ato 2 Superliga Limpex, Ato 3 Copa dos Campeões) | **Superliga** - liga em pontos corridos, os 4 primeiros vão à semifinal |
 
@@ -94,12 +98,17 @@ faixa fica sob o campo; na PERTO, dentro do campo, sempre do lado oposto ao da b
 ## Som
 Efeitos sintetizados por código (`game/sfx.py` e `game/music.py`, gerados com `math`/`array` no
 início do jogo, aos poucos) somados a sons gravados em `game/audio/` (OGG mono, volume nivelado por
-`tools/normalizar_audio.sh`, ~7,5 MB no total):
+`tools/normalizar_audio.sh`, ~7,3 MB no total):
 
 - **Músicas (stream, uma faixa depois da outra, em loop):** menu principal = `menu1/2/3.ogg`
   (desde o clique da tela de carregamento); tela de robôs = `interno1/2.ogg` + `submenus.ogg`;
-  carreira e campanha = `copas.ogg` + `interno1/2.ogg`; partida = torcida ao fundo, alternando 3 gravações (`torcida.ogg`, `torcida_boca.ogg` e
-  `torcida_estadio.ogg`, com o volume igualado).
+  carreira e campanha = `copas.ogg` + `interno1/2.ogg`; **partidas** (amistoso, carreira, Modo Robôs e
+  campanha) = `partida_musica.ogg` ("Into the Iron Horizon", 3 min, em loop), mais baixa que a torcida e
+  os efeitos.
+- **Torcida de fundo da partida:** toca junto com a música, num canal próprio: `torcida_loop.ogg`, 24 s
+  em loop sem emenda audível, feito por `tools/torcida_loop.sh` com as 3 gravações de torcida
+  misturadas (crossfade entre o fim e o começo). Segue o volume dos efeitos (**S**); a música segue o
+  **N**; **M** corta as duas.
 - **Reações da torcida (tabela única `FILE_SFX` em `game/sfx.py`):** cada reação tem de 3 a 9
   variações (gravações + variações derivadas delas em tempo de execução: outro tom/andamento ou outro
   trecho, sem arquivo novo), sorteadas em "saco embaralhado" (toca todas antes de repetir, nunca a
@@ -118,8 +127,9 @@ Ligados por padrão em volume médio.
 - **Efeitos:** chute e toque na bola, roubo e drible, trave (CLANG), apito de início e de fim, gol
   (explosão da torcida + buzina), "uuuh" da chance, defesa, palmas, skill (BUZZ), arrancada (ZOOM),
   cliques de menu, avanço de diálogo, vitória/derrota/empate, recompensa, compra e upgrade na loja.
-- **Música** chiptune em loop: uma trilha para menus/campanha e outra, mais animada e mais baixa,
-  para a partida; "acabou!" no apito final e caixa registradora no card do resumo da partida.
+- **Música** chiptune em loop (só se faltarem os arquivos): uma trilha para menus/campanha e outra, mais
+  animada e mais baixa, para a partida; "acabou!" no apito final e caixa registradora no card do resumo
+  da partida.
 - **Teclas:** **M** liga/desliga o mudo geral (em qualquer tela); **S** gira o volume dos efeitos e
   **N** o da música (DESL. / BAIXO / MÉDIO / ALTO), no menu ou na pausa. Tudo fica gravado nas
   preferências. No modo MAX a partida fica sem efeitos.
@@ -140,6 +150,20 @@ torcida, ~1 min) sem trocar a música do menu. Qualquer tecla, clique, toque ou 
 
 1. **Amistoso: um jogador** contra a CPU (2 min)
 2. **Amistoso: dois jogadores** no mesmo teclado
+
+   Antes do amistoso, uma tela escolhe o **time** e a **formação** de cada lado. São 29 times que já
+   existem no jogo: os 2 clássicos do amistoso (Azul e Vermelho, o padrão), 8 clubes da carreira, 13
+   times da campanha (do Clube do Xadrez ao X-Ômega Prime) e 6 da liga do Modo Robôs, cada um com
+   escudo, cor e força (os robôs entram em campo com a força do time). O mesmo time não pode estar dos
+   dois lados; cores parecidas fazem o lado da direita trocar de cor, como nas outras partidas.
+   Formações (mini-campo com a posição dos 5 robôs): **EQUILIBRADA 1-2-1** (a de sempre), **RETRANCA
+   2-1-1** (dois zagueiros, bloco recuado), **OFENSIVA 1-1-2** (dois atacantes abertos), **QUADRADO 2-2**
+   e **PRESSÃO 1-2-1** (linha alta). A formação muda onde cada robô fica e para onde volta durante o jogo
+   (posição base + avanço/recuo do bloco); os papéis e atributos dos robôs não mudam.
+   Teclas: setas/WASD escolhem (no modo 1 você escolhe os dois lados; TAB troca de lado; no modo 2 o J1
+   usa WASD no lado esquerdo e o J2 as setas no direito, ao mesmo tempo), **R** = aleatório, **ENTER** =
+   jogar, **ESC** = menu; com o mouse: setas < >, roda sobre a linha e os botões. A última escolha fica
+   lembrada (na sessão e nas preferências); no fim da partida, ENTER joga a revanche com os mesmos times.
 3. **Nova carreira de clubes** (estilo Elifoot): você é o técnico. 24 clubes fictícios
    em 3 divisões de 8 times (ida e volta, 14 rodadas). Elenco de 15-20 jogadores
    com overall/idade/valor, escalação dos 5 titulares (GOL, DEF, 2 MEI, ATA),
@@ -351,7 +375,8 @@ export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy
 .venv/bin/python tests/test_campaign_ui.py             # telas da campanha (menu, mapa por Ato, missões, diálogo, torneio, fim e galeria)
 .venv/bin/python tests/test_portraits.py               # retratos e cenários desenhados por código
 .venv/bin/python tests/test_prefs.py                   # preferências do jogador (store, valor inválido -> padrão)
-.venv/bin/python tests/test_sfx.py                     # som: buffers sintetizados, arquivos OGG (trilhas, efeitos, motor), throttle, mudo
+.venv/bin/python tests/test_friendly.py                # amistoso: times/formações, padrão idêntico ao motor antigo, tela, prefs, zero Surface
+.venv/bin/python tests/test_sfx.py                     # som: buffers sintetizados, arquivos OGG (trilhas, efeitos, motor), música + torcida da partida, throttle, mudo
 .venv/bin/python tests/test_crowd.py                   # torcida: locais, reações, extras, LOD, zero Surface por quadro
 .venv/bin/python tests/test_fireworks.py                # fogos do gol/vitória, modo demo, pisos do campo, nomes em caixa alta
 .venv/bin/python tests/test_camera.py                  # câmera de estádio: começa sempre em ESTÁDIO, tecla C, gol não troca, zero Surface
@@ -391,12 +416,14 @@ Utilitários do harness (`tests/sim_harness.py`): `golden`/`golden-new` com
 - `game/robot_league.py`: liga de 6 times (calendário, tabela, simulação estatística, premiação)
 - `game/robot_art.py`: arte dos robôs em campo (sprites pré-renderizados e cache); `Game` delega a ele
 - `game/store.py`: armazenamento de texto (`localStorage` no navegador, arquivo em `~` no desktop)
-- `game/prefs.py`: preferências do jogador (`soccerpy_prefs_v1`: torcida ALTA/MEDIA/OFF, tecla T; som `sfx_vol`/`music_vol` 0-3 e `mute`, teclas S/N/M), com sanitize e padrão
+- `game/prefs.py`: preferências do jogador (`soccerpy_prefs_v1`: torcida ALTA/MEDIA/OFF, tecla T; som `sfx_vol`/`music_vol` 0-3 e `mute`, teclas S/N/M; última escolha do amistoso `fr_t0/fr_t1/fr_f0/fr_f1`), com sanitize e padrão
+- `game/friendly.py` / `game/friendly_ui.py`: amistoso com escolha de times (29, de todos os modos) e formações (5), puro, e a tela de escolha
 - `game/sfx.py`: efeitos sonoros sintetizados, tabela única reação -> sons gravados (`FILE_SFX`, com variações derivadas em runtime e saco embaralhado), conversão para o formato do mixer, throttle, volumes/mudo, a música no canal reservado e a playlist do menu (`game/audio/*.ogg`, via `pygame.mixer.music`)
 - `game/music.py`: trilhas chiptune (menu, partida, jingles de vitória/derrota) escritas como texto e sintetizadas compasso a compasso
 - `game/crowd.py`: torcida (locais, espectadores pré-renderizados, reações, confete/LED/telão "AO VIVO", LOD) e a geometria das câmeras PERTO/ESTÁDIO
 - `game/narration.py`: narrador (Tonho) e comentarista (Cleide): catálogo de falas, fila sem spam e a faixa de TV da partida
 - `tools/normalizar_audio.sh`: deixa os áudios de `game/audio/` compactos e com o volume nivelado (ffmpeg; ver `docs/specs/som.md`)
+- `tools/torcida_loop.sh`: gera `game/audio/torcida_loop.ogg` (torcida de fundo da partida, 24 s em loop sem emenda) a partir das 3 gravações de torcida
 - `game/robots_ui.py`: telas do Modo Robôs (hub, garagem, banco, loja, habilidades, mochila, visual, liga)
 - `game/career.py` / `game/career_ui.py`: carreira de clubes (liga, mercado, finanças, save) e suas telas
 - `game/story.py`: dados da campanha (personagens, times, cenas/diálogos, torneios, capítulos, recompensas); módulo puro, sem pygame. É a fachada da campanha: guarda o Ato 1 e junta `story_a2.py` (Ato 2), `story_a3.py` (Ato 3) e `story_side.py` (missões secundárias), com os dados de cada parte; `story_post.py` guarda as cenas curtas das revanches do NG+
