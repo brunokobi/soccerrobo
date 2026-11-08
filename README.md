@@ -47,6 +47,10 @@ pelas habilidades dos robôs.
 |---|---|
 | **Fim da partida** - escudos dos dois times no placar e na faixa do resultado | **Carreira** - escudo de cada clube na tabela, no próximo jogo e nos resultados |
 
+![Elenco da carreira com robôs](docs/img/carreira-elenco.png)
+
+**Elenco da carreira** - robôs aspiradores com nome de robô, de 5 a 10 por time (5 titulares em verde).
+
 ![Todos os escudos](docs/img/escudos.png)
 
 **Escudos** - os 128 times do jogo (e exemplos de nomes do time do jogador, com *), desenhados por código.
@@ -189,11 +193,16 @@ torcida, ~1 min) sem trocar a música do menu. Qualquer tecla, clique, toque ou 
    jogar, **ESC** = menu; com o mouse: setas < >, roda sobre a linha e os botões. A última escolha fica
    lembrada (na sessão e nas preferências); no fim da partida, ENTER joga a revanche com os mesmos times.
 3. **Nova carreira de clubes** (estilo Elifoot): você é o técnico. 24 clubes fictícios
-   em 3 divisões de 8 times (ida e volta, 14 rodadas). Elenco de 15-20 jogadores
-   com overall/idade/valor, escalação dos 5 titulares (GOL, DEF, 2 MEI, ATA),
-   **mercado de transferências**, vender jogadores, finanças (bilheteria,
+   em 3 divisões de 8 times (ida e volta, 14 rodadas). Os jogadores são **robôs aspiradores**
+   com nome de robô ("Zumbido", "Faísca", "Rodinha", "Turbo Mk2", "Vassoura-7", "RX-07"...;
+   catálogo de ~4,7 mil nomes em `game/robot_names.py`, tirado do id do robô, sem repetir no clube).
+   **Elenco de 5 a 10 robôs** (5 titulares em campo: GOL, DEF, 2 MEI, ATA, e até 5 reservas; os
+   clubes da CPU começam com 7-10, sempre com goleiro reserva) com overall/idade/valor,
+   **mercado de transferências** (não compra acima de 10 nem vende abaixo de 5), finanças (bilheteria,
    salários, premiação), **promoção/rebaixamento** (sobem/descem 2) e evolução
-   dos jogadores entre temporadas. Suas partidas são **jogadas automaticamente
+   dos robôs entre temporadas. Save antigo (nomes de pessoa, 12-20 jogadores) é migrado ao
+   continuar: todos ganham nome de robô e o elenco fica com os titulares + os melhores reservas até 10
+   (no seu clube os excedentes são vendidos pelo valor de mercado e o dinheiro entra no caixa). Suas partidas são **jogadas automaticamente
    no campo** (você assiste; velocidade 1x/2x/4x/MAX nas teclas 1-4); as dos
    outros clubes são simuladas. Na aba INÍCIO, o seletor de **formação** do seu clube fica no
    painel da próxima partida. O progresso é salvo sozinho (`localStorage` no
@@ -444,6 +453,7 @@ export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy
 .venv/bin/python tests/test_camera.py                  # câmera de estádio: começa sempre em ESTÁDIO, C só na pausa, gol não troca, zero Surface
 .venv/bin/python tests/test_narration.py               # narrador/comentarista: catálogo, fila sem spam, nomes, faixa, zero Surface
 .venv/bin/python tests/test_match_stats.py             # estatísticas: assistência, gol contra, defesa, MVP, coleta não muda o jogo, SIMULAR, saves, telas
+.venv/bin/python tests/test_career.py                  # carreira: nomes de robô, elenco 5-10, mercado, temporadas, migração do save antigo, telas
 .venv/bin/python tests/test_crests.py                  # escudos: determinismo, todos os times, cache/memória, zero Surface por quadro, contraste, campo "crest" da garagem
 .venv/bin/python tests/test_robot_art.py               # robôs: chassis, peças visíveis, cache, FX, local da torcida por modo
 .venv/bin/python tests/test_arena.py                   # modificadores de arena da Torre do Pó (desligados fora dela, efeito, zero Surface)
@@ -496,7 +506,8 @@ Utilitários do harness (`tests/sim_harness.py`): `golden`/`golden-new` com
 - `tools/versionar_build.sh`: versiona `game.apk`/`game.tar.gz` no `index.html` do build (`?v=<sha256 curto do game.apk>`; cache busting a cada deploy)
 - `tools/torcida_loop.sh`: gera `game/audio/torcida_loop.ogg` (torcida de fundo da partida, 24 s em loop sem emenda) a partir das 3 gravações de torcida
 - `game/robots_ui.py`: telas do Modo Robôs (hub, garagem, banco, loja, habilidades, mochila, visual, liga)
-- `game/career.py` / `game/career_ui.py`: carreira de clubes (liga, mercado, finanças, save) e suas telas
+- `game/career.py` / `game/career_ui.py`: carreira de clubes (liga, elenco de 5-10 robôs, mercado, finanças, save com `ver` e migração do save antigo) e suas telas
+- `game/robot_names.py`: nomes de robô da carreira (catálogo determinístico pelo id, sem RNG)
 - `game/story.py`: dados da campanha (personagens, times, cenas/diálogos, torneios, capítulos, recompensas); módulo puro, sem pygame. É a fachada da campanha: guarda o Ato 1 e junta `story_a2.py` (Ato 2), `story_a3.py` (Ato 3) e `story_side.py` (missões secundárias), com os dados de cada parte; `story_post.py` guarda as cenas curtas das revanches do NG+
 - `game/campaign.py`: lógica da campanha (progresso, torneios de copa/liga/série, chefes/pity, treino, missões secundárias, finais, recompensas, NG+ e Torre do Pó, save v3 com migração do v1/v2)
 - `game/campaign_ui.py`: telas da campanha (menu, mapa com abas por Ato, missões secundárias, diálogo, torneio de copa/liga/série, resultado, fim de capítulo, fim com galeria de finais e entrada do NG+, Torre do Pó), reaproveitando garagem/bancada/loja do Modo Robôs

@@ -14,7 +14,7 @@ Planejamento e especificações do jogo. O código e os comandos do dia a dia es
 | [specs/estatisticas.md](specs/estatisticas.md) | Estatísticas da partida (coleta passiva no motor: gols, assistências, chutes, passes, desarmes, dribles, defesas, posse), nota e MELHOR DO JOGO, onde aparecem em cada modo (fim da partida, card do resumo, TAB), SIMULAR com RNG privado, acumulados nos saves (robo `cs`, liga `ps`, torneio `ps`, jogadores da carreira) e limitações |
 | [plano-crazygames.md](plano-crazygames.md) | Proposta para publicar no CrazyGames: como funciona a publicação (Basic/Full Launch, repasse), direitos dos áudios a trocar, inglês, SDK de anúncios (`game/portal.py`), build sem CDN externo, celular, página, cadastro/pagamento e ordem dos passos |
 | [baseline-fase4.md](baseline-fase4.md) | Medições de referência antes da Fase 4 (commit 8a467a3): `draw_ms`, `menu_ms`, `ms_step`, goldens e resumo da calibragem da campanha |
-| [img/](img/) | Capturas de tela usadas no README (menu, partida com a faixa do narrador, amistoso, formação, campanha, garagem, habilidades, Mochila, cosméticos, Torre, escudos). Para regerar, com `SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy SOCCERPY_SHOTS_DIR=<pasta>`: `tests/sim_harness.py ui-shots` (menu `a7_menu.png`, gol e narração) e `camera-shots`; `tests/test_campaign_ui.py <teste>` (ex.: `test_tourney_group_table_bracket_and_labels` -> `tourney_knockout.png`, `test_tower_screen_sim_watch_marks_and_restart` -> `d2_torre_tela.png`, `test_formation_selector_tourney_training_and_save` -> `formacao_torneio.png`); `tests/test_robots_ui.py test_formation_selector_robots_hub_and_save` (`formacao_robos.png`, aba LIGA); `tests/test_friendly.py` (tela do amistoso). A partida do README é um Modo Robôs no `estadio` com a garagem `sim_harness.loaded_garage()`, capturada após ~12 s de jogo. Confira cada imagem e copie só as escolhidas |
+| [img/](img/) | Capturas de tela usadas no README (menu, partida com a faixa do narrador, amistoso, formação, campanha, garagem, habilidades, Mochila, cosméticos, Torre, escudos, elenco da carreira). Para regerar, com `SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy SOCCERPY_SHOTS_DIR=<pasta>`: `tests/sim_harness.py ui-shots` (menu `a7_menu.png`, gol e narração) e `camera-shots`; `tests/test_campaign_ui.py <teste>` (ex.: `test_tourney_group_table_bracket_and_labels` -> `tourney_knockout.png`, `test_tower_screen_sim_watch_marks_and_restart` -> `d2_torre_tela.png`, `test_formation_selector_tourney_training_and_save` -> `formacao_torneio.png`); `tests/test_robots_ui.py test_formation_selector_robots_hub_and_save` (`formacao_robos.png`, aba LIGA); `tests/test_friendly.py` (tela do amistoso). A partida do README é um Modo Robôs no `estadio` com a garagem `sim_harness.loaded_garage()`, capturada após ~12 s de jogo. Confira cada imagem e copie só as escolhidas |
 | [specs/plano-de-implementacao.md](specs/plano-de-implementacao.md) | Ondas 0, A (visual), B (itens/skills), C (campanha), D (pós-campanha) em passos pequenos com arquivos e validação; estratégia de testes; riscos; decisões para o dev |
 
 ## Estado
@@ -67,6 +67,15 @@ Planejamento e especificações do jogo. O código e os comandos do dia a dia es
 - Escudos dos times em pixel art (`game/crests.py`): os 128 times de todos os modos + o do jogador (clique no escudo
   do topo troca símbolo/formato, campo opcional `crest` na garagem), em todas as telas com times; goldens 80/80
   ([specs/visual-desenhos-e-torcida.md](specs/visual-desenhos-e-torcida.md)): pronto e publicado.
+- Carreira com robôs: todos os jogadores da carreira são robôs aspiradores com nome de robô (`game/robot_names.py`:
+  ~4,7 mil nomes, tirados do id do robô, sem RNG e sem repetir no clube; carreira nova só com nomes-base como
+  "Zumbido" e "Faísca", os que chegam depois ganham modelos/códigos como "Turbo Mk2", "Vassoura-7", "RX-07") e
+  **elenco de 5 a 10** (5 titulares + até 5 reservas; a CPU nasce com 7-10 tirados de uma peneira de 15, mantendo
+  a força dos titulares da geração antiga; o mercado não compra acima de 10 nem vende abaixo de 5). O save da
+  carreira ganhou `ver` = 2: save antigo é migrado ao carregar (nomes de robô pelo id; elencos acima de 10 ficam
+  com os titulares + melhores reservas, garantindo um goleiro; excedentes do clube do jogador vendidos pelo valor
+  de mercado; estatísticas seguem no id), save inválido não carrega nem é sobrescrito; testes em
+  `tests/test_career.py` (fixture real do save antigo em `tests/fixtures/career_v1_mid_season.json`); goldens 80/80.
 - Deploy: build do pygbag + `tools/versionar_build.sh` (cache busting do `game.apk`); ver o README.
 - Publicação em portais: proposta para o CrazyGames em [plano-crazygames.md](plano-crazygames.md) (ainda não iniciada).
-- Código: ~52,7 mil linhas (game ~31,7 mil, tests ~21,0 mil); 560 testes (`def test_` em `tests/test_*.py`).
+- Código: ~52,7 mil linhas (game ~31,7 mil, tests ~21,0 mil); 572 testes (`def test_` em `tests/test_*.py`).
