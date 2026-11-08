@@ -10,10 +10,20 @@ import sys
 
 import formations
 import match_stats as MS
+import robot_names as RN
 
 SLOTS = ["GK", "DEF", "MID", "MID", "ATT"]       # os 5 titulares em campo
-TEMPLATE = [("GK", 2), ("DEF", 4), ("MID", 5), ("ATT", 4)]
-MIN_SQUAD, MAX_SQUAD = 12, 20
+# Elenco de 5 a 10 robos: 5 titulares (goleiro + 4 de linha) e ate 5 reservas. Cada clube nasce de uma
+# "peneira" de 15 robos (SCOUT, a mesma composicao dos elencos antigos de 15) e fica com os 7-10 melhores: os
+# 5 titulares (como auto_lineup), o melhor goleiro reserva e 1-4 reservas de linha (os de maior overall). Assim a
+# forca dos titulares e a mesma da geracao antiga (medido em tests/test_career.py e no relatorio do equilibrio).
+MIN_SQUAD, MAX_SQUAD = 5, 10
+SCOUT = [("GK", 2), ("DEF", 4), ("MID", 5), ("ATT", 4)]
+CPU_EXTRA_RANGE = (1, 4)                         # reservas de linha alem do goleiro reserva: elenco de 7 a 10
+MARKET_POS = SCOUT                               # pesos das posicoes dos robos sem clube no mercado
+# Versao do save da carreira (campo "ver"). Sem o campo = save antigo (nomes de pessoa, elencos de 12-20):
+# load() migra (ver migrate_v1) e o proximo save ja sai com ver=2.
+VERSION = 2
 ROUNDS = 14                                      # 8 clubes, ida e volta
 DIV_NAMES = ["Divisão 1", "Divisão 2", "Divisão 3"]
 DIV_BASE = [68, 58, 48]                          # força média inicial por divisão
@@ -31,13 +41,6 @@ POS_PT = {"GK": "GOL", "DEF": "DEF", "MID": "MEI", "ATT": "ATA"}
 # (match_stats.simulate, RNG privado com semente do jogo: placares e economia nao mudam).
 PSTAT_KEYS = ("sg", "sa", "smvp", "tg", "ta", "tmvp")
 PSTAT_MAX = 10 ** 6
-
-FIRST = ["Rafael", "Lucas", "Pedro", "Gabriel", "Mateus", "Bruno", "Diego", "Thiago",
-         "Caio", "André", "Felipe", "Rodrigo", "João", "Vitor", "Marcos", "Leandro",
-         "Danilo", "Igor", "Renan", "Paulo", "Henrique", "Samuel", "Otávio", "Murilo"]
-LAST = ["Silva", "Souza", "Costa", "Santos", "Oliveira", "Pereira", "Lima", "Alves",
-        "Rocha", "Ribeiro", "Carvalho", "Gomes", "Martins", "Araújo", "Barbosa",
-        "Nunes", "Moreira", "Cardoso", "Teixeira", "Dias", "Freitas", "Mendes"]
 
 CLUBS = [  # (nome, cor) - 8 por divisão, todos fictícios
     ("Tubarões FC", (30, 110, 230)), ("Leões do Norte", (230, 170, 20)),
@@ -68,8 +71,8 @@ def fmt_money(n):
 
 
 def short_name(full):
-    first, _, last = full.partition(" ")
-    return "%s. %s" % (first[0], last) if last else full
+    """Nome exibido do robo (os nomes ja sao curtos; corta so lixo comprido de save)."""
+    return str(full)[:RN.NAME_MAX]
 
 
 def value(p):
@@ -137,11 +140,32 @@ def _store_set(text):
         return False
 
 
+def _is_int(v):
+    return isinstance(v, int) and not isinstance(v, bool)
+
+
+def _valid_clubs(clubs):
+    """Estrutura minima dos elencos (o que rating/mercado/migracao usam). O nome nao entra: lixo vira o do id."""
+    if not isinstance(clubs, list):
+        return False
+    for club in clubs:
+        if not isinstance(club, dict) or not isinstance(club.get("squad"), list) or not club["squad"]:
+            return False
+        if not isinstance(club.get("lineup"), list) or not _is_int(club.get("money")):
+            return False
+        for p in club["squad"]:
+            if not (isinstance(p, dict) and _is_int(p.get("id")) and p.get("pos") in POS_PT
+                    and _is_int(p.get("ovr")) and _is_int(p.get("age"))):
+                return False
+    return True
+
+
 class Career:
     FIELDS = ("season", "round", "clubs", "divs", "fixtures", "user", "market",
-              "log", "last_results", "last_fin", "form", "next_id", "history", "formation")
+              "log", "last_results", "last_fin", "form", "next_id", "history", "formation", "ver")
     # "formation": formacao do clube do jogador (id de formations.FORMATIONS). Campo opcional: save antigo sem
-    # ele (ou com id invalido) carrega com a padrao ("equilibrada"); o save da carreira nao tem versao.
+    # ele (ou com id invalido) carrega com a padrao ("equilibrada"). "ver": versao do save (VERSION; ausente = save
+    # antigo, migrado no load).
 
     def __init__(self):
         self.season = 1
@@ -158,6 +182,7 @@ class Career:
         self.next_id = 1
         self.history = []
         self.formation = formations.DEFAULT
+        self.ver = VERSION
         self.last_stats = None          # estatisticas do ultimo jogo do jogador (so memoria; nao vai ao save)
 
     # ------------------------------------------------------------- criação
@@ -172,20 +197,34 @@ class Career:
         c.market_refresh()
         return c
 
-    def gen_player(self, pos, ovr, age=None):
-        p = {"id": self.next_id,
-             "name": "%s %s" % (random.choice(FIRST), random.choice(LAST)),
+    def gen_player(self, pos, ovr, age=None, squad=()):
+        """Robo novo. O nome sai do id (robot_names, sem RNG) e nao repete os do `squad` onde ele entra."""
+        pid = self.next_id
+        p = {"id": pid, "name": RN.unique_name(pid, {q["name"] for q in squad}),
              "pos": pos, "ovr": int(clamp(ovr, 28, 95)),
              "age": age if age else random.randint(18, 34)}
         self.next_id += 1
         return p
 
+    @staticmethod
+    def pick_squad(pool, n_extra):
+        """Indices (em ordem) dos robos da peneira que formam o elenco: os 5 titulares (melhor eff por vaga, como
+        auto_lineup), o melhor goleiro reserva e os n_extra reservas de linha de maior overall."""
+        used = []
+        for slot in SLOTS:
+            used.append(max((k for k in range(len(pool)) if k not in used), key=lambda k: eff(pool[k], slot)))
+        rest = sorted((k for k in range(len(pool)) if k not in used), key=lambda k: (-pool[k]["ovr"], k))
+        gk = [k for k in rest if pool[k]["pos"] == "GK"][:1]
+        field = [k for k in rest if pool[k]["pos"] != "GK"][:n_extra]
+        return sorted(used + gk + field)
+
     def gen_club(self, name, color, div):
         base = DIV_BASE[div] + random.randint(-5, 5)
+        pool = [{"pos": pos, "ovr": int(clamp(base + random.randint(-9, 9), 28, 95)), "age": random.randint(18, 34)}
+                for pos, n in SCOUT for _ in range(n)]
         squad = []
-        for pos, n in TEMPLATE:
-            for _ in range(n):
-                squad.append(self.gen_player(pos, base + random.randint(-9, 9)))
+        for k in self.pick_squad(pool, random.randint(*CPU_EXTRA_RANGE)):
+            squad.append(self.gen_player(pool[k]["pos"], pool[k]["ovr"], pool[k]["age"], squad=squad))
         club = {"name": name, "color": list(color), "div": div,
                 "money": START_MONEY[div], "squad": squad, "lineup": [],
                 "stats": self.blank_stats()}
@@ -410,7 +449,7 @@ class Career:
     def market_refresh(self):
         self.market = []
         for _ in range(6):                              # sem clube (mais baratos)
-            pos = random.choice([p for p, n in TEMPLATE for _ in range(n)])
+            pos = random.choice([p for p, n in MARKET_POS for _ in range(n)])
             self.market.append({"club": -1, "p": self.gen_player(
                 pos, random.randint(38, 70), random.randint(19, 35))})
         others = [i for i in range(len(self.clubs)) if i != self.user]
@@ -428,16 +467,18 @@ class Career:
         if u["money"] < price:
             return False, "Dinheiro insuficiente."
         if len(u["squad"]) >= MAX_SQUAD:
-            return False, "Elenco cheio (máx. %d). Venda alguém." % MAX_SQUAD
+            return False, "Elenco cheio (máx. %d robôs). Venda algum." % MAX_SQUAD
         p = e["p"]
         if e["club"] >= 0:
             src = self.clubs[e["club"]]
             src["squad"].remove(p)
             src["money"] += price
             repl = self.gen_player(p["pos"], p["ovr"] - random.randint(6, 14),
-                                   random.randint(17, 21))
+                                   random.randint(17, 21), squad=src["squad"])
             src["squad"].append(repl)
             self.auto_lineup(src)
+        p["name"] = RN.unique_name(p["id"], {q["name"] for q in u["squad"]}) if any(
+            q["name"] == p["name"] for q in u["squad"]) else p["name"]
         u["squad"].append(p)
         u["money"] -= price
         self.market.pop(k)
@@ -451,7 +492,7 @@ class Career:
         if p is None:
             return False, ""
         if len(u["squad"]) <= MIN_SQUAD:
-            return False, "Elenco mínimo: %d jogadores." % MIN_SQUAD
+            return False, "Elenco mínimo: %d robôs." % MIN_SQUAD
         if p["pos"] == "GK" and sum(q["pos"] == "GK" for q in u["squad"]) <= 1:
             return False, "Você precisa de pelo menos 1 goleiro."
         price = int(value(p) * 0.8)
@@ -528,13 +569,78 @@ class Career:
                 if a >= 36 or (a >= 34 and random.random() < 0.4):
                     club["squad"].remove(p)
                     club["squad"].append(self.gen_player(
-                        p["pos"], avg - 8 + random.randint(-5, 5), random.randint(17, 20)))
+                        p["pos"], avg - 8 + random.randint(-5, 5), random.randint(17, 20), squad=club["squad"]))
                     if i == self.user:
                         info["retired"].append(short_name(p["name"]))
             if i == self.user:
                 self.fix_lineup(club)
             else:
                 self.auto_lineup(club)
+
+    # ------------------------------------------------------ migração (save antigo)
+    @staticmethod
+    def trim_squad(club):
+        """Reduz o elenco a MAX_SQUAD: ficam os titulares e os melhores reservas (overall, depois valor, depois
+        id); se nenhum goleiro sobrar, o melhor goleiro excedente entra no lugar do pior reserva mantido.
+        Devolve os excedentes (removidos do clube)."""
+        squad = club["squad"]
+        if len(squad) <= MAX_SQUAD:
+            return []
+        starters = [p for p in squad if p["id"] in club["lineup"]]
+        bench = sorted((p for p in squad if p["id"] not in club["lineup"]),
+                       key=lambda p: (-p["ovr"], -value(p), p["id"]))
+        keep_bench = bench[:MAX_SQUAD - len(starters)]
+        out = bench[MAX_SQUAD - len(starters):]
+        if keep_bench and not any(p["pos"] == "GK" for p in starters + keep_bench):
+            gk = next((p for p in out if p["pos"] == "GK"), None)
+            if gk is not None:
+                out.remove(gk)
+                out.append(keep_bench.pop())
+                keep_bench.append(gk)
+        keep = {p["id"] for p in starters + keep_bench}
+        club["squad"] = [p for p in squad if p["id"] in keep]
+        return out
+
+    def migrate_v1(self):
+        """Save antigo (sem "ver"): nomes de pessoa e elencos de 12-20 -> robôs e elencos de até 10.
+        - todo robô ganha o nome de robô do seu id (robot_names, determinístico; sem repetir no clube);
+        - elencos acima de 10: trim_squad (titulares + melhores reservas). No clube do jogador os excedentes são
+          vendidos pelo valor de mercado (value(), cheio) e o dinheiro entra no caixa; nos da CPU saem do elenco;
+        - mercado: robôs de clube passam a apontar para o robô do elenco (some quem saiu); os sem clube são
+          renomeados; o noticiário antigo (com nomes de pessoa) dá lugar ao aviso da migração.
+        Estatísticas (sg/tg...) ficam no dict de cada robô mantido, ligadas ao id. Não grava nada."""
+        sold, earned = 0, 0
+        for i, club in enumerate(self.clubs):
+            if i == self.user:
+                self.fix_lineup(club)
+            elif len(club["lineup"]) != 5 or any(pid not in {p["id"] for p in club["squad"]}
+                                                  for pid in club["lineup"]):
+                self.auto_lineup(club)
+            out = self.trim_squad(club)
+            if i == self.user and out:
+                sold, earned = len(out), sum(value(p) for p in out)
+                club["money"] += earned
+            taken = set()
+            for p in sorted(club["squad"], key=lambda q: q["id"]):
+                p["name"] = RN.unique_name(p["id"], taken)
+                taken.add(p["name"])
+        market = []
+        for e in self.market:
+            if e["club"] >= 0:
+                p = self.player_by_id(e["club"], e["p"]["id"])
+                if p is None:
+                    continue
+                e["p"] = p
+            else:
+                e["p"]["name"] = RN.name_for(e["p"]["id"])
+            market.append(e)
+        self.market = market
+        self.log = []
+        if sold:
+            self.add_log("%d robôs excedentes vendidos por %s (elenco máx. %d)." % (sold, fmt_money(earned), MAX_SQUAD))
+        self.add_log("Seu elenco agora é de robôs aspiradores: de %d a %d por time." % (MIN_SQUAD, MAX_SQUAD))
+        self.ver = VERSION
+        return sold, earned
 
     # ----------------------------------------------------------- persistência
     def to_json(self):
@@ -556,12 +662,19 @@ class Career:
                     setattr(c, k, data[k])
             if c.user is not None and not (isinstance(c.user, int) and 0 <= c.user < len(c.clubs)):
                 return None               # save inconsistente
+            if not _valid_clubs(c.clubs):
+                return None               # elenco quebrado: nao migra nem carrega (o save fica como esta)
             c.formation = formations.clean(c.formation)   # campo opcional: ausente/invalido -> padrao
+            ver = data.get("ver")
+            if not isinstance(ver, int) or isinstance(ver, bool) or ver < VERSION:
+                c.migrate_v1()            # save antigo: so em memoria (grava no proximo save normal)
             for club in c.clubs if isinstance(c.clubs, list) else ():   # estatisticas opcionais: lixo -> zero
                 sq = club.get("squad") if isinstance(club, dict) else None
                 for p in sq if isinstance(sq, list) else ():
                     if not isinstance(p, dict):
                         continue
+                    if not isinstance(p.get("name"), str) or not p["name"]:
+                        p["name"] = RN.name_for(p.get("id"))
                     for k in PSTAT_KEYS:
                         if k in p:
                             v = p[k]
