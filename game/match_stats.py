@@ -116,8 +116,13 @@ def from_engine(teams, score, poss_time, fallback=None):
             row.update(team=t.idx, idx=p.idx, name=name, role=p.role, pid=p.pid, chassis=p.chassis,
                        paint=list(p.paint) if p.paint else None)
             players.append(row)
-    return finish(players, score, poss_pct(*poss_time), (teams[0].name, teams[1].name),
-                  (tuple(teams[0].color), tuple(teams[1].color)))
+    out = finish(players, score, poss_pct(*poss_time), (teams[0].name, teams[1].name),
+                 (tuple(teams[0].color), tuple(teams[1].color)))
+    for t, row in zip(teams, out["teams"]):             # escudo (nome/cor do time; amistoso: "VOCE" = Azul)
+        cr = getattr(t, "crest", None)
+        if cr:
+            row["crest"] = [cr[0], list(cr[1])[:3], cr[2]]
+    return out
 
 
 def mvp_row(summary):

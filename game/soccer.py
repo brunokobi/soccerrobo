@@ -11,6 +11,7 @@ from collections import OrderedDict, deque
 import pygame
 from pygame import Vector2 as V
 
+import crests
 import crowd
 import fireworks
 import floors
@@ -44,6 +45,7 @@ MATCH_TIME = 120.0
 PLAYER_SPEED = 205.0
 AI_SPEED = 0.93
 CATCH_SPEED = 520.0     # acima disso a bola nao e dominada, so rebatida
+HUD_CREST, END_CREST = 64, 120                 # escudos: placar (altura px) e fim da partida (3x, nitido)
 CAREER_TIME = 90.0      # segundos reais (1x) = 90 minutos de jogo
 SPEEDS = [1, 2, 4, "max"]
 GK_COLORS = [(250, 200, 40), (70, 205, 130)]
@@ -270,6 +272,7 @@ class Team:
         self.color = color
         self.gk_color = gk_color
         self.human = human
+        self.crest = (name, color, None)       # escudo: (nome do time, cor original, custom do jogador)
         self.players = []
         # formacao escolhida (formations.FORMATIONS[id]) ou None = FORMATION de sempre (legado).
         # Os papeis (chassi/atributos) seguem FORMATION; so as posicoes base e o push do bloco mudam.
@@ -444,6 +447,8 @@ class Game:
                 Team(0, n0, (50, 120, 255), (250, 200, 40), h0),
                 Team(1, n1, (235, 65, 65), (70, 205, 130), h1),
             ]
+            for t, (cn, cc) in zip(self.teams, crests.CLASSIC_TEAMS):
+                t.crest = (cn, cc, None)
         else:
             sel = friendly.sanitize(sel)
             self.teams = self.friendly_teams(sel, (n0, n1), (h0, h1))
@@ -486,6 +491,7 @@ class Game:
             form = None if fid == friendly.DEFAULT_FORMATION else friendly.formation(fid)
             name = names[i] if t["names"] is None else t["name"]
             out.append(Team(i, name, cols[i], GK_COLORS[i], humans[i], friendly.squad(t["id"]), None, form))
+            out[-1].crest = (t["name"], tuple(t["color"]), None)
         return out
 
     def start_career_match(self, home, away, venue=None, user_side=0):
@@ -523,6 +529,8 @@ class Game:
             Team(1, away["name"], c1, GK_COLORS[1], None, away["squad"], tuning,
                  formations.engine(away.get("formation"))),
         ]
+        for t, cfg in zip(self.teams, (home, away)):        # escudo: cor original do time (nao a trocada)
+            t.crest = (cfg["name"], tuple(cfg["color"]), cfg.get("crest"))
         self.score = [0, 0]
         self.career_match = True
         self.match_time = self.time_left = CAREER_TIME
@@ -746,6 +754,7 @@ class Game:
 
     # ----------------------------------------------------------------- update
     def update(self, dt):
+        crests.pump()                               # escudos pedidos pelas telas: gerados aqui, fora do desenho
         if self.state == "friendly":
             return
         if self.state == "menu":
@@ -1854,6 +1863,7 @@ class Game:
         self.fx_pairs.clear()
         self.trail.clear()
         self.warm_sprites()
+        self.warm_crests()
 
     def fx_ok(self):
         return self.speed_idx != 3 and self.state != "over"
@@ -2432,6 +2442,24 @@ class Game:
         self.puffs = robot_art.get_puffs(self.sprites)
         self.trail_players = [p for t in self.teams for p in t.players if p.art.trail is not None]
 
+    def warm_crests(self):
+        """Escudos da partida (HUD, fim de jogo, ESTATISTICAS) gerados aqui, fora do desenho; o HUD guarda as
+        Surfaces e as posicoes (nomes fixos durante a partida)."""
+        self.hud_crests = []
+        for k, t in enumerate(self.teams):
+            name, color, custom = t.crest
+            img = crests.get(name, color, HUD_CREST, custom, False)
+            crests.warm([(name, color, s, custom) for s in stats_ui.CREST_SIZES] +
+                        [(name, color, END_CREST, custom, False)])
+            w = self.font(44).size(t.name.upper())[0]
+            if k == 0:
+                r = img.get_rect(midright=(W // 2 - 270 - w // 2 - 12, 38))
+                r.left = max(8, r.left)
+            else:
+                r = img.get_rect(midleft=(W // 2 + 270 + w // 2 + 12, 38))
+                r.right = min(W - 8, r.right)
+            self.hud_crests.append((img, r))
+
     def draw_robot_trails(self, scr):
         """B13: rastro cosmetico atras dos robos em movimento. Pool fixo de TRAIL_N pontos por robo
         (amostrado no relogio real do desenho), imagens prontas (build_trail); congela na pausa."""
@@ -2566,10 +2594,12 @@ class Game:
                 self.draw_end_stats()
             elif self.career_match:
                 self.banner(title, "ENTER ou clique = continuar", col)
+                self.draw_end_crests()
                 self.draw_scorers()
                 self.draw_end_mvp()
             else:
                 self.banner(title, "ENTER = jogar de novo   |   ESC = menu", col)
+                self.draw_end_crests()
                 self.draw_scorers()
                 self.draw_end_mvp()
         if not (self.stats_tab and self.state == "over"):   # painel ESTATISTICAS cobre o campo: sem faixa
@@ -2609,6 +2639,13 @@ class Game:
         pygame.draw.rect(self.screen, (2, 8, 20), r.inflate(28, 14), border_radius=10)
         pygame.draw.rect(self.screen, (0, 200, 240), r.inflate(28, 14), 2, border_radius=10)
         self.screen.blit(img, r)
+
+    def draw_end_crests(self):
+        """Fim da partida: os dois escudos grandes nas pontas da faixa do placar (cache aquecido no inicio)."""
+        for k, t in enumerate(self.teams):
+            name, color, custom = t.crest
+            crests.blit(self.screen, name, color, END_CREST, custom=custom, compact=False,
+                        center=(W // 2 + (-460 if k == 0 else 460), CY))
 
     def draw_end_mvp(self):
         """Tela de fim: faixa MELHOR DO JOGO acima do placar e a dica do TAB (so blits/draw)."""
@@ -2861,6 +2898,8 @@ class Game:
         scr = self.screen
         scr.blit(self.hud_panel, (0, 0))
         t0, t1 = self.teams
+        for img, r in getattr(self, "hud_crests", ()):
+            scr.blit(img, r)
         self.text(t0.name.upper(), 44, led_color(t0.color), center=(W // 2 - 270, 36))
         self.text(t1.name.upper(), 44, led_color(t1.color), center=(W // 2 + 270, 36))
         self.text("%d  x  %d" % tuple(self.score), 64, (255, 255, 255), center=(W // 2, 30))

@@ -2,6 +2,7 @@
 import pygame
 
 import career as C
+import crests
 import crowd
 import formation_ui
 import formations
@@ -19,6 +20,7 @@ GREEN = (110, 230, 120)
 RED = (240, 100, 90)
 BTN = (0, 120, 170)
 POS_ORDER = {"GK": 0, "DEF": 1, "MID": 2, "ATT": 3}
+ROW_CREST, SMALL_CREST, MID_CREST, HEAD_CREST = 36, 24, 52, 64   # escudos (altura px; < 40 = compacto)
 TABS = [("home", "INÍCIO"), ("table", "TABELA"), ("squad", "ELENCO"), ("market", "MERCADO")]
 
 
@@ -212,6 +214,20 @@ class CareerUI:
         pygame.draw.rect(self.g.screen, fill, rect, border_radius=12)
         pygame.draw.rect(self.g.screen, LINE, rect, 2, border_radius=12)
 
+    def crest(self, name, color, size, custom=None, **anchor):
+        """Escudo do time (cache do crests; o do jogador com o simbolo/formato escolhido na garagem)."""
+        gg = getattr(self, "garage", None)
+        if custom is None and gg is not None and name == gg.team.get("name"):
+            custom = gg.team.get("crest")
+        return crests.blit(self.g.screen, name, color, size, custom=custom, **anchor)
+
+    def crest_beside(self, name, color, size, text, font_size, center, side, gap=12):
+        """Escudo ao lado de um texto centrado em `center` (side -1 = a esquerda, +1 = a direita)."""
+        w = self.g.font(font_size).size(text)[0]
+        x = center[0] + side * (w // 2 + gap)
+        anchor = {"midright": (x, center[1])} if side < 0 else {"midleft": (x, center[1])}
+        return self.crest(name, color, size, **anchor)
+
     def hit(self, rect, fn, enabled=True):
         self.buttons.append((pygame.Rect(rect), fn, enabled))
 
@@ -245,10 +261,10 @@ class CareerUI:
                 r = pygame.Rect(x, 158 + k * 60, 340, 54)
                 hover = r.collidepoint(pygame.mouse.get_pos())
                 self.panel(r, (20, 60, 90) if hover else PANEL)
-                pygame.draw.rect(self.g.screen, tuple(club["color"]), (r.x + 8, r.y + 8, 12, 38), border_radius=4)
-                self.text(club["name"].upper(), 28, TEXT, midleft=(r.x + 34, r.centery - 8))
+                self.crest(club["name"], club["color"], ROW_CREST + 8, center=(r.x + 24, r.centery))
+                self.text(club["name"].upper(), 28, TEXT, midleft=(r.x + 46, r.centery - 8))
                 self.text("Força %d   Caixa %s" % (c.rating(club), C.fmt_money(club["money"])),
-                          21, DIM, midleft=(r.x + 34, r.centery + 14))
+                          21, DIM, midleft=(r.x + 46, r.centery + 14))
                 self.hit(r, lambda i=idx: self.choose(i))
         self.btn((25, 652, 160, 40), "VOLTAR", self.to_menu, color=(60, 60, 70), size=26)
 
@@ -259,10 +275,11 @@ class CareerUI:
         scr = self.g.screen
         pygame.draw.rect(scr, PANEL, (0, 0, W, 74))
         pygame.draw.rect(scr, tuple(club["color"]), (0, 0, 12, 74))
-        self.text(club["name"].upper(), 46, TEXT, midleft=(28, 26), shadow=True)
+        self.crest(club["name"], club["color"], HEAD_CREST, center=(52, 37))
+        self.text(club["name"].upper(), 46, TEXT, midleft=(92, 26), shadow=True)
         self.text("%s   |   Temporada %d   |   Rodada %d/%d" % (
             C.DIV_NAMES[club["div"]], c.season, min(c.round + 1, C.ROUNDS), C.ROUNDS),
-            24, DIM, midleft=(30, 55))
+            24, DIM, midleft=(94, 55))
         self.text("Caixa: " + C.fmt_money(club["money"]), 34, GOLD if club["money"] >= 0 else RED,
                   midright=(W - 20, 26), shadow=True)
         self.text("Força do time: %d" % c.rating(club), 24, DIM, midright=(W - 20, 55))
@@ -282,6 +299,8 @@ class CareerUI:
         self.text(ch["name"].upper(), 46, vis(ch["color"]), center=(290, 212), shadow=True)
         self.text("x", 34, DIM, center=(290, 252))
         self.text(ca["name"].upper(), 46, vis(ca["color"]), center=(290, 292), shadow=True)
+        self.crest_beside(ch["name"], ch["color"], MID_CREST, ch["name"].upper(), 46, (290, 210), -1)
+        self.crest_beside(ca["name"], ca["color"], MID_CREST, ca["name"].upper(), 46, (290, 290), -1)
         self.text("Você joga %s" % ("em CASA (bilheteria!)" if h == c.user else "FORA de casa"), 26, TEXT,
                   center=(290, 334))
         self.text("Força:  %d  x  %d" % (c.rating(ch), c.rating(ca)), 26, DIM, center=(290, 362))
@@ -344,8 +363,8 @@ class CareerUI:
             if idx == c.user:
                 pygame.draw.rect(self.g.screen, GOLD, r, 3, border_radius=8)
             self.text(str(k + 1), 28, TEXT, center=(50, r.centery))
-            pygame.draw.rect(self.g.screen, tuple(club["color"]), (80, r.y + 8, 12, 26), border_radius=3)
-            self.text(club["name"].upper(), 28, TEXT, midleft=(105, r.centery))
+            self.crest(club["name"], club["color"], ROW_CREST, center=(88, r.centery))
+            self.text(club["name"].upper(), 28, TEXT, midleft=(110, r.centery))
             vals = [s["j"], s["v"], s["e"], s["d"], "%+d" % (s["gp"] - s["gc"]), s["pts"]]
             for (lab, x), v in zip(cols, vals):
                 self.text(str(v), 28 if lab != "PTS" else 32, GOLD if lab == "PTS" else TEXT,
@@ -371,8 +390,8 @@ class CareerUI:
             if mine:
                 pygame.draw.rect(self.g.screen, GOLD, r, 3, border_radius=8)
             self.text(str(k + 1), 28, GOLD if k == 0 else TEXT, center=(50, r.centery))
-            pygame.draw.rect(self.g.screen, tuple(color), (80, r.y + 8, 12, 26), border_radius=3)
-            self.text(self.fit(name, 28, 280), 28, TEXT, midleft=(105, r.centery))
+            self.crest(club, color, ROW_CREST, center=(88, r.centery))
+            self.text(self.fit(name, 28, 280), 28, TEXT, midleft=(110, r.centery))
             self.text(self.fit(club.upper(), 24, 300), 24, DIM, midleft=(400, r.centery))
             for (lab, x), v in zip(cols, (g, a, mvp)):
                 self.text(str(v), 32 if lab == "G" else 28, GOLD if lab == "G" else TEXT, midright=(x, r.centery))
@@ -547,6 +566,9 @@ class CareerUI:
         self.text(ch["name"].upper(), 40, vis(ch["color"]), midright=(430, 130), shadow=True)
         self.text("%d x %d" % (res["hg"], res["ag"]), 68, TEXT, center=(W // 2, 130), shadow=True)
         self.text(ca["name"].upper(), 40, vis(ca["color"]), midleft=(670, 130), shadow=True)
+        wh, wa = self.g.font(40).size(ch["name"].upper())[0], self.g.font(40).size(ca["name"].upper())[0]
+        self.crest(ch["name"], ch["color"], MID_CREST, midright=(max(24 + MID_CREST, 430 - wh - 12), 130))
+        self.crest(ca["name"], ca["color"], MID_CREST, midleft=(min(W - 24 - MID_CREST, 670 + wa + 12), 130))
         for team, x, anchor in ((0, 430, "midright"), (1, 670, "midleft")):
             evs = [e for e in info["events"] if e["team"] == team][:4]
             for k, e in enumerate(evs):
@@ -564,9 +586,12 @@ class CareerUI:
             me = c.user in (r["h"], r["a"])
             if me:
                 pygame.draw.rect(self.g.screen, (20, 60, 90), (20, y - 4, 560, 36), border_radius=6)
-            self.text(c.clubs[r["h"]]["name"].upper(), 26, TEXT, midright=(270, y + 14))
+            ch2, ca2 = c.clubs[r["h"]], c.clubs[r["a"]]
+            self.text(self.fit(ch2["name"].upper(), 26, 220), 26, TEXT, midright=(252, y + 14))
+            self.crest(ch2["name"], ch2["color"], SMALL_CREST, center=(267, y + 14))
             self.text("%d x %d" % (r["hg"], r["ag"]), 28, GOLD, center=(310, y + 14))
-            self.text(c.clubs[r["a"]]["name"].upper(), 26, TEXT, midleft=(355, y + 14))
+            self.crest(ca2["name"], ca2["color"], SMALL_CREST, center=(353, y + 14))
+            self.text(self.fit(ca2["name"].upper(), 26, 200), 26, TEXT, midleft=(368, y + 14))
         y0 = 262
         for d2 in range(3):
             if d2 == d:
@@ -588,9 +613,13 @@ class CareerUI:
         c = self.career
         i = self.season_info
         self.text("FIM DA TEMPORADA %d" % i["season"], 56, TEXT, center=(W // 2, 50), shadow=True)
+        colors = {cl["name"]: cl["color"] for cl in c.clubs}
         for d in range(3):
-            self.text("Campeão %s:  %s" % (C.DIV_NAMES[d], i["champions"][d]), 30, GOLD,
-                      center=(W // 2, 120 + d * 38))
+            line = "Campeão %s:  %s" % (C.DIV_NAMES[d], i["champions"][d])
+            self.text(line, 30, GOLD, center=(W // 2, 120 + d * 38))
+            if i["champions"][d] in colors:
+                self.crest_beside(i["champions"][d], colors[i["champions"][d]], SMALL_CREST + 6, line, 30,
+                                  (W // 2, 120 + d * 38), -1)
         self.panel((120, 250, 860, 250))
         self.text("Seu clube terminou em %dº na %s" % (i["u_pos"] + 1, C.DIV_NAMES[i["u_div"]]), 34, TEXT,
                   center=(W // 2, 290))

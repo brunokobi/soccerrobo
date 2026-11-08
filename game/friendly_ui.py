@@ -14,6 +14,7 @@ import random
 
 import pygame
 
+import crests
 import crowd
 import formation_ui
 import friendly
@@ -34,13 +35,7 @@ SRC_COLORS = {"AMISTOSO": (120, 200, 255), "CARREIRA": (255, 214, 90), "CAMPANHA
 ROWS = ("team", "form")
 PANEL_W, PANEL_H, PANEL_Y = 480, 470, 118
 PANEL_X = (34, W - 34 - 480)
-
-
-def shield_points(cx, top, w, h):
-    """Escudo simples (pentagono com bico embaixo), em pontos inteiros."""
-    hw = w // 2
-    return [(cx - hw, top), (cx + hw, top), (cx + hw, top + h * 55 // 100), (cx, top + h),
-            (cx - hw, top + h * 55 // 100)]
+CREST_H = 120                       # escudo do time (crests.py; 3x a tela logica, nitido)
 
 
 class FriendlyUI:
@@ -77,7 +72,12 @@ class FriendlyUI:
         self.focus = [0, 0]
         self.side = 0
         self.buttons = []
+        self.warm()
         self.g.state = "friendly"
+
+    def warm(self):
+        """Escudos dos dois times escolhidos: gerados aqui (abrir / trocar), nunca no desenho."""
+        crests.warm([(t["name"], t["color"], CREST_H) for t in (friendly.team(i) for i in self.sel["teams"]) if t])
 
     def labels(self):
         if self.mode == 1:
@@ -90,6 +90,7 @@ class FriendlyUI:
             return False
         teams[side] = tid
         self.sel = {"teams": tuple(teams), "forms": self.sel["forms"]}
+        self.warm()
         return True
 
     def change(self, side, row, step):
@@ -104,6 +105,7 @@ class FriendlyUI:
 
     def randomize(self):
         self.sel = friendly.sanitize(friendly.random_pick(self.rng))
+        self.warm()
         sfx.play("toggle")
 
     def back(self):
@@ -258,14 +260,8 @@ class FriendlyUI:
         pygame.draw.rect(scr, NEON if on else (30, 80, 110), r, 3 if on else 1, border_radius=10)
         self.arrow(pygame.Rect(r.x + 8, r.centery - 22, 34, 44), True, lambda: self.change(side, 0, -1), on)
         self.arrow(pygame.Rect(r.right - 42, r.centery - 22, 34, 44), False, lambda: self.change(side, 0, 1), on)
-        sx = r.x + 82
-        pts = shield_points(sx, r.y + 22, 62, 78)
-        pygame.draw.polygon(scr, col, pts)
-        pygame.draw.polygon(scr, lc if sum(col) < 200 else (240, 250, 255), pts, 3)
-        pygame.draw.line(scr, (255, 255, 255), (sx - 18, r.y + 46), (sx + 18, r.y + 46), 3)
-        self.text(t["name"][:1].upper(), 34, (10, 14, 24) if sum(col) > 520 else (255, 255, 255),
-                  center=(sx, r.y + 66))
-        tx = r.x + 128
+        crests.blit(scr, t["name"], t["color"], CREST_H, center=(r.x + 96, r.centery))
+        tx = r.x + 152
         maxw = r.right - 50 - tx
         self.text(self.fit(t["name"].upper(), 34, maxw), 34, TEXT, midleft=(tx, r.y + 30))
         self.text(t["src"], 22, SRC_COLORS.get(t["src"], DIM), midleft=(tx, r.y + 58))

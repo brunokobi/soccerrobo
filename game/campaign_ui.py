@@ -42,8 +42,8 @@ import portraits
 import sfx
 import skills as SK
 import story
-from robots_ui import goal_label
-from career_ui import BG, DIM, GOLD, GREEN, LINE, PANEL, RED, TEXT, W
+from robots_ui import CARD_CREST, goal_label
+from career_ui import BG, DIM, GOLD, GREEN, LINE, PANEL, RED, ROW_CREST, TEXT, W
 from robots_ui import RobotsUI
 
 TABS = [("map", "HISTÓRIA"), ("garage", "GARAGEM"), ("shop", "LOJA"), ("skills", "HABILIDADES")]
@@ -53,6 +53,7 @@ SCREENS = ("menu", "map", "garage", "shop", "skills", "bench", "dialog") + STUB_
 FRAME_EXTRA = ("tourney", "training", "sides", "tower")   # telas com cabecalho + abas (HISTORIA ativa)
 FORM_SCREENS = ("tourney", "training", "tower")            # telas com o seletor de FORMACAO
 FORM_RECT = (700, 386, 360, 54)                            # seletor no painel da partida (torneio e Torre)
+TEAM_CREST, KO_CREST, BOSS_CREST, NODE_CREST = 56, 18, 64, 30   # escudos: partida, chaveamento, chefe, mapa
 NODE_X0, NODE_DX = 110, 176
 NODE_X_MAX = 990                  # ultimo no do mapa (o painel vai ate x = 1080)
 
@@ -252,6 +253,27 @@ class CampaignUI(RobotsUI):
 
     def refresh_map(self):
         self.map_act = self.campaign.next_action() if self.campaign is not None else None
+        self.map_boss = self.chapter_boss()
+        self.map_bosses = {ch["id"]: self.chapter_boss(ch) for ch in story.CHAPTERS} if self.campaign else {}
+
+    def chapter_boss(self, ch=None):
+        """Chefe do torneio do capitulo (o atual por padrao): story.TEAMS[...] ou None (sem torneio). Com
+        variantes por escolha, vale a da escolha feita (senao a primeira)."""
+        cp = self.campaign
+        if cp is None:
+            return None
+        try:
+            nodes = (ch or cp.chapter())["nodes"]
+        except Exception:  # noqa: BLE001
+            return None
+        first = None
+        for n in nodes:
+            if n[0] == "tournament" and n[1] in story.TOURNAMENTS:
+                boss = story.TEAMS.get(story.TOURNAMENTS[n[1]].get("boss"))
+                first = first or boss
+                if len(n) < 3 or cp.check_cond(n[2]):
+                    return boss
+        return first
 
     def persist(self):
         """Unico ponto de gravacao: a CAMPANHA (nunca garage.save())."""
@@ -501,6 +523,9 @@ class CampaignUI(RobotsUI):
                 self.text(ch["id"], 34, TEXT if st == "current" else DIM, center=(x, y))
             if ch["id"] == cp.ch:                                   # anel pulsante (sem Surface)
                 pygame.draw.circle(scr, GOLD, (x, y), NODE_R + 6 + int(5 * pulse), 3)
+            boss = getattr(self, "map_bosses", {}).get(ch["id"])
+            if boss and not draft:                                  # chefe do capitulo (escudo pequeno)
+                self.crest(boss["name"], boss["color"], NODE_CREST, center=(x + NODE_R + 14, y - NODE_R + 8))
             col = TEXT if not draft else DIM
             yy = y + 44
             for line in self.wrap(ch["subtitle"], 22, dx - 8)[:2]:
@@ -515,13 +540,18 @@ class CampaignUI(RobotsUI):
         # ---- painel do capitulo atual
         ch = cp.chapter()
         self.panel((20, 414, 1060, 268))
-        self.text(self.fit("%s - %s" % (ch["title"], ch["subtitle"]), 36, 640), 36, GOLD, topleft=(40, 428),
+        boss = getattr(self, "map_boss", None)
+        tw = 560 if boss else 640
+        self.text(self.fit("%s - %s" % (ch["title"], ch["subtitle"]), 36, tw), 36, GOLD, topleft=(40, 428),
                   shadow=True)
-        self.text(self.fit(ch["local"], 26, 620), 26, TEXT, topleft=(40, 470))
+        self.text(self.fit(ch["local"], 26, tw - 20), 26, TEXT, topleft=(40, 470))
+        if boss:                                            # chefe do capitulo: escudo + nome
+            self.crest(boss["name"], boss["color"], BOSS_CREST, center=(648, 462))
+            self.text("CHEFE", 18, RED, center=(648, 504))
         side = story.SIDES.get(cp.side["id"]) if cp.side is not None else None
         ng = cp.ng if cp.ng_active() else 0
         if side is not None:
-            self.text(self.fit("Missão em andamento: %s" % side["title"], 24, 640), 24, NEON, topleft=(40, 506))
+            self.text(self.fit("Missão em andamento: %s" % side["title"], 24, 560), 24, NEON, topleft=(40, 506))
         elif ng:
             self.text("TURNÊ LENDÁRIA %s - revanches" % NG_ROMAN[ng], 24, (255, 120, 160), topleft=(40, 506))
         elif ch.get("draft"):
@@ -609,9 +639,11 @@ class CampaignUI(RobotsUI):
         for k, (sid, sp, done) in enumerate(rows[self.side_page * SIDE_ROWS:(self.side_page + 1) * SIDE_ROWS]):
             y = 184 + k * 84
             self.panel((40, y, 1020, 76))
-            self.text(self.fit(sp["title"], 28, 420), 28, DIM if done else GOLD, topleft=(60, y + 8), shadow=True)
-            self.text(self.fit(sp["local"], 20, 420), 20, DIM, topleft=(60, y + 44))
-            team = story.TEAMS[sp["team"]]["name"]
+            self.text(self.fit(sp["title"], 28, 380), 28, DIM if done else GOLD, topleft=(60, y + 8), shadow=True)
+            self.text(self.fit(sp["local"], 20, 380), 20, DIM, topleft=(60, y + 44))
+            tm = story.TEAMS[sp["team"]]
+            self.crest(tm["name"], tm["color"], ROW_CREST, center=(474, y + 38))
+            team = tm["name"]
             self.text(self.fit("Adversário: %s (Força %d)" % (team, cp.side_ovr(sid)), 22, 360), 22, TEXT,
                       topleft=(500, y + 10))
             rw = fx_text(sp.get("reward")) or "recompensa especial"
@@ -975,7 +1007,8 @@ class CampaignUI(RobotsUI):
             for st in C.stages_of(tr):
                 if st[0] in "GR":
                     continue
-                v["ko"].append({"stage": st, "name": story.TEAMS[stage_team(tr, st)]["name"],
+                tm = story.TEAMS[stage_team(tr, st)]
+                v["ko"].append({"stage": st, "name": tm["name"], "color": tuple(tm["color"]),
                                 "res": res.get(st), "cur": st == act["stage"]})
         return v
 
@@ -1198,8 +1231,9 @@ class CampaignUI(RobotsUI):
         self.panel((20, 62, 1060, 100))
         hg, ag = info["score"]
         for team, cx, left in ((th, 280, True), (ta, 820, False)):
-            pygame.draw.rect(scr, tuple(team["color"]), (cx - 230 if left else cx + 218, 82, 12, 60), border_radius=3)
-            self.text(self.fit(team["name"].upper(), 32, 400), 32, TEXT, center=(cx, 108), shadow=True)
+            self.crest(team["name"], team["color"], CARD_CREST, center=(cx - 196 if left else cx + 196, 112))
+            self.text(self.fit(team["name"].upper(), 32, 330), 32, TEXT, center=(cx + (16 if left else -16), 108),
+                      shadow=True)
         self.text("%d  x  %d" % (hg, ag), 60, GOLD, center=(W // 2, 100), shadow=True)
         res = {"w": ("VITÓRIA", GREEN), "d": ("EMPATE", GOLD), "l": ("DERROTA", RED)}[info["rew"]["result"]]
         line = res[0]
@@ -1263,8 +1297,8 @@ class CampaignUI(RobotsUI):
                 pygame.draw.line(scr, RED, (32, y - 2), (528, y - 2), 1)
             cy = y + (rh - 4) // 2
             self.text(str(k + 1), fs, GOLD if me else DIM, midright=(52, cy))
-            pygame.draw.rect(scr, tuple(row["color"]), (62, cy - 9, 12, 18), border_radius=3)
-            self.text(self.fit(row["name"].upper(), fs, 190), fs, TEXT if me else (200, 215, 205), midleft=(82, cy))
+            self.crest(row["name"], row["color"], rh - 6, center=(69, cy))
+            self.text(self.fit(row["name"].upper(), fs, 186), fs, TEXT if me else (200, 215, 205), midleft=(86, cy))
             for val, x in ((row["pts"], 300), (row["p"], 340), (row["w"], 380), (row["d"], 420),
                            (row["l"], 460), (row["gd"], 515)):
                 self.text(("%+d" % val) if x == 515 and val else str(val), fs,
@@ -1292,7 +1326,7 @@ class CampaignUI(RobotsUI):
         bh = 52
         yu, yo = py + 50, py + 112
         ymid = (yu + yo) // 2
-        me_name = self.garage.team["name"]
+        me_name, me_col = self.garage.team["name"], self.garage.team["color"]
         for i, b in enumerate(ko):
             x = x0 + i * (cw + gap)
             last = i == n - 1
@@ -1313,6 +1347,7 @@ class CampaignUI(RobotsUI):
                 pygame.draw.rect(scr, edge, r, wd, border_radius=6)
                 if user_box:
                     names = (me_name, b["name"])
+                    tcols = (me_col, b.get("color", (150, 150, 150)))
                     cols = (GOLD, TEXT if res is None or res[1] >= res[2] else DIM)
                     sc = ("", "")
                     if res is not None:
@@ -1323,7 +1358,9 @@ class CampaignUI(RobotsUI):
                     names, cols, sc = ("?", "?"), (DIM, DIM), ("", "")
                 for k in range(2):
                     yy = y + 14 + k * 24
-                    self.text(self.fit(names[k].upper(), 20, cw - 52), 20, cols[k], midleft=(x + 8, yy))
+                    if user_box:
+                        self.crest(names[k], tcols[k], KO_CREST, center=(x + 15, yy))
+                    self.text(self.fit(names[k].upper(), 20, cw - 74), 20, cols[k], midleft=(x + 28, yy))
                     if sc[k]:
                         self.text(sc[k], 20, TEXT, midright=(x + cw - 8, yy))
             if not last and v.get("fmt") == "series":       # serie: uma linha reta entre os duelos
@@ -1355,12 +1392,13 @@ class CampaignUI(RobotsUI):
         enough = mine >= int(round(act["F_rec"]))
         # --- cartoes dos dois times
         gg = self.garage
-        for x, name, col, sub, subc in (
-                (40, gg.team["name"].upper(), gg.team["color"], "Sua Força: %d" % mine, GREEN if enough else GOLD),
-                (400, opp["name"].upper(), opp["color"], "Força do rival: %d" % act["O"], TEXT)):
-            pygame.draw.rect(scr, tuple(col), (x, 476, 14, 50), border_radius=3)
-            self.text(self.fit(name, 32, 270), 32, TEXT, topleft=(x + 26, 474), shadow=True)
-            self.text(sub, 24, subc, topleft=(x + 26, 506))
+        for x, name, col, sub, subc, cname in (
+                (40, gg.team["name"].upper(), gg.team["color"], "Sua Força: %d" % mine, GREEN if enough else GOLD,
+                 gg.team["name"]),
+                (400, opp["name"].upper(), opp["color"], "Força do rival: %d" % act["O"], TEXT, opp["name"])):
+            self.crest(cname, col, TEAM_CREST, center=(x + 22, 502))
+            self.text(self.fit(name, 32, 236), 32, TEXT, topleft=(x + 52, 474), shadow=True)
+            self.text(sub, 24, subc, topleft=(x + 52, 506))
         self.text("x", 32, DIM, center=(366, 502))
         self.text("Força recomendada: %d" % int(round(act["F_rec"])), 26, TEXT, topleft=(40, 546))
         if act.get("boss") and act.get("pity", 0) > 0:
@@ -1400,9 +1438,9 @@ class CampaignUI(RobotsUI):
         self.text("TREINO", 52, TEXT, center=(cx, 160), shadow=True)
         self.panel((250, 196, 600, 250))
         opp = tr["opp"]
-        pygame.draw.rect(scr, tuple(opp["color"]), (290, 222, 14, 50), border_radius=3)
-        self.text(self.fit(opp["name"].upper(), 36, 500), 36, TEXT, topleft=(316, 218), shadow=True)
-        self.text("Força do rival: %d" % tr["O"], 26, DIM, topleft=(316, 256))
+        self.crest(opp["name"], opp["color"], TEAM_CREST, center=(312, 247))
+        self.text(self.fit(opp["name"].upper(), 36, 480), 36, TEXT, topleft=(344, 218), shadow=True)
+        self.text("Força do rival: %d" % tr["O"], 26, DIM, topleft=(344, 256))
         mine = int(round(self.info()["match_F"]))
         self.text("Sua Força: %d" % mine, 28, GREEN if mine >= tr["O"] else GOLD, topleft=(290, 306))
         if self.garage.mod_on():
@@ -1750,12 +1788,13 @@ class CampaignUI(RobotsUI):
         mine = int(round(act["user_F"]))
         opp = act["opp"]
         gg = self.garage
-        for x, name, col, sub, subc in (
-                (40, gg.team["name"].upper(), gg.team["color"], "Sua Força: %d" % mine, GREEN if mine >= act["O"] else GOLD),
-                (400, opp["name"].upper(), opp["color"], "Força do rival: %d" % act["O"], TEXT)):
-            pygame.draw.rect(scr, tuple(col), (x, 476, 14, 50), border_radius=3)
-            self.text(self.fit(name, 32, 270), 32, TEXT, topleft=(x + 26, 474), shadow=True)
-            self.text(sub, 24, subc, topleft=(x + 26, 506))
+        for x, name, col, sub, subc, cname in (
+                (40, gg.team["name"].upper(), gg.team["color"], "Sua Força: %d" % mine,
+                 GREEN if mine >= act["O"] else GOLD, gg.team["name"]),
+                (400, opp["name"].upper(), opp["color"], "Força do rival: %d" % act["O"], TEXT, opp["name"])):
+            self.crest(cname, col, TEAM_CREST, center=(x + 22, 502))
+            self.text(self.fit(name, 32, 236), 32, TEXT, topleft=(x + 52, 474), shadow=True)
+            self.text(sub, 24, subc, topleft=(x + 52, 506))
         self.text("x", 32, DIM, center=(366, 502))
         mk = act.get("mark")
         if mk and f > st["best"]:

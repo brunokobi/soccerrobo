@@ -9,6 +9,7 @@ sprite do robo cacheado em robot_art), Font(None) e texto Latin-1.
 """
 import pygame
 
+import crests
 import match_stats as MS
 import robot_art
 from career_ui import DIM, GOLD, GREEN, LINE, PANEL, TEXT, vis
@@ -18,6 +19,7 @@ MVP_EDGE = (255, 214, 90)
 ROW_HI = (40, 34, 10)
 TEAM_ROWS = (("POSSE", "poss"), ("CHUTES", "sh"), ("NO GOL", "sot"), ("PASSES", "pass"),
              ("DESARMES", "tk"), ("DRIBLES", "dr"), ("DEFESAS", "sv"))
+CREST_SIZES = (26, 34)              # escudos daqui (compactos): painel ESTATISTICAS e selo do MVP
 PCOLS = (("G", "g", 30), ("A", "a", 30), ("CH", "sh", 34), ("PAS", "pc", 36), ("DES", "tk", 38),
          ("DEF", "sv", 36), ("NOTA", "nota", 44))
 
@@ -44,6 +46,9 @@ class Painter:
         pygame.draw.rect(self.g.screen, fill, rect, border_radius=12)
         pygame.draw.rect(self.g.screen, LINE, rect, 2, border_radius=12)
 
+    def crest(self, name, color, size, custom=None, **anchor):
+        return crests.blit(self.g.screen, name, color, size, custom=custom, **anchor)
+
     def sprite_for(self, row):
         """Retrato do robo da partida que acabou: o corpo ja pre-renderizado (Player.art, warm_sprites). Nunca
         constroi nada no desenho: sem arte pronta (teste/demo), sem retrato."""
@@ -68,6 +73,23 @@ def _team_color(summary, t):
         return vis(summary["teams"][t].get("color") or (255, 255, 255))
     except (KeyError, IndexError, TypeError):
         return TEXT
+
+
+def team_crest(ui, summary, t, size, **anchor):
+    """Escudo do time t do resumo (usa a identidade "crest" gravada pelo motor; senao nome/cor)."""
+    try:
+        row = summary["teams"][t]
+    except (KeyError, IndexError, TypeError):
+        return None
+    cr = row.get("crest")
+    if cr:
+        name, color, custom = cr[0], cr[1], cr[2] if len(cr) > 2 else None
+    else:
+        name, color, custom = row.get("name") or "", row.get("color") or (255, 255, 255), None
+    fn = getattr(ui, "crest", None)
+    if fn is not None:
+        return fn(name, color, size, custom=custom, **anchor)
+    return crests.blit(ui.g.screen, name, color, size, custom=custom, **anchor)
 
 
 def _sprite(ui, row, summary):
@@ -107,6 +129,7 @@ def draw_mvp_card(ui, rect, summary):
     spr = _sprite(ui, row, summary)
     if spr is not None:
         scr.blit(spr, spr.get_rect(center=(r.centerx, cy)))
+    team_crest(ui, summary, t, CREST_SIZES[1], center=(r.centerx + 40, cy + 28))
     ui.text(ui.fit(player_name(row), 34, r.w - 24), 34, TEXT, center=(r.centerx, r.y + 156), shadow=True)
     team = summary["teams"][t].get("name") or ""
     ui.text(ui.fit("%s - %s" % (MS.ROLE_PT.get(row.get("role"), ""), team.upper()), 22, r.w - 24), 22,
@@ -141,6 +164,7 @@ def draw_mvp_strip(ui, rect, summary):
     if spr is not None:
         scr.blit(spr, spr.get_rect(center=(r.x + 44, r.centery)))
     t = row.get("team", 0)
+    team_crest(ui, summary, t, CREST_SIZES[0], center=(r.x + 68, r.bottom - 20))
     ui.text("MELHOR DO JOGO", 20, GOLD, topleft=(r.x + 86, r.y + 8))
     ui.text(ui.fit(player_name(row), 32, r.w - 230), 32, TEXT, topleft=(r.x + 86, r.y + 26), shadow=True)
     team = summary["teams"][t].get("name") or ""
@@ -175,6 +199,8 @@ def draw_stats_panel(ui, rect, summary, title=True):
     # ---- times
     cx = r.centerx
     lw = r.w // 2 - 120
+    team_crest(ui, summary, 0, CREST_SIZES[0], center=(cx - 88, y + 10))
+    team_crest(ui, summary, 1, CREST_SIZES[0], center=(cx + 88, y + 10))
     ui.text(ui.fit((teams[0].get("name") or "").upper(), 24, lw), 24, _team_color(summary, 0),
             midright=(cx - 110, y + 10))
     ui.text(ui.fit((teams[1].get("name") or "").upper(), 24, lw), 24, _team_color(summary, 1),

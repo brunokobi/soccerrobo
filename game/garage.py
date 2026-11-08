@@ -434,6 +434,8 @@ class Garage:
             cfg["tactic"] = self.tactic
         if self.formation != formations.DEFAULT:        # padrao: cfg identico ao de sempre (motor legado)
             cfg["formation"] = self.formation
+        if self.team.get("crest"):                       # escudo escolhido (so o desenho; o motor ignora)
+            cfg["crest"] = dict(self.team["crest"])
         items = self.backpack_items()
         if items:
             cfg["items"] = tuple(items)
@@ -589,6 +591,15 @@ class Garage:
                 r["cs"] = match_stats.add_cs(r.get("cs"), g, a, mvp)
                 n += 1
         return n
+
+    def set_crest(self, crest):
+        """Escudo do time: {"sym": id, "shape": id} (crests.SYMBOLS / SHAPES) ou None = o gerado pelo nome."""
+        c = clean_crest(crest)
+        if c:
+            self.team["crest"] = c
+        else:
+            self.team.pop("crest", None)
+        return c
 
     def set_formation(self, fid):
         """Formacao do time (formations.FORMATIONS): so muda as posicoes no motor. (ok, msg)."""
@@ -1169,6 +1180,19 @@ def _league_ps(raw):
     return out
 
 
+def clean_crest(v):
+    """Campo opcional team["crest"] = {"sym": id, "shape": id}: so ids curtos [a-z_] (o desenho em crests.py
+    ignora id desconhecido). Qualquer outra coisa -> None."""
+    if not isinstance(v, dict):
+        return None
+    out = {}
+    for k in ("sym", "shape"):
+        x = v.get(k)
+        if isinstance(x, str) and 0 < len(x) <= 16 and all("a" <= ch <= "z" or ch == "_" for ch in x):
+            out[k] = x
+    return out or None
+
+
 def _sanitize(data):
     if not isinstance(data, dict) or not _is_int(data.get("v")) or not (1 <= data["v"] <= VERSION):
         return None
@@ -1176,6 +1200,9 @@ def _sanitize(data):
     tm = tm if isinstance(tm, dict) else {}
     team = {"name": _str(tm.get("name"), NAME_MAX_TEAM, "Meu Time"),
             "color": _color(tm.get("color"), TEAM_COLOR)}
+    crest = clean_crest(tm.get("crest"))           # escudo escolhido (opcional; saves antigos nao tem)
+    if crest:
+        team["crest"] = crest
     cap = _int(data.get("cap"), MAX_LEVEL, CAMPAIGN_CAP, MAX_LEVEL)
     # pecas (inventario): ids unicos, modelo conhecido, <=200, reliquia (unique) no maximo 1
     inv_raw = data.get("inventory")
