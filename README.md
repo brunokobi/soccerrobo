@@ -387,7 +387,10 @@ do Pó.
 
 Também prontos e publicados: amistoso com escolha de times e formações e a escolha de
 formação na campanha, no Modo Robôs e na carreira (com robôs fortes a PRESSÃO rende mais; ver
-[docs/specs/formacoes.md](docs/specs/formacoes.md)). O planejamento detalhado fica em [`docs/`](docs/INDEX.md).
+[docs/specs/formacoes.md](docs/specs/formacoes.md)); estatísticas da partida, MELHOR DO JOGO e
+artilharia ([docs/specs/estatisticas.md](docs/specs/estatisticas.md)); escudos em pixel art para os 128
+times. Em estudo: publicação no CrazyGames ([docs/plano-crazygames.md](docs/plano-crazygames.md)).
+O planejamento detalhado fica em [`docs/`](docs/INDEX.md).
 
 **Robôs (Fase 1):** 6 chassis (Disco, Tanque, Velocista, Goleiro, Orbital, Titã) e 8 atributos
 (velocidade, aceleração, chute, controle/sucção, defesa, visão, bateria, QI) que

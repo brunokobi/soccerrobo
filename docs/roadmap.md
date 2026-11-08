@@ -12,10 +12,12 @@ Tabela original do planejamento (HEAD fd5e17b); as linhas das Fases 4 e 6 e a do
 | 4 (nova) | **Campanha Expandida**: torcida + desenhos detalhados, itens/skills, campanha 3 atos | Ondas A (visual, torcida, câmera de estádio), B (peças, sets, módulo, 16 skills, itens, cosméticos) e C (campanha Prólogo + 13 capítulos em 3 Atos, 3 finais, 14 missões, calibrada no motor) e D (NG+ "Turnê Lendária", Torre do Pó, peças Míticas) prontas e publicadas |
 | 5 | Editor de firmware (regras da IA em blocos) | planejada (era a antiga Fase 4) |
 | 6 | **Som**: efeitos sonoros e música sintetizados por código (stdlib), sons gravados, música nas partidas com a torcida de fundo em loop, mudo e volumes nas prefs | pronta e publicada ([specs/som.md](specs/som.md)) |
+| - | **Estatísticas e MELHOR DO JOGO** (fim da partida, card do resumo, artilharia/assistências acumuladas) e **escudos** em pixel art para os 128 times | prontos e publicados ([specs/estatisticas.md](specs/estatisticas.md); escudos em [specs/visual-desenhos-e-torcida.md](specs/visual-desenhos-e-torcida.md)) |
+| - | **Publicação no CrazyGames** | proposta ([plano-crazygames.md](plano-crazygames.md)): direitos dos áudios, inglês, SDK de anúncios, build do portal |
 | - | **Amistoso** com escolha de times e formações; **formação** também na Campanha, no Modo Robôs e na Carreira | pronto e publicado ([specs/formacoes.md](specs/formacoes.md)); balanceamento medido em `tests/calib_formations.py` (sem formação dominante até Força ~75; acima disso a PRESSÃO rende mais, aceito pelo dono; efeito no SIMULAR) |
 
 Números do código hoje:
-- ~48,9 mil linhas (game ~28,9 mil, tests ~20,0 mil); 532 testes.
+- ~52,7 mil linhas (game ~31,7 mil, tests ~21,0 mil); 560 testes.
 - Desenho em partida (câmera ESTÁDIO, gol em curso): 1,9-2,5 ms/frame; PERTO 1,0-1,3 ms (ver [specs/visual-desenhos-e-torcida.md](specs/visual-desenhos-e-torcida.md), 2.8).
 - Motor: 0,037 ms/step.
 - Goldens `golden` e `golden-new`: 80/80.

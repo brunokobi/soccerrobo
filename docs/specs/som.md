@@ -177,7 +177,7 @@ Regra: todo áudio novo passa por `tools/normalizar_audio.sh <pasta_de_entrada> 
 | Tipo | Formato | Corte | Volume |
 |---|---|---|---|
 | efeitos e reações (o resto) | vorbis mono 44,1 kHz, q3 | silêncio do início (`silenceremove`, -50 dB) | `loudnorm` I=-16 LUFS, TP=-1,5 dBTP |
-| músicas (stream: `menu1-3`, `copas`, `interno1/2`, `submenus`, `partida_musica`; e as fontes `torcida*` do loop) | vorbis mono 22,05 kHz, q2 | nenhum | I=-20 LUFS (fundo: não briga com os efeitos) |
+| músicas (stream: `menu1-3` (`menu1` = "Era do Metal", a primeira do menu), `copas`, `interno1/2`, `submenus`, `partida_musica`; e as fontes `torcida*` do loop) | vorbis mono 22,05 kHz, q2 | nenhum | I=-20 LUFS (fundo: não briga com os efeitos) |
 | motor dos robôs (`robo_motor`, Sound em loop) | vorbis mono 44,1 kHz, q2 | nenhum | I=-20 LUFS |
 | torcida de fundo (`torcida_loop`, Sound em loop; `tools/torcida_loop.sh`) | vorbis mono 44,1 kHz, q2 | trecho de ~27 s de cada gravação | ganho estático para -20 LUFS (loop sem emenda) |
 

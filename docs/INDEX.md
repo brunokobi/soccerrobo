@@ -63,9 +63,10 @@ Planejamento e especificações do jogo. O código e os comandos do dia a dia es
 - Estatísticas e MELHOR DO JOGO em todos os modos (fim da partida, card do resumo com TAB, narradora anuncia o
   MVP), estatísticas estimadas no SIMULAR e artilharia/assistências acumuladas (liga do Modo Robôs, ficha do
   robô, torneio da campanha, carreira), campos opcionais nos saves; goldens 80/80
-  ([specs/estatisticas.md](specs/estatisticas.md)): pronto (branch `feat/estatisticas-e-melhor-do-jogo`).
+  ([specs/estatisticas.md](specs/estatisticas.md)): pronto e publicado.
 - Escudos dos times em pixel art (`game/crests.py`): os 128 times de todos os modos + o do jogador (clique no escudo
   do topo troca símbolo/formato, campo opcional `crest` na garagem), em todas as telas com times; goldens 80/80
-  ([specs/visual-desenhos-e-torcida.md](specs/visual-desenhos-e-torcida.md)): pronto (branch `feat/escudos-dos-times`).
+  ([specs/visual-desenhos-e-torcida.md](specs/visual-desenhos-e-torcida.md)): pronto e publicado.
 - Deploy: build do pygbag + `tools/versionar_build.sh` (cache busting do `game.apk`); ver o README.
+- Publicação em portais: proposta para o CrazyGames em [plano-crazygames.md](plano-crazygames.md) (ainda não iniciada).
 - Código: ~52,7 mil linhas (game ~31,7 mil, tests ~21,0 mil); 560 testes (`def test_` em `tests/test_*.py`).
