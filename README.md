@@ -23,9 +23,9 @@ pelas habilidades dos robôs.
 | ![Menu principal](docs/img/menu.png) | ![Partida com câmera de estádio, gol e faixa do narrador](docs/img/partida-estadio-gol.png) |
 | **Menu** - amistosos, carreira de clubes, Modo Robôs e campanha | **Partida** - câmera de estádio, torcida reagindo ao gol, LED e faixa do narrador |
 | ![Campanha: diálogo](docs/img/campanha-dialogo.png) | ![Campanha: mapa dos capítulos](docs/img/campanha-mapa.png) |
-| **Campanha** - diálogos com personagens e cenários em pixel art animados (torcida com rostos, piso de tábuas, luzes) | **Mapa da campanha** - da escola ao Mundial de Aspiradores |
+| **Campanha** - diálogos com personagens e cenários em pixel art animados (torcida com rostos, piso de tábuas, luzes) | **Mapa da campanha** - da escola ao Mundial de Aspiradores, com o escudo do chefe de cada capítulo |
 | ![Campanha: torneio](docs/img/campanha-torneio.png) | ![Modo Robôs: liga](docs/img/modo-robos-liga.png) |
-| **Torneio** - grupo, chaveamento, final contra o chefe, formação e ASSISTIR ou SIMULAR | **Modo Robôs** - liga de 6 times em 4 tiers, com a formação do próximo jogo |
+| **Torneio** - grupo, chaveamento, final contra o chefe (escudos em todas as tabelas), formação e ASSISTIR ou SIMULAR | **Modo Robôs** - liga de 6 times em 4 tiers, com escudos e a formação do próximo jogo |
 | ![Garagem: bancada com 8 slots](docs/img/garagem-bancada.png) | ![Árvore de habilidades](docs/img/habilidades.png) |
 | **Garagem** - 8 slots (com Módulo), sets, relíquias e o antes/depois de cada peça | **Habilidades** - árvore Ataque/Controle/Defesa, skills equipadas e tática do time |
 | ![Mochila de itens](docs/img/mochila.png) | ![Galeria de cosméticos](docs/img/visual-cosmeticos.png) |
@@ -33,7 +33,7 @@ pelas habilidades dos robôs.
 
 | ![Amistoso: escolha de times e formações](docs/img/amistoso-escolha.png) | ![Seletor de formação na campanha](docs/img/formacao-campanha.png) |
 |---|---|
-| **Amistoso** - antes da partida, o time e a formação de cada lado (escudo, força e mini-campo com a posição dos robôs) | **Formação** - o mesmo seletor na campanha, no Modo Robôs e na carreira |
+| **Amistoso** - antes da partida, o time e a formação de cada lado (escudo em pixel art, força e mini-campo com a posição dos robôs) | **Formação** - o mesmo seletor na campanha, no Modo Robôs e na carreira |
 
 | ![Mapa do Ato 2](docs/img/campanha-mapa-ato2.png) | ![Superliga em pontos corridos](docs/img/campanha-superliga.png) |
 |---|---|
@@ -42,6 +42,14 @@ pelas habilidades dos robôs.
 ![Missões secundárias](docs/img/campanha-missoes.png)
 
 **Missões secundárias** - 14 missões avulsas com prêmio próprio; as 4 "Fitas do Vô" levam ao final secreto.
+
+| ![Fim da partida com os escudos](docs/img/partida-fim-escudos.png) | ![Tabela da carreira com escudos](docs/img/carreira-tabela.png) |
+|---|---|
+| **Fim da partida** - escudos dos dois times no placar e na faixa do resultado | **Carreira** - escudo de cada clube na tabela, no próximo jogo e nos resultados |
+
+![Todos os escudos](docs/img/escudos.png)
+
+**Escudos** - os 128 times do jogo (e exemplos de nomes do time do jogador, com *), desenhados por código.
 
 **Pós-campanha (Onda D):**
 
@@ -60,6 +68,19 @@ Robôs em campo com cosméticos (câmera PERTO):
 Tema tecnológico/neon: arena com grade e linhas holográficas, robôs-disco com
 anel de LED e barra de bateria, bola com brilho, rastro e faíscas, e HUD e menu
 novos.
+
+**Escudos dos times:** todos os 128 times do jogo (amistoso, carreira, campanha e liga do Modo Robôs;
+os adversários da Torre e do treino usam o escudo do time da liga de mesmo nome) têm um escudo em pixel
+art desenhado por código (`game/crests.py`), sem nenhuma imagem externa: formato (clássico, redondo,
+losango, hexágono, pontudo, francês, oval), padrão nas cores do time (liso, faixa, listras, metade,
+diagonal, quartos, chevron, aro), medalhão com um símbolo 15x15 escolhido pelo nome (tubarão, leão,
+dragão, raio, chama, coroa, flor de cerejeira, torre de xadrez, aspirador-robô, engrenagem, pão, vassoura,
+furacão, cavaleiro, trevo, ômega e mais ~40) e faixa com as iniciais. O mesmo time gera sempre o mesmo
+escudo. Os chefes e rivais da campanha (Os Impecáveis, Guarda Zero, X-Ômega Prime e o chefe de cada
+capítulo) têm escudo especial com coroa ou estrelas e louros ou asas. Aparecem no amistoso, no placar e
+no fim da partida, nas ESTATÍSTICAS/MELHOR DO JOGO, nas tabelas, artilharia, chaveamento, cards de
+resultado, carreira, mapa da campanha e Torre. O escudo do seu time sai do nome e da cor; no Modo Robôs e
+na campanha, **clique no escudo do topo** para trocar o símbolo (**SHIFT + clique** troca o formato).
 
 **Pisos do campo:** cada partida sorteia um piso, sem repetir o anterior. Pode ser a arena neon
 original ou um piso de casa: cozinha em xadrez, tacos de madeira, porcelanato, ladrilho hidráulico ou
@@ -420,6 +441,7 @@ export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy
 .venv/bin/python tests/test_camera.py                  # câmera de estádio: começa sempre em ESTÁDIO, C só na pausa, gol não troca, zero Surface
 .venv/bin/python tests/test_narration.py               # narrador/comentarista: catálogo, fila sem spam, nomes, faixa, zero Surface
 .venv/bin/python tests/test_match_stats.py             # estatísticas: assistência, gol contra, defesa, MVP, coleta não muda o jogo, SIMULAR, saves, telas
+.venv/bin/python tests/test_crests.py                  # escudos: determinismo, todos os times, cache/memória, zero Surface por quadro, contraste, campo "crest" da garagem
 .venv/bin/python tests/test_robot_art.py               # robôs: chassis, peças visíveis, cache, FX, local da torcida por modo
 .venv/bin/python tests/test_arena.py                   # modificadores de arena da Torre do Pó (desligados fora dela, efeito, zero Surface)
 CAMPAIGN_BAL_N=100 .venv/bin/python tests/test_campaign_balance.py   # balanço da campanha por simulação (lento, ver abaixo)
@@ -465,6 +487,7 @@ Utilitários do harness (`tests/sim_harness.py`): `golden`/`golden-new` com
 - `game/crowd.py`: torcida (locais, espectadores pré-renderizados, reações, confete/LED/telão "AO VIVO", LOD) e a geometria das câmeras PERTO/ESTÁDIO
 - `game/narration.py`: narrador (Tonho) e comentarista (Cleide): catálogo de falas, fila sem spam e a faixa de TV da partida
 - `game/match_stats.py`: estatísticas da partida (puro): contadores por robô, nota, MELHOR DO JOGO, estatísticas estimadas do SIMULAR e acumulados
+- `game/crests.py`: escudos dos times em pixel art (formato, padrão, símbolo, iniciais, especiais dos chefes), determinísticos, com cache LRU limitado e geração fora do desenho (`request`/`pump`)
 - `game/stats_ui.py`: cartão MELHOR DO JOGO, faixa do fim da partida e painel ESTATÍSTICAS (usados pelo motor e pelos cards de resumo)
 - `tools/normalizar_audio.sh`: deixa os áudios de `game/audio/` compactos e com o volume nivelado (ffmpeg; ver `docs/specs/som.md`)
 - `tools/versionar_build.sh`: versiona `game.apk`/`game.tar.gz` no `index.html` do build (`?v=<sha256 curto do game.apk>`; cache busting a cada deploy)

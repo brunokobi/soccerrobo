@@ -203,6 +203,37 @@ Hoje o robô é um disco 64x64 (chassis só muda detalhes). Plano (arquivo novo 
 - **Animação** (`anim_*`): por quadro só `Surface.fill` em blocos lógicos de 3 px e blits de sprites prontos (brilhos em anéis x3, placa NO AR, neon LANCHES) aquecidos em `portraits._warm`: bandeirolas com recorte em V, placar, flashes de câmera, telão com equalizador, globo girando, drones e confete, engrenagens, relógio, vapor, lâmpadas do camarim em sequência, bandeiras, pombo-robô, bolhas e holograma, malas na esteira, lanternas e pétalas, esteira com Zés e braço robótico, carro passando.
 - **Custo medido** (desktop, `get_background` = pintura + frente + sprites da animação): 3-10 ms por cenário (médio ~6 ms; Mundial ~15 ms com o globo e os drones), a frio (sprites zerados) igual; o clássico ficava em ~9 ms. Cache de cenários igual ao clássico (6 x 2,1 MB = 12,6 MB no teto), frentes ~2,5 MB, sprites da camada pixel ~1,2 MB (o clássico usava ~2,4 MB de brilhos suaves). Quadro (fundo + animação + frente) ~0,4 ms.
 
+### 4.x Escudos dos times (`crests.py`)
+
+- **O quê**: os 128 times do jogo (2 clássicos do amistoso, 24 clubes da carreira, 86 de `story.TEAMS`, 16 da liga
+  do Modo Robôs) e o time do jogador têm escudo em pixel art, sem imagens externas e sem nada parecido com clube
+  real. Os nomes não mudam. Adversários da Torre ("Parafusos FC 12") e do treino usam o escudo do time da liga
+  de mesmo nome.
+- **Técnica** (mesma família dos personagens/cenários): tela lógica 32x40 pintada num buffer RGBA, ampliada por
+  vizinho mais próximo (40/80/120 px de altura ficam nítidos; outras alturas ampliam para o múltiplo de cima e
+  reduzem com smoothscale). Formato (7) + padrão (8) com a cor do time e uma secundária com contraste mínimo,
+  luz/sombra e bevel, borda dourada e contorno escuro; medalhão com símbolo 15x15 (55 símbolos: arte em texto e
+  alguns radiais por fórmula) com contorno automático; faixa com até 3 iniciais numa fonte 5x7. Abaixo de 40 px
+  o layout é **compacto**: sem faixa (ilegível) e com o símbolo direto no campo. Medalhão escuro, ou creme
+  quando o símbolo é escuro (contraste >= 3). Chefes/rivais (`SPECIALS`): borda dupla, coroa ou estrelas, louros
+  ou asas.
+- **Determinismo**: tudo sai de `zlib.crc32` do nome (sem `hash()`, sem random). Símbolo por palavra-chave
+  (`SYMBOL_RULES`, prefixo de palavra sem acento; `"sol$"` = palavra inteira), senão fallback pelo hash.
+- **Cache e quadro**: LRU de Surfaces prontas por (nome, cor, altura, custom, compacto) com teto de 4 MB, e LRU
+  de 160 artes lógicas (~5 KB cada). No desenho as telas só chamam `crests.blit`: se o escudo não está pronto,
+  o pedido entra numa fila e um escudo simples (`pygame.draw`) ocupa o lugar; `crests.pump()` roda no
+  `Game.update` (fora do desenho, o pedido mais novo primeiro, ~6 ms por quadro, no mínimo 1). Amistoso
+  (abrir/trocar) e partida (`warm_crests` no início: HUD, fim e ESTATÍSTICAS) aquecem na hora. Com a fila vazia,
+  zero Surface por quadro.
+- **Custo medido** (desktop): arte ~2,4 ms por escudo, `get` com ampliação ~1,2 ms; os 128 times em 4 alturas
+  ~7 MB sem limite (com o teto, 4 MB). No navegador (WASM, ~5-10x mais lento) ~15-25 ms por escudo: uma tabela
+  de 8 times completa em poucos quadros.
+- **Time do jogador**: gerado pelo nome/cor; campo opcional `team["crest"] = {"sym", "shape"}` na garagem
+  (Modo Robôs e campanha; `garage.clean_crest`, ids desconhecidos ignorados no desenho, saves antigos sem o campo
+  carregam igual). No topo do Modo Robôs/campanha, clique no escudo troca o símbolo e SHIFT + clique o formato.
+  O `match_cfg` leva o `crest` (o motor ignora; goldens 80/80).
+- **Testes**: `tests/test_crests.py`; folha com todos: `docs/img/escudos.png`.
+
 ## 5. Como testar (obrigatório)
 - **Zero Surface por frame**: `tests/test_crowd.py` troca `pygame.Surface` por um contador (como `test_60_frames_every_screen_zero_surface_and_cache`) e confere 0 criações em 300 frames de partida com torcida em cada local; idem para robôs com todas as peças e FX de skills.
 - **Tempo de desenho**: `sim_harness.py draw` ganha `--crowd` e imprime `draw_ms` por local; limite duro 25 ms (como `test_draw_time_budget`), metas 1,5 ms (desktop). Aviso informativo > 3 ms.
