@@ -84,7 +84,7 @@ Planejamento e especificações do jogo. O código e os comandos do dia a dia es
   temporada, 25% do valor base, mín. R$ 100k; revisar e vender nunca dá lucro). Save da carreira `ver` = 3 com
   migração do v2 (e do v1 passando pelas duas; fixtures v2 em `tests/fixtures/career_v2_*.json`); carreira nova
   idêntica à v2 na força; na simulação de 10 temporadas a CPU fica de 0,1 a 1,0 abaixo no overall médio e a
-  Divisão 1 chega na mesma temporada (~6ª); goldens 80/80: pronto (não publicado).
+  Divisão 1 chega na mesma temporada (~6ª); goldens 80/80: pronto e publicado.
 - Deploy: build do pygbag + `tools/versionar_build.sh` (cache busting do `game.apk`); ver o README.
 - Publicação em portais: proposta para o CrazyGames em [plano-crazygames.md](plano-crazygames.md) (ainda não iniciada).
 - Código: ~53,9 mil linhas (game ~32,1 mil, tests ~21,8 mil); 587 testes (`def test_` em `tests/test_*.py`).
