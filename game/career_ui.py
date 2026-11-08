@@ -34,6 +34,14 @@ def ovr_color(o):
     return (240, 150, 90)
 
 
+# cor do uso por fase (career.PHASES): amaciando, auge, desgaste, fim de vida
+PHASE_COLORS = [GREEN, TEXT, (245, 160, 60), RED]
+
+
+def hours_color(h):
+    return PHASE_COLORS[C.phase_index(h)]
+
+
 def vis(color):
     """Garante que a cor do clube seja legível em fundo escuro."""
     c = tuple(color)
@@ -331,7 +339,8 @@ class CareerUI:
             self.text("Última rodada:  bilheteria %s   |   salários -%s" % (
                 C.fmt_money(fin.get("ticket", 0)), C.fmt_money(fin.get("wages", 0))), 24, DIM,
                 topleft=(24, 556))
-        self.text("Dica: compre robôs no MERCADO e ajuste a escalação em ELENCO.", 24, DIM, topleft=(24, 590))
+        self.text("Dica: compre robôs no MERCADO; no ELENCO, escale e faça a REVISÃO dos robôs mais gastos.", 24,
+                  DIM, topleft=(24, 590))
 
     def tab_table(self):
         c = self.career
@@ -411,7 +420,7 @@ class CareerUI:
         club = c.clubs[c.user]
         starters, bench = self.squad_rows(club)
         self.text("ROBÔ", 22, DIM, topleft=(60, 138))
-        for lab, x in (("POS", 360), ("OVR", 430), ("IDADE", 494), ("G", 536), ("A", 572), ("VALOR", 700)):
+        for lab, x in (("POS", 330), ("OVR", 390), ("USO", 500), ("G", 540), ("A", 576), ("VALOR", 700)):
             self.text(lab, 22, DIM, midright=(x, 148))
         for k, p in enumerate(starters + bench):
             y = 166 + k * 25
@@ -423,11 +432,11 @@ class CareerUI:
             if p["id"] == self.sel:
                 pygame.draw.rect(self.g.screen, GOLD, r, 2, border_radius=5)
             self.text(p["name"], 22, TEXT, midleft=(44, y + 12))
-            self.text(C.POS_PT[p["pos"]], 22, DIM, midright=(360, y + 12))
-            self.text(str(p["ovr"]), 24, ovr_color(p["ovr"]), midright=(430, y + 12))
-            self.text(str(p["age"]), 22, TEXT, midright=(494, y + 12))
-            self.text(str(p.get("sg", 0)), 22, GOLD if p.get("sg") else DIM, midright=(536, y + 12))
-            self.text(str(p.get("sa", 0)), 22, TEXT if p.get("sa") else DIM, midright=(572, y + 12))
+            self.text(C.POS_PT[p["pos"]], 22, DIM, midright=(330, y + 12))
+            self.text(str(p["ovr"]), 24, ovr_color(p["ovr"]), midright=(390, y + 12))
+            self.text(C.fmt_hours(p["hours"]), 22, hours_color(p["hours"]), midright=(500, y + 12))
+            self.text(str(p.get("sg", 0)), 22, GOLD if p.get("sg") else DIM, midright=(540, y + 12))
+            self.text(str(p.get("sa", 0)), 22, TEXT if p.get("sa") else DIM, midright=(576, y + 12))
             self.text(C.fmt_money(C.value(p)), 22, TEXT, midright=(700, y + 12))
             self.hit(r, lambda pid=p["id"]: self.pick_player(pid))
             if k == 4:
@@ -439,24 +448,31 @@ class CareerUI:
         self.text("Verde = titular", 22, GREEN, topleft=(765, 182))
         p = next((q for q in club["squad"] if q["id"] == self.sel), None)
         if p:
-            self.text(p["name"], 28, TEXT, topleft=(765, 225))
-            self.text("%s   Overall %d   %d anos" % (C.POS_PT[p["pos"]], p["ovr"], p["age"]), 22, DIM,
-                      topleft=(765, 258))
-            self.text("Valor: " + C.fmt_money(C.value(p)), 24, TEXT, topleft=(765, 286))
+            self.text(p["name"], 28, TEXT, topleft=(765, 210))
+            self.text("%s   Overall %d   Valor %s" % (C.POS_PT[p["pos"]], p["ovr"], C.fmt_money(C.value(p))), 22,
+                      DIM, topleft=(765, 238))
+            self.text("Uso: %s  (%s)" % (C.fmt_hours(p["hours"]), C.phase_name(p["hours"])), 22,
+                      hours_color(p["hours"]), topleft=(765, 262))
             self.text("Temp.: %dG %dA %d MVP   Total: %dG %dA %d MVP" % (
                 p.get("sg", 0), p.get("sa", 0), p.get("smvp", 0), p.get("tg", 0), p.get("ta", 0), p.get("tmvp", 0)),
-                20, GOLD, topleft=(765, 308))
+                20, GOLD, topleft=(765, 288))
         else:
             self.text("Clique num robô", 24, DIM, topleft=(765, 240))
         is_st = bool(p) and p["id"] in club["lineup"]
-        self.btn((765, 330, 295, 46), "ESCALAR TITULAR", self.do_lineup, enabled=bool(p) and not is_st, size=26)
-        self.btn((765, 386, 295, 46), "AUTO ESCALAÇÃO", self.do_auto, color=(60, 80, 130), size=26)
+        self.btn((765, 314, 295, 42), "ESCALAR TITULAR", self.do_lineup, enabled=bool(p) and not is_st, size=26)
+        self.btn((765, 364, 295, 42), "AUTO ESCALAÇÃO", self.do_auto, color=(60, 80, 130), size=26)
         sell_lab = "CONFIRMAR VENDA" if p and self.confirm == p["id"] else (
             "VENDER (%s)" % C.fmt_money(int(C.value(p) * 0.8)) if p else "VENDER")
-        self.btn((765, 442, 295, 46), sell_lab, self.do_sell, enabled=bool(p),
+        self.btn((765, 414, 295, 42), sell_lab, self.do_sell, enabled=bool(p),
                  color=(150, 60, 50) if p and self.confirm == p["id"] else (110, 55, 50), size=24)
-        for k, line in enumerate(self.wrap(self.msg, 22, 295)[:5]):
-            self.text(line, 22, GOLD, topleft=(765, 510 + k * 26))
+        # OFICINA: revisao (tira 3 mil h de uso, nunca abaixo de 5 mil h; 1 por temporada)
+        rev_ok, rev_price, rev_why = c.revision_check(p["id"]) if p else (False, 0, "")
+        self.btn((765, 464, 295, 42), "REVISÃO (%s)" % C.fmt_money(rev_price) if p else "REVISÃO", self.do_revise,
+                 enabled=rev_ok, color=(40, 110, 90), size=24)
+        msg = self.msg or rev_why or ("Revisão: -%s de uso (mín. %s), 1 por temporada." % (
+            C.fmt_hours(C.REV_HOURS), C.fmt_hours(C.REV_FLOOR)) if p else "")
+        for k, line in enumerate(self.wrap(msg, 22, 295)[:5]):
+            self.text(line, 22, GOLD if self.msg else DIM, topleft=(765, 520 + k * 26))
 
     def pick_player(self, pid):
         self.sel = pid
@@ -472,6 +488,13 @@ class CareerUI:
         self.career.auto_lineup(club)
         self.msg = "Escalação automática aplicada."
         self.save()
+
+    def do_revise(self):
+        ok, self.msg = self.career.revise(self.sel)
+        self.confirm = None
+        sfx.play("buy" if ok else "error")
+        if ok:
+            self.save()
 
     def do_sell(self):
         if self.confirm != self.sel:
@@ -494,7 +517,7 @@ class CareerUI:
                      color=(50, 160, 220) if self.pos_filter == pos else (16, 44, 70), size=24)
         self.text("Caixa: " + C.fmt_money(club["money"]), 28, GOLD, midright=(W - 24, 153))
         for lab, x, right in (("CLUBE", 40, False), ("ROBÔ", 290, False), ("POS", 590, True),
-                              ("OVR", 660, True), ("IDADE", 745, True), ("VS TITULAR", 850, True),
+                              ("OVR", 660, True), ("USO", 770, True), ("VS TITULAR", 880, True),
                               ("PREÇO", 1055, True)):
             self.text(lab, 22, DIM, **({"midright": (x, 194)} if right else {"midleft": (x, 194)}))
         entries = sorted(c.market, key=lambda e: -e["p"]["ovr"])
@@ -514,9 +537,9 @@ class CareerUI:
             self.text(p["name"], 22, TEXT, midleft=(290, y + 13))
             self.text(C.POS_PT[p["pos"]], 22, DIM, midright=(590, y + 13))
             self.text(str(p["ovr"]), 24, ovr_color(p["ovr"]), midright=(660, y + 13))
-            self.text(str(p["age"]), 22, TEXT, midright=(745, y + 13))
+            self.text(C.fmt_hours(p["hours"]), 22, hours_color(p["hours"]), midright=(770, y + 13))
             self.text(("%+d" % delta) if delta else "0", 22, GREEN if delta > 0 else (RED if delta < 0 else DIM),
-                      midright=(850, y + 13))
+                      midright=(880, y + 13))
             self.text(C.fmt_money(price), 22, TEXT if price <= club["money"] else RED, midright=(1055, y + 13))
             self.hit(r, lambda e=e: self.pick_market(e))
         if not entries:
@@ -639,6 +662,7 @@ class CareerUI:
         club = c.clubs[c.user]
         self.text("Caixa atual: " + C.fmt_money(club["money"]), 28, TEXT, center=(W // 2, 535))
         if i["retired"]:
-            self.text("Aposentados: " + ", ".join(i["retired"]) + " (veja o novo elenco)", 22, DIM,
+            self.text(self.fit("Foram para a reciclagem: " + ", ".join(i["retired"]) + " (veja o novo elenco)",
+                               22, 1000), 22, DIM,
                       center=(W // 2, 570))
         self.btn((W // 2 - 180, 620, 360, 56), "INICIAR TEMPORADA %d" % c.season, self.after_season, size=32)
