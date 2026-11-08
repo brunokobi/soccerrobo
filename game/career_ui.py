@@ -331,7 +331,7 @@ class CareerUI:
             self.text("Última rodada:  bilheteria %s   |   salários -%s" % (
                 C.fmt_money(fin.get("ticket", 0)), C.fmt_money(fin.get("wages", 0))), 24, DIM,
                 topleft=(24, 556))
-        self.text("Dica: compre jogadores no MERCADO e ajuste a escalação em ELENCO.", 24, DIM, topleft=(24, 590))
+        self.text("Dica: compre robôs no MERCADO e ajuste a escalação em ELENCO.", 24, DIM, topleft=(24, 590))
 
     def tab_table(self):
         c = self.career
@@ -377,7 +377,7 @@ class CareerUI:
         c = self.career
         cols = [("G", 760), ("A", 860), ("MVP", 980)]
         self.text("#", 24, DIM, center=(50, 196))
-        self.text("JOGADOR", 24, DIM, topleft=(105, 186))
+        self.text("ROBÔ", 24, DIM, topleft=(105, 186))
         self.text("CLUBE", 24, DIM, topleft=(400, 186))
         for lab, x in cols:
             self.text(lab, 24, DIM, midright=(x, 196))
@@ -410,7 +410,7 @@ class CareerUI:
         c = self.career
         club = c.clubs[c.user]
         starters, bench = self.squad_rows(club)
-        self.text("JOGADOR", 22, DIM, topleft=(60, 138))
+        self.text("ROBÔ", 22, DIM, topleft=(60, 138))
         for lab, x in (("POS", 360), ("OVR", 430), ("IDADE", 494), ("G", 536), ("A", 572), ("VALOR", 700)):
             self.text(lab, 22, DIM, midright=(x, 148))
         for k, p in enumerate(starters + bench):
@@ -434,7 +434,8 @@ class CareerUI:
                 pygame.draw.line(self.g.screen, LINE, (20, y + 25), (720, y + 25), 1)
 
         self.panel((745, 135, 335, 540))
-        self.text("Elenco: %d/%d" % (len(club["squad"]), C.MAX_SQUAD), 26, GOLD, topleft=(765, 150))
+        self.text("Elenco: %d/%d  (mín. %d)" % (len(club["squad"]), C.MAX_SQUAD, C.MIN_SQUAD), 26, GOLD,
+                  topleft=(765, 150))
         self.text("Verde = titular", 22, GREEN, topleft=(765, 182))
         p = next((q for q in club["squad"] if q["id"] == self.sel), None)
         if p:
@@ -446,7 +447,7 @@ class CareerUI:
                 p.get("sg", 0), p.get("sa", 0), p.get("smvp", 0), p.get("tg", 0), p.get("ta", 0), p.get("tmvp", 0)),
                 20, GOLD, topleft=(765, 308))
         else:
-            self.text("Clique num jogador", 24, DIM, topleft=(765, 240))
+            self.text("Clique num robô", 24, DIM, topleft=(765, 240))
         is_st = bool(p) and p["id"] in club["lineup"]
         self.btn((765, 330, 295, 46), "ESCALAR TITULAR", self.do_lineup, enabled=bool(p) and not is_st, size=26)
         self.btn((765, 386, 295, 46), "AUTO ESCALAÇÃO", self.do_auto, color=(60, 80, 130), size=26)
@@ -492,7 +493,7 @@ class CareerUI:
             self.btn((20 + i * 110, 135, 100, 36), lab, lambda p=pos: setattr(self, "pos_filter", p),
                      color=(50, 160, 220) if self.pos_filter == pos else (16, 44, 70), size=24)
         self.text("Caixa: " + C.fmt_money(club["money"]), 28, GOLD, midright=(W - 24, 153))
-        for lab, x, right in (("CLUBE", 40, False), ("JOGADOR", 290, False), ("POS", 590, True),
+        for lab, x, right in (("CLUBE", 40, False), ("ROBÔ", 290, False), ("POS", 590, True),
                               ("OVR", 660, True), ("IDADE", 745, True), ("VS TITULAR", 850, True),
                               ("PREÇO", 1055, True)):
             self.text(lab, 22, DIM, **({"midright": (x, 194)} if right else {"midleft": (x, 194)}))
@@ -519,7 +520,7 @@ class CareerUI:
             self.text(C.fmt_money(price), 22, TEXT if price <= club["money"] else RED, midright=(1055, y + 13))
             self.hit(r, lambda e=e: self.pick_market(e))
         if not entries:
-            self.text("Nenhum jogador nessa posição agora. O mercado muda a cada rodada.", 24, DIM,
+            self.text("Nenhum robô nessa posição agora. O mercado muda a cada rodada.", 24, DIM,
                       topleft=(30, 230))
         e = self.msel if self.msel in c.market else None
         self.btn((880, 648, 200, 44), "COMPRAR", self.do_buy, enabled=bool(e), size=28)
