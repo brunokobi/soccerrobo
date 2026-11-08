@@ -75,7 +75,9 @@ Planejamento e especificações do jogo. O código e os comandos do dia a dia es
   carreira ganhou `ver` = 2: save antigo é migrado ao carregar (nomes de robô pelo id; elencos acima de 10 ficam
   com os titulares + melhores reservas, garantindo um goleiro; excedentes do clube do jogador vendidos pelo valor
   de mercado; estatísticas seguem no id), save inválido não carrega nem é sobrescrito; testes em
-  `tests/test_career.py` (fixture real do save antigo em `tests/fixtures/career_v1_mid_season.json`); goldens 80/80.
+  `tests/test_career.py` (fixture real do save antigo em `tests/fixtures/career_v1_mid_season.json`); goldens 80/80;
+  a carreira ficou um pouco mais fácil (na simulação de 10 temporadas, a Divisão 1 chega ~1 temporada antes):
+  pronto e publicado.
 - Deploy: build do pygbag + `tools/versionar_build.sh` (cache busting do `game.apk`); ver o README.
 - Publicação em portais: proposta para o CrazyGames em [plano-crazygames.md](plano-crazygames.md) (ainda não iniciada).
-- Código: ~52,7 mil linhas (game ~31,7 mil, tests ~21,0 mil); 572 testes (`def test_` em `tests/test_*.py`).
+- Código: ~53,3 mil linhas (game ~31,9 mil, tests ~21,4 mil); 572 testes (`def test_` em `tests/test_*.py`).

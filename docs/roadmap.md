@@ -13,11 +13,12 @@ Tabela original do planejamento (HEAD fd5e17b); as linhas das Fases 4 e 6 e a do
 | 5 | Editor de firmware (regras da IA em blocos) | planejada (era a antiga Fase 4) |
 | 6 | **Som**: efeitos sonoros e música sintetizados por código (stdlib), sons gravados, música nas partidas com a torcida de fundo em loop, mudo e volumes nas prefs | pronta e publicada ([specs/som.md](specs/som.md)) |
 | - | **Estatísticas e MELHOR DO JOGO** (fim da partida, card do resumo, artilharia/assistências acumuladas) e **escudos** em pixel art para os 128 times | prontos e publicados ([specs/estatisticas.md](specs/estatisticas.md); escudos em [specs/visual-desenhos-e-torcida.md](specs/visual-desenhos-e-torcida.md)) |
+| - | **Carreira com robôs**: nomes de robô (`robot_names.py`) e elenco de 5 a 10 (5 titulares), save `ver` 2 com migração do antigo | pronta e publicada (testes em `tests/test_career.py`) |
 | - | **Publicação no CrazyGames** | proposta ([plano-crazygames.md](plano-crazygames.md)): direitos dos áudios, inglês, SDK de anúncios, build do portal |
 | - | **Amistoso** com escolha de times e formações; **formação** também na Campanha, no Modo Robôs e na Carreira | pronto e publicado ([specs/formacoes.md](specs/formacoes.md)); balanceamento medido em `tests/calib_formations.py` (sem formação dominante até Força ~75; acima disso a PRESSÃO rende mais, aceito pelo dono; efeito no SIMULAR) |
 
 Números do código hoje:
-- ~52,7 mil linhas (game ~31,7 mil, tests ~21,0 mil); 560 testes.
+- ~53,3 mil linhas (game ~31,9 mil, tests ~21,4 mil); 572 testes.
 - Desenho em partida (câmera ESTÁDIO, gol em curso): 1,9-2,5 ms/frame; PERTO 1,0-1,3 ms (ver [specs/visual-desenhos-e-torcida.md](specs/visual-desenhos-e-torcida.md), 2.8).
 - Motor: 0,037 ms/step.
 - Goldens `golden` e `golden-new`: 80/80.
