@@ -49,7 +49,8 @@ pelas habilidades dos robôs.
 
 ![Elenco da carreira com robôs](docs/img/carreira-elenco.png)
 
-**Elenco da carreira** - robôs aspiradores com nome de robô, de 5 a 10 por time (5 titulares em verde).
+**Elenco da carreira** - robôs aspiradores com nome de robô, de 5 a 10 por time (5 titulares em verde), horas de
+USO coloridas pela fase (verde amaciando, branco auge, laranja desgaste, vermelho fim de vida) e a REVISÃO.
 
 ![Todos os escudos](docs/img/escudos.png)
 
@@ -197,12 +198,18 @@ torcida, ~1 min) sem trocar a música do menu. Qualquer tecla, clique, toque ou 
    com nome de robô ("Zumbido", "Faísca", "Rodinha", "Turbo Mk2", "Vassoura-7", "RX-07"...;
    catálogo de ~4,7 mil nomes em `game/robot_names.py`, tirado do id do robô, sem repetir no clube).
    **Elenco de 5 a 10 robôs** (5 titulares em campo: GOL, DEF, 2 MEI, ATA, e até 5 reservas; os
-   clubes da CPU começam com 7-10, sempre com goleiro reserva) com overall/idade/valor,
+   clubes da CPU começam com 7-10, sempre com goleiro reserva) com overall/horas de uso/valor,
    **mercado de transferências** (não compra acima de 10 nem vende abaixo de 5), finanças (bilheteria,
    salários, premiação), **promoção/rebaixamento** (sobem/descem 2) e evolução
-   dos robôs entre temporadas. Save antigo (nomes de pessoa, 12-20 jogadores) é migrado ao
+   dos robôs entre temporadas. **Horas de uso** no lugar da idade: +50 h por partida para cada titular
+   (jogos assistidos e simulados) e +300 h para todo robô na virada da temporada; a fase define a evolução
+   do overall (0-5 mil h Amaciando, 5-11 mil Auge, 11-16 mil Desgaste, 16 mil+ Fim de vida) e com 16 mil h
+   (40%) ou 18 mil h o robô vai para a **reciclagem** (entra um de fábrica, 0-2 mil h). Robô novinho vale mais,
+   gasto vale menos. **REVISÃO** (ELENCO, robô do seu clube): tira 3 mil h sem baixar de 5 mil h, 1 por robô
+   por temporada, custa 25% do valor base (mín. R$ 100k) e não muda o overall. Save antigo (nomes de pessoa, 12-20 jogadores) é migrado ao
    continuar: todos ganham nome de robô e o elenco fica com os titulares + os melhores reservas até 10
-   (no seu clube os excedentes são vendidos pelo valor de mercado e o dinheiro entra no caixa). Suas partidas são **jogadas automaticamente
+   (no seu clube os excedentes são vendidos pelo valor de mercado e o dinheiro entra no caixa); save `ver` 2
+   (idade em anos) vira `ver` 3 com horas = (idade - 18) x 1000 (+-300 pelo id), overall igual. Suas partidas são **jogadas automaticamente
    no campo** (você assiste; velocidade 1x/2x/4x/MAX nas teclas 1-4); as dos
    outros clubes são simuladas. Na aba INÍCIO, o seletor de **formação** do seu clube fica no
    painel da próxima partida. O progresso é salvo sozinho (`localStorage` no
@@ -453,7 +460,7 @@ export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy
 .venv/bin/python tests/test_camera.py                  # câmera de estádio: começa sempre em ESTÁDIO, C só na pausa, gol não troca, zero Surface
 .venv/bin/python tests/test_narration.py               # narrador/comentarista: catálogo, fila sem spam, nomes, faixa, zero Surface
 .venv/bin/python tests/test_match_stats.py             # estatísticas: assistência, gol contra, defesa, MVP, coleta não muda o jogo, SIMULAR, saves, telas
-.venv/bin/python tests/test_career.py                  # carreira: nomes de robô, elenco 5-10, mercado, temporadas, migração do save antigo, telas
+.venv/bin/python tests/test_career.py                  # carreira: nomes de robô, elenco 5-10, mercado, temporadas, horas de uso, revisão, migração v1/v2, telas
 .venv/bin/python tests/test_crests.py                  # escudos: determinismo, todos os times, cache/memória, zero Surface por quadro, contraste, campo "crest" da garagem
 .venv/bin/python tests/test_robot_art.py               # robôs: chassis, peças visíveis, cache, FX, local da torcida por modo
 .venv/bin/python tests/test_arena.py                   # modificadores de arena da Torre do Pó (desligados fora dela, efeito, zero Surface)
@@ -506,7 +513,7 @@ Utilitários do harness (`tests/sim_harness.py`): `golden`/`golden-new` com
 - `tools/versionar_build.sh`: versiona `game.apk`/`game.tar.gz` no `index.html` do build (`?v=<sha256 curto do game.apk>`; cache busting a cada deploy)
 - `tools/torcida_loop.sh`: gera `game/audio/torcida_loop.ogg` (torcida de fundo da partida, 24 s em loop sem emenda) a partir das 3 gravações de torcida
 - `game/robots_ui.py`: telas do Modo Robôs (hub, garagem, banco, loja, habilidades, mochila, visual, liga)
-- `game/career.py` / `game/career_ui.py`: carreira de clubes (liga, elenco de 5-10 robôs, mercado, finanças, save com `ver` e migração do save antigo) e suas telas
+- `game/career.py` / `game/career_ui.py`: carreira de clubes (liga, elenco de 5-10 robôs, mercado, finanças, horas de uso e revisão, save com `ver` e migração dos saves antigos) e suas telas
 - `game/robot_names.py`: nomes de robô da carreira (catálogo determinístico pelo id, sem RNG)
 - `game/story.py`: dados da campanha (personagens, times, cenas/diálogos, torneios, capítulos, recompensas); módulo puro, sem pygame. É a fachada da campanha: guarda o Ato 1 e junta `story_a2.py` (Ato 2), `story_a3.py` (Ato 3) e `story_side.py` (missões secundárias), com os dados de cada parte; `story_post.py` guarda as cenas curtas das revanches do NG+
 - `game/campaign.py`: lógica da campanha (progresso, torneios de copa/liga/série, chefes/pity, treino, missões secundárias, finais, recompensas, NG+ e Torre do Pó, save v3 com migração do v1/v2)

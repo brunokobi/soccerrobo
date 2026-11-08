@@ -14,6 +14,7 @@ Tabela original do planejamento (HEAD fd5e17b); as linhas das Fases 4 e 6 e a do
 | 6 | **Som**: efeitos sonoros e música sintetizados por código (stdlib), sons gravados, música nas partidas com a torcida de fundo em loop, mudo e volumes nas prefs | pronta e publicada ([specs/som.md](specs/som.md)) |
 | - | **Estatísticas e MELHOR DO JOGO** (fim da partida, card do resumo, artilharia/assistências acumuladas) e **escudos** em pixel art para os 128 times | prontos e publicados ([specs/estatisticas.md](specs/estatisticas.md); escudos em [specs/visual-desenhos-e-torcida.md](specs/visual-desenhos-e-torcida.md)) |
 | - | **Carreira com robôs**: nomes de robô (`robot_names.py`) e elenco de 5 a 10 (5 titulares), save `ver` 2 com migração do antigo | pronta e publicada (testes em `tests/test_career.py`) |
+| - | **Carreira com horas de uso**: idade vira horas de uso (fases, reciclagem) e REVISÃO no ELENCO, save `ver` 3 com migração do v2 | pronta (testes em `tests/test_career.py`) |
 | - | **Publicação no CrazyGames** | proposta ([plano-crazygames.md](plano-crazygames.md)): direitos dos áudios, inglês, SDK de anúncios, build do portal |
 | - | **Amistoso** com escolha de times e formações; **formação** também na Campanha, no Modo Robôs e na Carreira | pronto e publicado ([specs/formacoes.md](specs/formacoes.md)); balanceamento medido em `tests/calib_formations.py` (sem formação dominante até Força ~75; acima disso a PRESSÃO rende mais, aceito pelo dono; efeito no SIMULAR) |
 
