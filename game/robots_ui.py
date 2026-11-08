@@ -14,12 +14,14 @@ import crowd
 import formation_ui
 import formations
 import garage as G
+import match_stats as MS
 import parts as P
 import robot_art
 import robot_league as RL
 import robots
 import sfx
 import skills as SK
+import stats_ui
 from career_ui import (BG, BTN, DIM, GOLD, GREEN, LINE, PANEL, RED, TEXT, W,
                        CareerUI, ovr_color)
 
@@ -34,6 +36,12 @@ FUN_NAMES = ("Zé Parafuso", "Chuta-Bolt", "Mini Hulk", "Robozilla", "Fio Solto"
              "Dona Bateria", "Bip Bop", "Lata Veia", "Cabo Zero", "Faísca Jr", "Mecha Fofo",
              "Turbinado", "Zunido", "Ferrugento", "Pé de Ferro")
 PIECE_ROWS = 6
+
+
+def goal_label(e, name=None):
+    """Autor do gol com a assistencia, se houver: "Bolt (assist.: Turbo)"."""
+    nm = name if name is not None else (e.get("name") or "")
+    return nm + ("  (assist.: %s)" % e["ast"] if e.get("ast") else "")
 
 
 def bench_slot_rects(mod_on):
@@ -253,6 +261,8 @@ class RobotsUI(CareerUI):
         self.cmp_cache = None      # bancada: (chave, dados) do ANTES/DEPOIS
         self.cos_sel = None        # loja/cosméticos: id selecionado
         self.vis_open = False      # galeria VISUAL (modal da bancada) aberta
+        self.stats_view = False    # tela "round": painel ESTATISTICAS (TAB) no lugar de GOLS/RECOMPENSAS/XP
+        self.hub_tab = "table"     # LIGA: painel TABELA ou ARTILHARIA
 
     def open(self):
         """Entra no Modo Robôs (tela de menu do modo)."""
@@ -377,6 +387,9 @@ class RobotsUI(CareerUI):
                     sfx.play("click")
                     fn()
                     break
+        elif e.type == pygame.KEYDOWN and e.key == pygame.K_TAB and self.screen_id == "round":
+            sfx.play("toggle")
+            self.toggle_stats()
         elif e.type == pygame.KEYDOWN and self.formation_screen() and formation_ui.key_step(e):
             sfx.play("click")
             self.change_formation(formation_ui.key_step(e))
@@ -416,6 +429,14 @@ class RobotsUI(CareerUI):
         gg = self.garage
         return formation_ui.draw_selector(self, rect, gg.formation, self.change_formation,
                                           lambda r, fn: self.hit(r, fn), col=gg.team["color"])
+
+    def toggle_stats(self):
+        """Card do resumo: alterna GOLS/RECOMPENSAS/EXPERIENCIA <-> ESTATISTICAS (com MELHOR DO JOGO)."""
+        info = self.round_info
+        self.stats_view = bool(info and info.get("stats")) and not self.stats_view
+
+    def set_hub_tab(self, tab):
+        self.hub_tab = tab
 
     def update(self, dt):
         if self.editing:
@@ -917,13 +938,14 @@ class RobotsUI(CareerUI):
         self.pending = fx
         _r, h, a = fx
         hg, ag = RL.quick_sim(RL.team_strength(lg, h, gg), RL.team_strength(lg, a, gg), self.rng)
-        self.finish_round([hg, ag], [], True)
+        # estatisticas estimadas: RNG privado com semente do jogo (o placar e o self.rng nao mudam)
+        self.finish_round([hg, ag], [], True, RL.sim_stats(lg, h, a, hg, ag, gg, "user"))
 
     def match_done(self, score, events):
         """Callback de Game.start_robot_match (o Game já voltou ao estado "robots")."""
-        self.finish_round(score, events, False)
+        self.finish_round(score, events, False, self.g.last_stats)
 
-    def finish_round(self, score, events, simulated):
+    def finish_round(self, score, events, simulated, stats=None):
         gg = self.garage
         lg = gg.league
         fx, self.pending = self.pending, None
@@ -950,7 +972,11 @@ class RobotsUI(CareerUI):
             gained = rew["levels"].get(r["id"], 0)
             rows.append((r["name"], r["id"] in starters, rew["xp"].get(r["id"], 0),
                          r["level"] - gained, r["level"], gained > 0))
+        if stats is not None:                         # artilharia/assistencias/MVP: robos e liga
+            gg.add_match_stats(stats, side)
+            RL.credit_stats(lg, h, a, stats)
         RL.advance_round(lg, gg, self.rng)
+        RL.sim_round_stats(lg, rnd, gg)               # os outros jogos da rodada (simulados) tambem contam
         fin = RL.is_finished(lg)
         if not fin:
             gg.refresh_shop(tier, self.rng)
@@ -959,11 +985,12 @@ class RobotsUI(CareerUI):
         self.round_info = {
             "round": rnd + 1, "teams": (lg["teams"][h], lg["teams"][a]), "score": (hg, ag),
             "user_home": uh, "sim": simulated, "fin": fin, "rew": rew, "rows": rows,
-            "goals": [(e.get("min", 0), e.get("name", ""), e.get("team", 0), bool(e.get("own")))
+            "goals": [(e.get("min", 0), goal_label(e), e.get("team", 0), bool(e.get("own")))
                       for e in events],
             "equipped": eq, "rating": self.info()["rating"], "base": base,
-            "items": [SK.ITEMS[i]["name"] for i in used],
+            "items": [SK.ITEMS[i]["name"] for i in used], "stats": stats,
         }
+        self.stats_view = False
         self.persist()
         self.screen_id = "round"
         self.place_mode = False
@@ -1004,8 +1031,42 @@ class RobotsUI(CareerUI):
             return self.draw_no_league()
         scr = self.g.screen
         fx = RL.next_fixture(lg)
-        # ---- tabela
+        # ---- tabela (ou artilharia)
         self.panel((520, 135, 560, 300))
+        scorers = self.hub_tab == "scorers"
+        self.btn((930, 141, 140, 30), "TABELA" if scorers else "ARTILHARIA",
+                 lambda: self.set_hub_tab("table" if scorers else "scorers"), color=(60, 80, 130), size=20)
+        if scorers:
+            self.draw_league_scorers(lg)
+        else:
+            self.draw_league_table(lg)
+        self.draw_hub_rest(lg, fx)
+
+    def draw_league_scorers(self, lg):
+        """Top 5 da ARTILHARIA da liga (todos os times, jogos assistidos e simulados)."""
+        scr = self.g.screen
+        self.text("ARTILHARIA  -  TIER %d" % (lg["tier"] + 1), 24, GOLD, topleft=(540, 143))
+        for lab, x in (("G", 950), ("A", 1000), ("MVP", 1060)):
+            self.text(lab, 20, DIM, midright=(x, 186))
+        rows = RL.top_scorers(lg, 5)
+        if not rows:
+            self.text("Ninguém marcou ainda nesta liga.", 22, DIM, topleft=(540, 210))
+        me = self.garage.team["name"]
+        for k, (name, team, color, g, a, mvp) in enumerate(rows):
+            y = 200 + k * 38
+            mine = team == me
+            if mine:
+                pygame.draw.rect(scr, (22, 70, 100), (528, y, 544, 34), border_radius=6)
+            self.text(str(k + 1), 24, GOLD if k == 0 else DIM, midright=(556, y + 17))
+            pygame.draw.rect(scr, tuple(color), (566, y + 8, 14, 18), border_radius=3)
+            self.text(self.fit(name, 24, 170), 24, TEXT, midleft=(590, y + 17))
+            self.text(self.fit(team.upper(), 20, 160), 20, DIM, midleft=(764, y + 17))
+            self.text(str(g), 26, GOLD, midright=(950, y + 17))
+            self.text(str(a), 24, TEXT, midright=(1000, y + 17))
+            self.text(str(mvp), 24, TEXT, midright=(1060, y + 17))
+
+    def draw_league_table(self, lg):
+        scr = self.g.screen
         self.text("TABELA  -  TIER %d" % (lg["tier"] + 1), 24, GOLD, topleft=(540, 143))
         for lab, x in (("PTS", 820), ("J", 866), ("V", 910), ("E", 954), ("D", 998), ("SG", 1060)):
             self.text(lab, 20, DIM, midright=(x, 186))
@@ -1022,6 +1083,10 @@ class RobotsUI(CareerUI):
                          (row["l"], 998), (row["gd"], 1060)):
                 self.text(("%+d" % v) if x == 1060 and v else str(v), 24, GOLD if (me and x == 820) else TEXT,
                           midright=(x, y + 17))
+
+    def draw_hub_rest(self, lg, fx):
+        gg = self.garage
+        scr = self.g.screen
         # ---- próximo jogo
         self.panel((20, 135, 480, 300))
         if fx is None:
@@ -1230,14 +1295,29 @@ class RobotsUI(CareerUI):
         res = {"w": ("VITÓRIA", GREEN), "d": ("EMPATE", GOLD), "l": ("DERROTA", RED)}[rew["result"]]
         self.text(res[0], 22, res[1], center=(W // 2, 148))
 
+    def draw_stats_button(self, info):
+        """Botao ESTATISTICAS / RESUMO (TAB) ao lado do CONTINUAR."""
+        if info.get("stats"):
+            self.btn((W // 2 + 146, 650, 250, 42), "RESUMO (TAB)" if self.stats_view else "ESTATÍSTICAS (TAB)",
+                     self.toggle_stats, color=(110, 80, 20) if self.stats_view else (60, 80, 130), size=24)
+
     def draw_round_body(self, info):
-        """Gols, recompensas, XP e botão CONTINUAR."""
+        """Gols, recompensas, XP e botão CONTINUAR (TAB: painel ESTATISTICAS com o MELHOR DO JOGO)."""
         scr = self.g.screen
         th, ta = info["teams"]
         rew = info["rew"]
+        if self.stats_view and info.get("stats"):
+            stats_ui.draw_stats_view(self, (20, 172, 1060, 470), info["stats"])
+            self.btn((W // 2 - 130, 650, 260, 42), "CONTINUAR", self.round_continue, size=30)
+            self.draw_stats_button(info)
+            return
         # gols
         self.panel((20, 172, 520, 222))
         self.text("GOLS", 22, GOLD, topleft=(38, 180))
+        mv = MS.mvp_row(info.get("stats"))
+        if mv is not None:
+            self.text(self.fit("MELHOR DO JOGO: %s  %s" % (stats_ui.player_name(mv), stats_ui.fnota(mv["nota"])),
+                               20, 380), 20, GOLD, midright=(526, 189))
         goals = info["goals"]
         if not goals:
             self.text("Jogo simulado: sem lances." if info["sim"] else "Sem gols.", 22, DIM, topleft=(38, 212))
@@ -1293,6 +1373,7 @@ class RobotsUI(CareerUI):
             else:
                 self.text("Nv %d" % hi, 22, DIM, midleft=(x0 + 306, y + 18))
         self.btn((W // 2 - 130, 650, 260, 42), "CONTINUAR", self.round_continue, size=30)
+        self.draw_stats_button(info)
 
     def draw_league_end(self):
         info = self.end_info
@@ -1757,8 +1838,18 @@ class RobotsUI(CareerUI):
         self.btn((765, 512, 295, 44), "AUTO ESCALAÇÃO", self.do_auto, color=(60, 80, 130), size=26)
         self.btn((765, 562, 295, 44), "ABRIR BANCADA", self.open_bench, enabled=rb is not None,
                  color=(60, 110, 90), size=26)
+        lg = self.garage.league
+        if lg is not None:
+            e = next((x for x in lg.get("ps") or () if x[0] == RL.USER and x[1] == rb["id"]), None)
+            g, a, mv = (e[3], e[4], e[5]) if e else (0, 0, 0)
+            self.text("Nesta liga: %s, %d assist., %d MVP" % (MS.plural(g, "gol", "gols"), a, mv), 20,
+                      TEXT, midleft=(765, 616))
+        cs = MS.clean_cs(rb.get("cs"))
+        self.text("Carreira: %s, %d assist., %d MVP, %s" % (MS.plural(cs["g"], "gol", "gols"), cs["a"], cs["mvp"],
+                                                            MS.plural(cs["j"], "jogo", "jogos")), 20,
+                  GOLD, midleft=(765, 638))
         self.text("Papel: " + {"GK": "goleiro", "DEF": "defensor", "MID": "meia", "ATT": "atacante"}[rb["role"]],
-                  22, DIM, midleft=(765, 640))
+                  20, DIM, midleft=(765, 660))
 
     # ================================================================ BANCADA
     def bench_reset(self):

@@ -55,6 +55,7 @@ import os
 import random
 
 import garage as G
+import match_stats as MS
 import parts
 import robot_league as RL
 import robots
@@ -335,6 +336,7 @@ class Campaign:
         self.tower = None                   # Torre do Po: {"floor","best"} (Onda D)
         self._reports = {}                  # relatorios de recompensa (so memoria)
         self.warnings = []                  # avisos de reparo ao carregar (so memoria, para a UI)
+        self.last_mstats = None             # estatisticas da ultima partida registrada (so memoria)
         self.repaired = False
 
     # ------------------------------------------------------------------ serializacao
@@ -429,6 +431,48 @@ class Campaign:
         n = self.stats["ev"]
         self.stats["ev"] = n + 1
         return random.Random("%d|%s|%d" % (self.seed, tag, n))
+
+    # ------------------------------------------------------------------ estatisticas (match_stats)
+    def sim_stats(self, act, my, opp, tag):
+        """Estatisticas estimadas de uma partida SIMULADA: RNG privado com semente derivada (seed, contador de
+        eventos SEM avancar, placar). Nunca usa _rng: resultados, loja e drops nao mudam."""
+        seed = MS.seed_of("camp", self.seed, self.stats["ev"], tag, my, opp)
+        return MS.sim_cfgs(random.Random(seed), (my, opp), act["home"], act["away"])
+
+    def credit_stats(self, mstats, tour=False):
+        """Soma gols/assistencias/MVP nos robos do jogador (robo.cs, lado 0) e, numa partida de torneio, na
+        artilharia do torneio atual (tour["ps"]: [lado, time, robo, chave, gols, assist.])."""
+        self.last_mstats = mstats if isinstance(mstats, dict) else None   # so memoria: o card do resumo le
+        if not isinstance(mstats, dict):
+            return
+        self.garage.add_match_stats(mstats, 0)
+        tr = self.tour
+        if not tour or tr is None or self.side is not None:
+            return
+        ps = tr.setdefault("ps", [])
+        idx = {(e[0], e[1], e[3]): e for e in ps}
+        teams = mstats.get("teams") or ({}, {})
+        for p in mstats.get("players") or ():
+            g, a = int(p.get("g", 0)), int(p.get("a", 0))
+            if not (g or a):
+                continue
+            side = 1 if p.get("team") == 1 else 0
+            team = (teams[side].get("name") or "?")[:TOUR_PS_NAME]
+            key = p.get("pid") if side == 0 and p.get("pid") is not None else int(p.get("idx", 0))
+            e = idx.get((side, team, key))
+            if e is None:
+                if len(ps) >= TOUR_PS_MAX:
+                    continue
+                e = idx[(side, team, key)] = [side, team, (p.get("name") or "?")[:TOUR_PS_NAME], key, 0, 0]
+                ps.append(e)
+            e[4] += g
+            e[5] += a
+
+    def tour_scorers(self, n=3):
+        """Artilharia do torneio atual: [(robo, time, gols, assist., e_do_jogador)] (top n)."""
+        tr = self.tour
+        rows = [(e[2], e[1], None, e[4], e[5], e[0] == 0) for e in ((tr or {}).get("ps") or ()) if e[4] > 0]
+        return [(r[0], r[1], r[3], r[4], r[5]) for r in MS.top_scorers(rows, n)]
 
     def chapter(self):
         return next(c for c in story.CHAPTERS if c["id"] == self.ch)
@@ -728,8 +772,9 @@ class Campaign:
                 "user_F": self.garage.match_F(), "O": opp["ovr"], "F_rec": float(O + int(sp.get(
                     "delta", SIDE_DELTA))), "pity": 0, "attempt": sd["loses"]}
 
-    def _record_side(self, my, opp, events=None, simulated=False):
+    def _record_side(self, my, opp, events=None, simulated=False, mstats=None):
         sd = self.side
+        self.credit_stats(mstats)
         sp = story.SIDES[sd["id"]]
         g = self.garage
         my, opp = G.clamp(int(my), 0, 99), G.clamp(int(opp), 0, 99)
@@ -898,16 +943,17 @@ class Campaign:
         return next(i for i, r in enumerate(self.group_table()) if r["idx"] == 0) + 1
 
     # ---- registrar partida ---------------------------------------------------------------
-    def record_match(self, my, opp, pen=None, events=None, simulated=False):
+    def record_match(self, my, opp, pen=None, events=None, simulated=False, mstats=None):
         """Registra a partida do estagio atual (usuario = mandante). `events` = eventos do motor
         (so gols com team==0 e pid contam para o XP). Empate no mata-mata: pen (pm,po) ou sorteado por
         shootout(). Devolve {"result","my","opp","pen","stage","outcome","advanced","rewards",...};
         outcome: "next" | "elim" | "retry" | "done" | "champion"."""
         tour = self.tour
         if self.side is not None:
-            return self._record_side(my, opp, events, simulated)
+            return self._record_side(my, opp, events, simulated, mstats)
         if tour is None or tour["stage"] == DONE:
             raise RuntimeError("sem partida pendente")
+        self.credit_stats(mstats, tour=True)               # antes de o torneio avancar/recomecar
         g = self.garage
         tr = self.tournament()
         stages = stages_of(tr)
@@ -982,7 +1028,7 @@ class Campaign:
             my, opp = sim_match(act["user_F"], act["O"], self._rng("sim"), POST_SIM_RELIEF)
         else:
             my, opp = sim_match(act["user_F"], act["O"], self._rng("sim"))
-        return self.record_match(my, opp, simulated=True)
+        return self.record_match(my, opp, simulated=True, mstats=self.sim_stats(act, my, opp, "sim"))
 
     def _peek_match(self):
         act = self.next_action()
@@ -1024,9 +1070,10 @@ class Campaign:
                 "O": team["ovr"], "user_F": self.garage.match_F(), "econ_tier": self.training_econ_tier(),
                 "bg": self.chapter_bg(), "venue": self.chapter_venue(), "training": True}
 
-    def record_training(self, my, opp, events=None, simulated=False):
+    def record_training(self, my, opp, events=None, simulated=False, mstats=None):
         """Recompensas de um treino (tier-1); nao mexe em torneio, pity nem nos."""
         g = self.garage
+        self.credit_stats(mstats)
         my, opp = G.clamp(int(my), 0, 99), G.clamp(int(opp), 0, 99)
         pids = [e["pid"] for e in (events or ()) if e.get("team") == 0 and not e.get("own")
                 and e.get("pid") is not None]
@@ -1230,7 +1277,7 @@ class Campaign:
                 "O": O, "F_rec": float(O + 4), "econ_tier": NG_ECON_TIER, "venue": "coliseu", "bg": "coliseu",
                 "mark": TOWER_MARKS.get(floor), "training": False, "stage": "F", "boss": floor % 10 == 0}
 
-    def record_tower(self, my, opp, pen=None, events=None, simulated=False):
+    def record_tower(self, my, opp, pen=None, events=None, simulated=False, mstats=None):
         """Registra a partida do proximo andar (usuario mandante). Empate: penaltis (pen ou shootout).
         Vitoria sobe um andar (bonus de sucata e marco so ao bater o recorde). Devolve o dict de resultado
         com outcome "tower_win" | "tower_lose"."""
@@ -1238,6 +1285,7 @@ class Campaign:
         if not self.tower_unlocked() or floor is None:
             raise RuntimeError("sem andar pendente")
         g = self.garage
+        self.credit_stats(mstats)
         my, opp = G.clamp(int(my), 0, 99), G.clamp(int(opp), 0, 99)
         O = tower_ovr(floor)
         pids = [e["pid"] for e in (events or ()) if e.get("team") == 0 and not e.get("own")
@@ -1289,7 +1337,7 @@ class Campaign:
         if act is None:
             raise RuntimeError("sem andar pendente")
         my, opp = tower_sim(act["user_F"], act["O"], act["mod"], self._rng("sim"))
-        return self.record_tower(my, opp, simulated=True)
+        return self.record_tower(my, opp, simulated=True, mstats=self.sim_stats(act, my, opp, "tower"))
 
     def reward_spec(self, rid):
         """REWARDS[rid] efetivo: a primeira variante `alt` [(cond, {campos}), ...] cuja cond vale e
@@ -1510,8 +1558,33 @@ def _tour(t, ch_id, node_entry):
             return None
         last = i
         results.append([r[0]] + vals)
-    return {"id": tid, "attempt": attempt, "seed": seed, "stage": stage, "results": results,
-            "loses": loses}
+    out = {"id": tid, "attempt": attempt, "seed": seed, "stage": stage, "results": results,
+           "loses": loses}
+    ps = _tour_ps(t.get("ps"))
+    if ps:
+        out["ps"] = ps
+    return out
+
+
+TOUR_PS_MAX, TOUR_PS_NAME = 64, 24
+
+
+def _tour_ps(raw):
+    """Artilharia do torneio (campo opcional): entradas invalidas sao descartadas, sem invalidar o torneio."""
+    out, seen = [], set()
+    for e in (raw[:TOUR_PS_MAX * 2] if isinstance(raw, list) else ()):
+        if not (isinstance(e, (list, tuple)) and len(e) == 6):
+            continue
+        side, key = _sint(e[0], 0, 1), _sint(e[3], 0, G.ID_MAX)
+        g, a = _sint(e[4], 0, 999), _sint(e[5], 0, 999)
+        if None in (side, key, g, a) or not isinstance(e[1], str) or not isinstance(e[2], str):
+            continue
+        team, name = G._str(e[1], TOUR_PS_NAME, "?"), G._str(e[2], TOUR_PS_NAME, "?")
+        if (side, team, key) in seen or len(out) >= TOUR_PS_MAX:
+            continue
+        seen.add((side, team, key))
+        out.append([side, team, name, key, g, a])
+    return out
 
 
 def _side(t):

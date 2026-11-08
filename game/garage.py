@@ -12,6 +12,7 @@ import os
 import random
 
 import formations
+import match_stats
 import parts
 import robots
 import skills
@@ -80,6 +81,9 @@ FIELDS = ("scrap", "next_id", "team", "robots", "lineup", "inventory", "unlocked
 # v2 (Fase 4/B3): slot "modulo", robo.skills/look, items, cosmetics, cap, tactic, MAX_FLAGS 128.
 # "formation" (formacao do time do jogador, id de formations.FORMATIONS): campo OPCIONAL da v2 (sem subir a
 # versao): save antigo sem o campo, ou com id invalido, carrega com a padrao ("equilibrada").
+# Estatisticas (campos OPCIONAIS da v2, sem subir a versao; save antigo carrega com zeros): robo.cs = totais na
+# carreira do robo {"g","a","mvp","j"} e league.ps = artilharia/assistencias da liga em andamento
+# [[time, chave, nome, g, a, mvp], ...] (chave = id do robo no time do jogador, posicao 0-4 nos outros).
 VERSION = 2
 SAVE_KEY = "soccerpy_robots_v1"
 SAVE_PATH = os.path.join(os.path.expanduser("~"), ".soccerpy_robots.json")
@@ -575,6 +579,17 @@ class Garage:
         self.tactic = tactic
         return True, "Tática: %s." % skills.TACTIC_NAMES.get(tactic, tactic)
 
+    def add_match_stats(self, summary, side=0):
+        """Soma gols/assistencias/MVP/jogos da partida (match_stats) nos totais dos robos do jogador (robo.cs).
+        side = lado do time do jogador no resumo. Devolve quantos robos foram creditados."""
+        n = 0
+        for pid, _name, _t, g, a, mvp in match_stats.goal_rows(summary, side):
+            r = self.robot(pid) if pid is not None else None
+            if r is not None:
+                r["cs"] = match_stats.add_cs(r.get("cs"), g, a, mvp)
+                n += 1
+        return n
+
     def set_formation(self, fid):
         """Formacao do time (formations.FORMATIONS): so muda as posicoes no motor. (ok, msg)."""
         if fid not in formations.FORMATIONS:
@@ -597,7 +612,7 @@ class Garage:
                 "paint": list(paint if paint is not None else self.team["color"]),
                 "base": robots.from_overall(base_ovr, role, chassis, seed=rid),
                 "slots": {s: None for s in parts.SLOTS}, "oc": 0,
-                "skills": skills.new_robot_skills(), "look": {}}
+                "skills": skills.new_robot_skills(), "look": {}, "cs": match_stats.clean_cs(None)}
 
     def tier(self):
         """Tier da proxima liga: o seguinte ao ultimo concluido (3 e o teto)."""
@@ -1071,7 +1086,8 @@ def _robot(r, team_color, cap=MAX_LEVEL):
             "paint": _color(r.get("paint"), team_color), "base": base,
             "slots": {s: _strict_int(slots.get(s), 1, ID_MAX) for s in parts.SLOTS},
             "oc": _int(r.get("oc"), 0, len(OC_MUL) - 1, 0),
-            "skills": _robot_skills(r.get("skills"), level), "look": _look(r.get("look"))}
+            "skills": _robot_skills(r.get("skills"), level), "look": _look(r.get("look")),
+            "cs": match_stats.clean_cs(r.get("cs"))}
 
 
 def _league(lg):
@@ -1127,8 +1143,30 @@ def _league(lg):
             return None
         keys.add((r_, h, a))
         out_res.append([r_, h, a, hg, ag])
-    return {"tier": tier, "teams": out_teams, "fixtures": out_fx, "round": rnd,
-            "results": out_res}
+    out = {"tier": tier, "teams": out_teams, "fixtures": out_fx, "round": rnd,
+           "results": out_res}
+    ps = _league_ps(lg.get("ps"))
+    if ps:
+        out["ps"] = ps
+    return out
+
+
+LEAGUE_PS_MAX = 64
+
+
+def _league_ps(raw):
+    """Artilharia da liga (campo opcional): entradas invalidas sao descartadas (nunca invalidam a liga)."""
+    out, seen = [], set()
+    for e in (raw[:LEAGUE_PS_MAX * 2] if isinstance(raw, list) else ()):
+        if not (isinstance(e, (list, tuple)) and len(e) == 6):
+            continue
+        t, key = _strict_int(e[0], 0, LEAGUE_TEAMS - 1), _strict_int(e[1], 0, ID_MAX)
+        vals = [_int(x, 0, 10 ** 6, None) for x in e[3:]]
+        if t is None or key is None or None in vals or (t, key) in seen or len(out) >= LEAGUE_PS_MAX:
+            continue
+        seen.add((t, key))
+        out.append([t, key, _str(e[2], NAME_MAX_LEAGUE_TEAM, "?")] + vals)
+    return out
 
 
 def _sanitize(data):

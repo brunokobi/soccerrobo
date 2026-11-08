@@ -9,6 +9,7 @@ import random
 import sys
 
 import formations
+import match_stats as MS
 
 SLOTS = ["GK", "DEF", "MID", "MID", "ATT"]       # os 5 titulares em campo
 TEMPLATE = [("GK", 2), ("DEF", 4), ("MID", 5), ("ATT", 4)]
@@ -25,6 +26,11 @@ PRIZES = [
 ]
 PROMOTED = 2                                     # sobem / descem 2 por divisão
 POS_PT = {"GK": "GOL", "DEF": "DEF", "MID": "MEI", "ATT": "ATA"}
+# Estatisticas por jogador (campos OPCIONAIS no dict do jogador; save antigo = zeros): temporada (sg gols, sa
+# assistencias, smvp melhor do jogo) e carreira toda (tg, ta, tmvp). Os jogos simulados tambem contam
+# (match_stats.simulate, RNG privado com semente do jogo: placares e economia nao mudam).
+PSTAT_KEYS = ("sg", "sa", "smvp", "tg", "ta", "tmvp")
+PSTAT_MAX = 10 ** 6
 
 FIRST = ["Rafael", "Lucas", "Pedro", "Gabriel", "Mateus", "Bruno", "Diego", "Thiago",
          "Caio", "André", "Felipe", "Rodrigo", "João", "Vitor", "Marcos", "Leandro",
@@ -152,6 +158,7 @@ class Career:
         self.next_id = 1
         self.history = []
         self.formation = formations.DEFAULT
+        self.last_stats = None          # estatisticas do ultimo jogo do jogador (so memoria; nao vai ao save)
 
     # ------------------------------------------------------------- criação
     @classmethod
@@ -339,6 +346,55 @@ class Career:
         if self.round < ROUNDS:
             self.market_refresh()
 
+    # ------------------------------------------------------- estatisticas (match_stats)
+    def player_by_id(self, club_idx, pid):
+        for p in self.clubs[club_idx]["squad"]:
+            if p["id"] == pid:
+                return p
+        return None
+
+    def credit_stats(self, mstats, h, a):
+        """Soma gols/assistencias/MVP de uma partida (resumo de match_stats) nos jogadores dos 2 clubes."""
+        mvp = mstats.get("mvp")
+        for i, row in enumerate(mstats.get("players") or ()):
+            g, ast, mv = int(row.get("g", 0)), int(row.get("a", 0)), 1 if i == mvp else 0
+            if not (g or ast or mv):
+                continue
+            p = self.player_by_id(h if row.get("team") == 0 else a, row.get("pid"))
+            if p is None:
+                continue
+            for ks, kt, v in (("sg", "tg", g), ("sa", "ta", ast), ("smvp", "tmvp", mv)):
+                p[ks] = min(PSTAT_MAX, int(p.get(ks, 0)) + v)
+                p[kt] = min(PSTAT_MAX, int(p.get(kt, 0)) + v)
+
+    def round_stats(self, user_stats=None):
+        """Depois de play_round: estatisticas de todos os jogos da rodada (o do jogador assistido vem do motor;
+        os demais sao estimados com RNG privado). Guarda o do jogador em last_stats."""
+        self.last_stats = None
+        for r in self.last_results:
+            h, a, hg, ag = r["h"], r["a"], r["hg"], r["ag"]
+            mine = self.user in (h, a)
+            st = user_stats if (mine and isinstance(user_stats, dict)) else None
+            if st is None:
+                seed = MS.seed_of("career", self.season, self.round, h, a, hg, ag)
+                st = MS.sim_cfgs(random.Random(seed), (hg, ag), self.match_cfg(h), self.match_cfg(a))
+            self.credit_stats(st, h, a)
+            if mine:
+                self.last_stats = st
+
+    def scorers(self, d, n=10):
+        """Artilharia da temporada na divisao d: [(nome, clube, cor, gols, assist., mvp, do_jogador)]."""
+        rows = []
+        for idx in self.divs[d]:
+            club = self.clubs[idx]
+            for p in club["squad"]:
+                g, a = int(p.get("sg", 0)), int(p.get("sa", 0))
+                if g or a:
+                    rows.append((short_name(p["name"]), club["name"], tuple(club["color"]), g, a,
+                                 int(p.get("smvp", 0)), idx == self.user))
+        rows.sort(key=lambda e: (-e[3], -e[4], -e[5], e[0], e[1]))
+        return rows[:n]
+
     # -------------------------------------------------------------- tabela
     def table(self, d):
         def key(i):
@@ -415,7 +471,11 @@ class Career:
         info = {"season": self.season, "u_div": u_div, "u_pos": u_pos,
                 "champions": [self.clubs[o[0]]["name"] for o in orders],
                 "prize": PRIZES[u_div][u_pos], "status": "", "retired": [],
-                "up": [], "down": []}
+                "up": [], "down": [], "top_scorer": (self.scorers(u_div, 1) or [None])[0]}
+        for club in self.clubs:                          # artilharia da temporada zera (a da carreira fica)
+            for p in club["squad"]:
+                for k in ("sg", "sa", "smvp"):
+                    p.pop(k, None)
         for d in range(3):
             for pos, idx in enumerate(orders[d]):
                 self.clubs[idx]["money"] += PRIZES[d][pos]
@@ -497,6 +557,17 @@ class Career:
             if c.user is not None and not (isinstance(c.user, int) and 0 <= c.user < len(c.clubs)):
                 return None               # save inconsistente
             c.formation = formations.clean(c.formation)   # campo opcional: ausente/invalido -> padrao
+            for club in c.clubs if isinstance(c.clubs, list) else ():   # estatisticas opcionais: lixo -> zero
+                sq = club.get("squad") if isinstance(club, dict) else None
+                for p in sq if isinstance(sq, list) else ():
+                    if not isinstance(p, dict):
+                        continue
+                    for k in PSTAT_KEYS:
+                        if k in p:
+                            v = p[k]
+                            ok = isinstance(v, int) and not isinstance(v, bool) and 0 <= v <= PSTAT_MAX
+                            if not ok:
+                                p[k] = 0
             return c
         except Exception as ex:  # noqa: BLE001
             print("save load error:", ex)

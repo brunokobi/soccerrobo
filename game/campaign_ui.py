@@ -42,6 +42,7 @@ import portraits
 import sfx
 import skills as SK
 import story
+from robots_ui import goal_label
 from career_ui import BG, DIM, GOLD, GREEN, LINE, PANEL, RED, TEXT, W
 from robots_ui import RobotsUI
 
@@ -968,6 +969,7 @@ class CampaignUI(RobotsUI):
              "names": [e["name"] for e in act["opp"]["squad"]], "fmt": tr["format"],
              "adv": C.advance_pos(tr)}
         if not single:
+            v["top"] = cp.tour_scorers(1)                   # artilheiro do torneio (calculado ao entrar)
             v["rows"] = cp.group_table() if C.round_stages(tr) else []
             res = {r[0]: r for r in tour["results"]}
             for st in C.stages_of(tr):
@@ -1025,7 +1027,8 @@ class CampaignUI(RobotsUI):
             return
         used = cp.garage.backpack_items()
         try:
-            out = cp.record_match(int(score[0]), int(score[1]), events=events, simulated=False)
+            out = cp.record_match(int(score[0]), int(score[1]), events=events, simulated=False,
+                                  mstats=self.g.last_stats)
         except (RuntimeError, ValueError, KeyError):
             self.go("map")
             return
@@ -1053,7 +1056,7 @@ class CampaignUI(RobotsUI):
             return
         my, opp = C.sim_match(cp.garage.match_F(), tr["O"], cp._rng("trainsim"))
         used = cp.garage.backpack_items()
-        out = cp.record_training(my, opp, simulated=True)
+        out = cp.record_training(my, opp, simulated=True, mstats=cp.sim_stats(tr, my, opp, "train"))
         self.finish_result(out, tr, [], True, training=True, items=used)
 
     def train_done(self, score, events):
@@ -1065,7 +1068,8 @@ class CampaignUI(RobotsUI):
             self.go("map")
             return
         used = cp.garage.backpack_items()
-        out = cp.record_training(int(score[0]), int(score[1]), events=events, simulated=False)
+        out = cp.record_training(int(score[0]), int(score[1]), events=events, simulated=False,
+                                 mstats=self.g.last_stats)
         self.finish_result(out, pend["act"], events, False, training=True, items=used)
 
     # ---- resultado (tela "round" herdada: draw_round_body + cabecalho proprio)
@@ -1088,7 +1092,8 @@ class CampaignUI(RobotsUI):
         goals = []
         for e in events or ():
             nm = e.get("name") or by_id.get(e.get("pid"), "")
-            goals.append((e.get("min", 0), nm, e.get("team", 0), bool(e.get("own"))))
+            goals.append((e.get("min", 0), goal_label(e, nm), e.get("team", 0), bool(e.get("own"))))
+        mstats, cp.last_mstats = cp.last_mstats, None
         eq = sum(1 for r in gg.lineup_robots() for v in r["slots"].values() if v is not None)
         self.cache = None
         base = G.team_rating(gg.lineup_robots(), {})
@@ -1105,7 +1110,8 @@ class CampaignUI(RobotsUI):
             "pity": cp.pity, "single": out.get("outcome") == "done",
             "items": [SK.ITEMS[i]["name"] for i in (items or ()) if i in SK.ITEMS], "ph": out.get("ph", 0),
             "tower": out.get("tower") if tower else None, "mark": out.get("mark"), "mythic": out.get("mythic"),
-            "bonus": out.get("bonus", 0), "mod": act.get("mod") if tower else None}
+            "bonus": out.get("bonus", 0), "mod": act.get("mod") if tower else None, "stats": mstats}
+        self.stats_view = False
         if tower:
             self.round_info["tname"] = "Torre do Pó"
         self.persist()
@@ -1231,6 +1237,10 @@ class CampaignUI(RobotsUI):
                 self.draw_series_panel(v)
             else:
                 self.draw_group_panel(v)
+            if v.get("top"):
+                name, team, g, _a, mine = v["top"][0]
+                self.text(self.fit("Artilheiro: %s (%s) %d gol%s" % (name, team, g, "" if g == 1 else "s"), 20, 300),
+                          20, GOLD if mine else DIM, midright=(526, 189))
             self.draw_bracket_panel(v, act)
         self.draw_match_panel(v, act)
 
@@ -1654,7 +1664,8 @@ class CampaignUI(RobotsUI):
             return
         used = cp.garage.backpack_items()
         try:
-            out = cp.record_tower(int(score[0]), int(score[1]), events=events, simulated=False)
+            out = cp.record_tower(int(score[0]), int(score[1]), events=events, simulated=False,
+                                  mstats=self.g.last_stats)
         except (RuntimeError, ValueError):
             self.go("tower")
             return

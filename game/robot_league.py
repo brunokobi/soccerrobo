@@ -6,8 +6,10 @@ league = {"tier","teams":[{name,color,ovr,seed}],"fixtures":[[[h,a],..],..],
           "round":int,"results":[[round,h,a,hg,ag],..]}. teams[0] e o usuario.
 """
 import math
+import random
 
 import garage as gm
+import match_stats as ms
 import robots
 
 N_TEAMS = 6
@@ -230,3 +232,61 @@ def finish_league(garage, rng):
     garage.refresh_shop(nxt, rng)
     return {"pos": pos, "prize": prize, "unlocked": new, "advanced": advanced,
             "tier": tier, "next_tier": nxt}
+
+
+# --- estatisticas (artilharia e assistencias da liga; ver match_stats) -------------
+def team_cfg(league, idx, garage):
+    """cfg de partida (match_cfg) do time `idx` da liga: o do jogador vem da garagem."""
+    if idx == USER:
+        return garage.match_cfg()
+    t = league["teams"][idx]
+    return match_cfg(opponent_team(t["name"], t["color"], t["ovr"], t["seed"]))
+
+
+def credit_stats(league, h, a, summary):
+    """Soma gols/assistencias/MVP de uma partida (match_stats) em league["ps"]. Time do jogador: chave = id do
+    robo; outros times: chave = posicao 0-4 no elenco gerado."""
+    if not isinstance(summary, dict):
+        return
+    ps = league.setdefault("ps", [])
+    idx = {(e[0], e[1]): e for e in ps}
+    mvp_i = summary.get("mvp")
+    for i, p in enumerate(summary.get("players") or ()):
+        g, ast, mvp = int(p.get("g", 0)), int(p.get("a", 0)), 1 if i == mvp_i else 0
+        if not (g or ast or mvp):
+            continue
+        t = h if p.get("team", 0) == 0 else a
+        pid, name = p.get("pid"), p.get("name", "")
+        key = pid if t == USER and pid is not None else int(p.get("idx", 0))
+        e = idx.get((t, key))
+        if e is None:
+            e = idx[(t, key)] = [t, key, name or "?", 0, 0, 0]
+            ps.append(e)
+        e[2] = name or e[2]
+        e[3] += g
+        e[4] += ast
+        e[5] += mvp
+
+
+def sim_stats(league, h, a, hg, ag, garage, salt=""):
+    """Estatisticas (match_stats.simulate) de um jogo SIMULADO da liga, com RNG privado de semente derivada
+    do jogo (nunca o RNG da liga: resultados e economia nao mudam)."""
+    seed = ms.seed_of("rl", salt, league["tier"], league["teams"][h]["seed"], league["teams"][a]["seed"],
+                      h, a, hg, ag, len(league["results"]))
+    return ms.sim_cfgs(random.Random(seed), (hg, ag), team_cfg(league, h, garage), team_cfg(league, a, garage))
+
+
+def sim_round_stats(league, rnd, garage):
+    """Credita as estatisticas simuladas dos jogos da rodada `rnd` sem o jogador (os outros times)."""
+    for r_, h, a, hg, ag in league["results"]:
+        if r_ == rnd and USER not in (h, a):
+            credit_stats(league, h, a, sim_stats(league, h, a, hg, ag, garage, "cpu%d" % rnd))
+
+
+def top_scorers(league, n=5):
+    """Top n da ARTILHARIA da liga: [(nome, time, cor, gols, assist., mvp)]."""
+    rows = []
+    for t, _key, name, g, a, mvp in league.get("ps") or ():
+        tm = league["teams"][t]
+        rows.append((name, tm["name"], tuple(tm["color"]), g, a, mvp))
+    return ms.top_scorers(rows, n)

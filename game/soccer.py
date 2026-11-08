@@ -16,12 +16,14 @@ import fireworks
 import floors
 import formations
 import friendly
+import match_stats
 import narration
 import prefs
 import robot_art
 import robots
 import sfx
 import skills
+import stats_ui
 from campaign import Campaign
 from campaign_ui import CampaignUI
 from career import Career
@@ -89,6 +91,9 @@ ARENA_LABELS = {"bola_pesada": "BOLA PESADA", "bateria_curta": "BATERIA CURTA",
 ARENA_BALL_DRAG = 0.25
 ARENA_BAT_DRAIN = 1.8
 ARENA_GK_REACH = 10
+# Estatisticas da partida (match_stats): so OBSERVAM o jogo (sem RNG, sem mudar decisao). False = desliga a
+# coleta (teste: a mesma partida com e sem coleta tem que dar o mesmo estado).
+STATS_ON = True
 HUMAN_AIM_ERR = 30                     # graus de erro de mira humano por 1.0 de (0.65 - chu/100); so chu < 65
 
 # (papel, fracao x a partir do proprio gol, fracao y). Formacao padrao (formations.FORMATIONS["equilibrada"]);
@@ -254,6 +259,7 @@ class Player:
         self.sk_ev = None      # FX de evento (kind, ate sk_t): drible, lancamento, paralisado
         self.sk_badge = False  # Lider: faixa de capitao (so desenho)
         self.sk_fx_next = 0.0
+        self.st = match_stats.PStat()            # estatisticas da partida (so observacao; match_stats)
 
 
 class Team:
@@ -284,6 +290,7 @@ class Team:
             elif len(squad[i]) >= 4:               # carreira: (nome, ovr, pid, pos)
                 nm, ovr, pid, pos = squad[i][:4]
                 chassis, seed = robots.POS_CHASSIS.get(pos), pid
+                extra = dict(pid=pid)              # so identifica o jogador (estatisticas); nao muda o motor
             else:                                  # legado: (nome, ovr), chassis pelo papel
                 nm, ovr = squad[i]
                 chassis, seed = None, None
@@ -384,6 +391,10 @@ class Game:
         self.speed_idx = 0
         self.events = []
         self.last_owner = None
+        self.last_stats = None                    # resumo da ultima partida (match_stats), no fim
+        self.stats_tab = False                    # tela de fim: TAB alterna o painel ESTATISTICAS
+        self.painter = stats_ui.Painter(self)
+        self.st_reset()
         self.has_save = Career.has_save()
         self.match_sink = None                    # (return_state, fn) quando a partida vem de outro modo (robos)
         self.career_ui = CareerUI(self)
@@ -447,6 +458,7 @@ class Game:
         self.match_time = self.time_left = MATCH_TIME
         self.events = []
         self.last_owner = None
+        self.st_reset()
         self.ball = Ball()
         self.paused = False
         self.reset_fx()
@@ -516,6 +528,7 @@ class Game:
         self.match_time = self.time_left = CAREER_TIME
         self.events = []
         self.last_owner = None
+        self.st_reset()
         self.speed_idx = 0
         self.ball = Ball()
         self.paused = False
@@ -549,6 +562,7 @@ class Game:
 
     def kickoff(self, team_idx):
         b = self.ball
+        self.st_shot = self.st_pass = self.st_ast = None
         for t in self.teams:
             t.ctrl = None
             for p in t.players:
@@ -647,6 +661,11 @@ class Game:
                 return ui.handle_event(e)
             if e.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN):   # sem UI: volta ao menu
                 self.state = "menu"
+            return
+        if (e.type == pygame.KEYDOWN and e.key == pygame.K_TAB and self.state == "over" and not self.demo
+                and self.last_stats is not None):
+            sfx.play("toggle")
+            self.stats_tab = not self.stats_tab           # tela de fim: ESTATISTICAS <-> placar
             return
         if e.type == pygame.KEYDOWN:
             if self.state == "menu":
@@ -814,6 +833,7 @@ class Game:
         if self.state == "play" and self.time_left <= 0:
             self.time_left = 0
             self.state = "over"
+            self.st_finish()
             self.crowd_end()
 
     def update_goal(self, dt):
@@ -829,6 +849,7 @@ class Game:
             if self.time_left <= 0:
                 self.time_left = 0
                 self.state = "over"
+                self.st_finish()
                 self.crowd_end()
             else:
                 if self.speed_idx != 3:
@@ -876,6 +897,8 @@ class Game:
                 if aim_err > 0:
                     d = d.rotate(random.uniform(-aim_err, aim_err))
                 self.kick(p, d, 330 + 520 * h.charge)
+                if STATS_ON and self.st_aimed(p):
+                    self.st_shot_by(p)
             h.charge = 0.0
         if pas and not h.pass_prev and has_ball:
             self.pass_ball(p, aim)
@@ -904,6 +927,9 @@ class Game:
         b.pos = p.pos + d * (PR + BR + 3)
         b.vel = d * power
         p.cd = 0.35
+        if STATS_ON:                                    # todo chute e passe/lancamento ate virar chute
+            p.st.pa += 1
+            self.st_pass = p
         if self.sk_on:
             self.sk_on_kick(p, d, power)
         if power >= 600:
@@ -967,6 +993,8 @@ class Game:
             if b.vel.length() < 8:
                 b.vel = V()
         b.roll += b.vel.length() * dt * 0.12
+        if STATS_ON and self.last_owner is not None:      # posse: tempo com o ultimo time a dominar
+            self.st_poss[self.last_owner.team.idx] += dt
 
         self.ball_interactions()
         self.ball_bounds()
@@ -985,12 +1013,18 @@ class Game:
                         b.owner = q
                         q.cd = 0.0
                         o.cd = 0.7
+                        if STATS_ON:
+                            q.st.tk += 1
+                            self.st_gain(q)
                         self.fx_emit("tackle", b.pos)
                         self.snd("steal")
                         self.narr_hook("steal", q.team.idx, q)
                         if self.sk_on:
                             self.on_steal(q, o)
                         break
+                    if STATS_ON and q not in self.st_drib:  # drible: o desarme falhou (1 por marcador e posse)
+                        self.st_drib.append(q)
+                        o.st.dr += 1
                     if self.sk_on and o.sk_evade:          # Drible: o desarme falhou, o marcador fica
                         self.on_evade(q, o)
             return
@@ -1015,9 +1049,13 @@ class Game:
                         b.owner = p
                         b.vel = V()
                         p.hold = 0.8
+                        if STATS_ON:
+                            self.st_gain(p)
                     else:
                         self.deflect(p, 0.6, spread=25)
                         p.cd = 0.35
+                        if STATS_ON:
+                            self.st_touch(p)
                     if speed >= CATCH_SPEED:                       # defesa de chute forte
                         self.crowd_event("save", t.idx, p)
                     return
@@ -1037,6 +1075,8 @@ class Game:
             b.vel = V()
             if air:
                 b.air = 0.0
+            if STATS_ON:
+                self.st_gain(best)
 
     def deflect(self, p, keep, spread=0):
         b = self.ball
@@ -1081,6 +1121,8 @@ class Game:
         self.events.append({"min": self.minute(), "team": team_idx,
                             "name": lo.name if lo else "", "own": bool(lo and lo.team.idx != team_idx),
                             "pid": getattr(lo, "pid", None)})
+        if STATS_ON:
+            self.st_goal(lo, team_idx)
         self.ball.owner = None
         if BATTERY_ON:                      # gol recarrega todos os robos
             for t in self.teams:
@@ -1194,6 +1236,8 @@ class Game:
         err = p.f.shot_err
         d = (V(t.target_x, ty) - p.pos).rotate(random.uniform(-err, err))
         self.kick(p, d, random.uniform(560, 680) + 140 * p.f.g_chu)
+        if STATS_ON:
+            self.st_shot_by(p)
 
     def ai_bad_decision(self, p):
         """Decisao ruim (dec_err > 0): passe aleatorio, mira no goleiro ou chute de longe."""
@@ -1271,6 +1315,97 @@ class Game:
         speed = p.f.gk_speed * min(1.0, to.length() / 30) * (1.25 if shot else 1.0)
         self.steer(p, to, speed, dt)
         p.face = V(t.dir, 0)
+
+    # ---------------------------------------------------------------- estatisticas (match_stats)
+    # So observam: leem o estado e somam contadores (Player.st); nunca chamam RNG nem mudam decisao.
+    def st_reset(self):
+        self.st_shot = None                       # [chutador, no_gol_ja_contado, goleiro_que_tocou] pendente
+        self.st_pass = None                       # quem passou (aguardando o proximo dominio)
+        self.st_ast = None                        # (passador, receptor, time_left no dominio): candidato a assistencia
+        self.st_poss = [0.0, 0.0]                 # s de posse por time
+        self.st_drib = []                         # marcadores ja driblados nesta posse
+        self.last_stats = None
+        self.stats_tab = False
+
+    def st_shot_by(self, p):
+        """O chute que acabou de sair (kick() o contou como passe) e uma finalizacao."""
+        if self.st_pass is p:
+            p.st.pa -= 1
+            self.st_pass = None
+        p.st.sh += 1
+        self.st_shot = [p, False, None]
+
+    def st_aimed(self, p):
+        """Chute humano na direcao do gol rival (perto o bastante)? Le so a bola recem-chutada."""
+        b, t = self.ball, p.team
+        vx = b.vel.x * t.dir
+        dx = (t.target_x - b.pos.x) * t.dir
+        if vx <= 1.0 or not 0 < dx < 650:
+            return False
+        return abs(b.pos.y + b.vel.y * dx / vx - CY) < GOAL_HALF + 40
+
+    def st_touch(self, p):
+        """p tocou a bola sem domina-la (rebote). Goleiro rival num chute pendente = defesa."""
+        sh = self.st_shot
+        if sh is not None and p.role == "GK" and p.team is not sh[0].team and sh[2] is None:
+            p.st.sv += 1
+            sh[2] = p
+            if not sh[1]:
+                sh[0].st.sot += 1
+                sh[1] = True
+
+    def st_gain(self, p):
+        """p dominou a bola: fecha o chute pendente (defesa do goleiro) e o passe pendente (certo/errado)."""
+        self.st_drib = []
+        sh = self.st_shot
+        if sh is not None:
+            if p.role == "GK" and p.team is not sh[0].team and sh[2] is None:
+                p.st.sv += 1
+                if not sh[1]:
+                    sh[0].st.sot += 1
+            self.st_shot = None
+        ps = self.st_pass
+        if ps is not None:
+            if p.team is ps.team and p is not ps:
+                ps.st.pc += 1
+                self.st_ast = (ps, p, self.time_left)
+            self.st_pass = None
+        ast = self.st_ast
+        if ast is not None and p.team is not ast[0].team:
+            self.st_ast = None
+
+    def st_goal(self, lo, team_idx):
+        """Gol: autor (ou gol contra), chute no gol e assistencia (ver match_stats)."""
+        sh, ast = self.st_shot, self.st_ast
+        self.st_shot = self.st_pass = self.st_ast = None
+        if lo is None:
+            return
+        if lo.team.idx != team_idx:
+            lo.st.og += 1
+            return
+        lo.st.g += 1
+        if sh is not None and sh[0] is lo:
+            if not sh[1]:
+                lo.st.sot += 1
+            if sh[2] is not None:                 # o goleiro tocou mas nao evitou: nao foi defesa
+                sh[2].st.sv -= 1
+        else:                                     # gol sem chute registrado (conducao, rebote): conta o chute
+            lo.st.sh += 1
+            lo.st.sot += 1
+        if (ast is not None and ast[1] is lo and ast[0] is not lo and ast[0].team is lo.team
+                and ast[2] - self.time_left <= match_stats.ASSIST_WINDOW):
+            ast[0].st.a += 1
+            ev = self.events[-1]
+            ev["ast"] = ast[0].name
+            ev["apid"] = ast[0].pid
+
+    def st_finish(self):
+        """Fim da partida: monta o resumo (time, robos, MELHOR DO JOGO). Uma vez, fora do laco."""
+        if not STATS_ON:
+            self.last_stats = None
+            return None
+        self.last_stats = match_stats.from_engine(self.teams, self.score, self.st_poss, narration.FALLBACK_ROBOTS)
+        return self.last_stats
 
     # ---------------------------------------------------------------- skills (B6)
     def sk_setup(self, home, away):
@@ -1989,8 +2124,9 @@ class Game:
             n.event(k, t, rid, score=sc, minute=mn)
             return
         if kind == "end":
+            mv = match_stats.mvp_row(self.last_stats)
             n.event("end_draw" if team is None else "end_win", 0 if team is None else team, None,
-                    score=sc, minute=mn)
+                    score=sc, minute=mn, mvp=(mv["team"], mv["idx"]) if mv else None)
             return
         if kind == "post":
             team = getattr(getattr(who, "team", None), "idx", None)
@@ -2424,14 +2560,20 @@ class Game:
             else:
                 w = self.teams[0 if a > c else 1]
                 title, col = "VITÓRIA: " + w.name.upper(), w.color
-            if self.career_match:
+            if self.demo:
+                self.banner(title, None, col)
+            elif self.stats_tab and self.last_stats is not None:
+                self.draw_end_stats()
+            elif self.career_match:
                 self.banner(title, "ENTER ou clique = continuar", col)
                 self.draw_scorers()
-            elif self.demo:
-                self.banner(title, None, col)
+                self.draw_end_mvp()
             else:
                 self.banner(title, "ENTER = jogar de novo   |   ESC = menu", col)
-        self.draw_narration(cam)                        # faixa de TV por cima do clarao do gol
+                self.draw_scorers()
+                self.draw_end_mvp()
+        if not (self.stats_tab and self.state == "over"):   # painel ESTATISTICAS cobre o campo: sem faixa
+            self.draw_narration(cam)                    # faixa de TV por cima do clarao do gol
         if self.demo:
             self.draw_demo_overlay()
         if cr is not None and not self.paused:          # LOD automatico: tempo do quadro de partida
@@ -2467,6 +2609,20 @@ class Game:
         pygame.draw.rect(self.screen, (2, 8, 20), r.inflate(28, 14), border_radius=10)
         pygame.draw.rect(self.screen, (0, 200, 240), r.inflate(28, 14), 2, border_radius=10)
         self.screen.blit(img, r)
+
+    def draw_end_mvp(self):
+        """Tela de fim: faixa MELHOR DO JOGO acima do placar e a dica do TAB (so blits/draw)."""
+        if self.last_stats is None:
+            return
+        stats_ui.draw_mvp_strip(self.painter, (W // 2 - 310, 104, 620, 88), self.last_stats)
+        self.text("TAB = estatísticas da partida", 24, (255, 230, 120), center=(W // 2, 214))
+
+    def draw_end_stats(self):
+        """Tela de fim com TAB: cartao do MVP + painel ESTATISTICAS por cima do campo."""
+        stats_ui.draw_stats_view(self.painter, (24, 84, W - 48, 548), self.last_stats)
+        sub = "ENTER ou clique = continuar" if self.career_match else "ENTER = jogar de novo   |   ESC = menu"
+        pygame.draw.rect(self.screen, (2, 8, 20), (24, 637, W - 48, 25), border_radius=8)
+        self.text("TAB = voltar ao placar   |   " + sub, 24, (255, 230, 120), center=(W // 2, 649))
 
     def draw_scorers(self):
         for team in (0, 1):

@@ -28,7 +28,8 @@ IDLE_GAP = 8.5                  # s sem fala -> conversa de calmaria
 MINOR_GAP = 2.0                 # s de faixa livre antes de aceitar um lance pequeno (respiro entre falas)
 MINOR_COOLDOWN = {"steal": 7.0, "dribble": 5.0, "skill": 6.0, "chance": 2.5}
 PRIO = {"end_win": 5, "end_draw": 5, "goal": 4, "equalize": 4, "turn": 4, "own": 4, "start": 3, "save": 3,
-        "post": 3, "chance": 2, "skill": 1, "dribble": 1, "steal": 1, "idle": 0, "score": 4, "stat": 0}
+        "post": 3, "chance": 2, "skill": 1, "dribble": 1, "steal": 1, "idle": 0, "score": 4, "stat": 0,
+        "mvp": 5}
 FOLLOW = {"goal": 1.0, "equalize": 1.0, "turn": 1.0, "own": 1.0, "end_win": 1.0, "end_draw": 1.0,
           "start": 0.8, "save": 0.6, "post": 0.7, "chance": 0.25, "skill": 0.3, "dribble": 0.3, "steal": 0.2}
 DUR = (2.0, 4.2)                # s por fala (min, max), cresce com a largura
@@ -224,6 +225,14 @@ LINES = {
               "Faltou bateria pros dois no fim.",
               "Vamos ter revanche, pode escrever!"),
     },
+    "mvp": {                    # apito final: a Cleide anuncia o MELHOR DO JOGO (no lugar do comentario do fim)
+        "C": ("Melhor do jogo: {R}, do {T}!",
+              "Pra mim o melhor em campo foi o {R}, Tonho.",
+              "Destaque da partida: {R}! Jogou limpinho.",
+              "O craque do jogo? {R}, sem dúvida!",
+              "Troféu de melhor do jogo pro {R}!",
+              "Nota alta pro {R}: o melhor da sala hoje."),
+    },
     "idle": {
         "N": ("Bola rolando no meio-campo...",
               "O {T} troca passes com calma.",
@@ -364,11 +373,12 @@ class Narration:
         self.num_img = [_frag(txt, str(n), TEXT_SIZE, NUM_COL) for n in range(100)]
 
     # ------------------------------------------------------------------ eventos
-    def event(self, kind, team=None, robot=None, skill=None, score=None, minute=None):
+    def event(self, kind, team=None, robot=None, skill=None, score=None, minute=None, mvp=None):
         """Lance da partida (so escreve estado). kind: start, chance, save, post, goal, equalize, turn,
         own, steal, dribble, skill, end_win, end_draw. team = time do lance (gol: quem marcou; save:
         quem defendeu; end_win: vencedor). robot = indice 0..4 do robo do lance no time `team` (gol
-        contra: indice no time que errou)."""
+        contra: indice no time que errou). mvp = (time, indice) do MELHOR DO JOGO no apito final: a Cleide o
+        anuncia no lugar do comentario do fim (uma fala so, sem spam)."""
         if score is not None:
             self.score = list(score)
         if minute is not None:
@@ -394,6 +404,9 @@ class Narration:
             self._end()
         ctx = self._ctx(kind, team, robot, skill)
         self._push("N", kind, prio, ctx)
+        if kind in ("end_win", "end_draw") and mvp is not None and mvp[0] in (0, 1):
+            self._push("C", "mvp", prio, self._ctx("mvp", mvp[0], mvp[1], None))
+            return True
         if self.rng.random() < FOLLOW.get(kind, 0.0):
             if kind in GOAL_KINDS and self.rng.random() < 0.5:
                 lead = 0 if self.score[0] >= self.score[1] else 1

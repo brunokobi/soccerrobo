@@ -5,6 +5,7 @@ import career as C
 import crowd
 import formation_ui
 import formations
+import match_stats as MS
 import sfx
 
 W, H = 1100, 700
@@ -58,6 +59,8 @@ class CareerUI:
         self.confirm = None
         self.pos_filter = None
         self.table_div = 0
+        self.table_mode = "table"       # aba TABELA: "table" (classificacao) ou "scorers" (artilharia)
+        self.stats_view = False         # resultado da rodada: painel ESTATISTICAS (TAB)
 
     def open_new(self):
         self.career = C.Career.new()
@@ -112,6 +115,7 @@ class CareerUI:
 
     def quick_sim(self):
         self.career.play_round(None)
+        self.career.round_stats(None)                    # estatisticas estimadas (RNG privado)
         self.make_round_info([])
 
     def change_formation(self, step):
@@ -125,6 +129,7 @@ class CareerUI:
 
     def match_done(self, score, events):
         self.career.play_round(user_score=(score[0], score[1]))
+        self.career.round_stats(self.g.last_stats)       # o jogo assistido vem do motor; os outros, estimados
         self.make_round_info(events)
 
     def make_round_info(self, events):
@@ -132,7 +137,9 @@ class CareerUI:
         res = next(r for r in c.last_results if c.user in (r["h"], r["a"]))
         mine, theirs = (res["hg"], res["ag"]) if res["h"] == c.user else (res["ag"], res["hg"])
         sfx.result(mine, theirs)
-        self.round_info = {"round": c.round, "res": res, "events": events, "fin": dict(c.last_fin)}
+        self.round_info = {"round": c.round, "res": res, "events": events, "fin": dict(c.last_fin),
+                           "stats": c.last_stats}
+        self.stats_view = False
         self.screen_id = "round"
         self.save()
 
@@ -163,12 +170,19 @@ class CareerUI:
                     break
         elif e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE and self.screen_id in ("pick", "hub"):
             self.to_menu()
+        elif e.type == pygame.KEYDOWN and e.key == pygame.K_TAB and self.screen_id == "round":
+            sfx.play("toggle")
+            self.toggle_stats()
         elif self.screen_id == "hub" and self.tab == "home" and formation_ui.key_step(e):
             sfx.play("click")
             self.change_formation(formation_ui.key_step(e))
 
     def update(self, dt):
         pass
+
+    def toggle_stats(self):
+        info = self.round_info
+        self.stats_view = bool(info and info.get("stats")) and not self.stats_view
 
     # ------------------------------------------------------------- helpers
     def text(self, *a, **k):
@@ -306,6 +320,11 @@ class CareerUI:
         for i in range(3):
             self.btn((20 + i * 170, 135, 160, 38), C.DIV_NAMES[i], lambda i=i: setattr(self, "table_div", i),
                      color=(50, 160, 220) if d == i else (16, 44, 70), size=26)
+        sc = self.table_mode == "scorers"
+        self.btn((920, 135, 160, 38), "TABELA" if sc else "ARTILHARIA",
+                 lambda: setattr(self, "table_mode", "table" if sc else "scorers"), color=(110, 80, 20), size=24)
+        if sc:
+            return self.tab_scorers(d)
         cols = [("J", 560), ("V", 640), ("E", 720), ("D", 800), ("SG", 890), ("PTS", 1000)]
         self.text("#", 24, DIM, center=(50, 196))
         self.text("CLUBE", 24, DIM, topleft=(105, 186))
@@ -334,6 +353,32 @@ class CareerUI:
         self.text("Verde: sobem 2   |   Vermelho: caem 2   (D1 não sobe, D3 não cai)", 22, DIM,
                   topleft=(24, 590))
 
+    def tab_scorers(self, d):
+        """ARTILHARIA da temporada na divisao (todos os jogos, assistidos e simulados)."""
+        c = self.career
+        cols = [("G", 760), ("A", 860), ("MVP", 980)]
+        self.text("#", 24, DIM, center=(50, 196))
+        self.text("JOGADOR", 24, DIM, topleft=(105, 186))
+        self.text("CLUBE", 24, DIM, topleft=(400, 186))
+        for lab, x in cols:
+            self.text(lab, 24, DIM, midright=(x, 196))
+        rows = c.scorers(d, 8)
+        if not rows:
+            self.text("Ninguém marcou ainda nesta temporada.", 26, DIM, topleft=(105, 240))
+        for k, (name, club, color, g, a, mvp, mine) in enumerate(rows):
+            r = pygame.Rect(20, 214 + k * 46, 1060, 42)
+            pygame.draw.rect(self.g.screen, PANEL, r, border_radius=8)
+            if mine:
+                pygame.draw.rect(self.g.screen, GOLD, r, 3, border_radius=8)
+            self.text(str(k + 1), 28, GOLD if k == 0 else TEXT, center=(50, r.centery))
+            pygame.draw.rect(self.g.screen, tuple(color), (80, r.y + 8, 12, 26), border_radius=3)
+            self.text(self.fit(name, 28, 280), 28, TEXT, midleft=(105, r.centery))
+            self.text(self.fit(club.upper(), 24, 300), 24, DIM, midleft=(400, r.centery))
+            for (lab, x), v in zip(cols, (g, a, mvp)):
+                self.text(str(v), 32 if lab == "G" else 28, GOLD if lab == "G" else TEXT, midright=(x, r.centery))
+        self.text("Gols, assistências e MELHOR DO JOGO da temporada (jogos simulados também contam).", 22, DIM,
+                  topleft=(24, 590))
+
     # ---- elenco
     def squad_rows(self, club):
         by_id = {p["id"]: p for p in club["squad"]}
@@ -347,7 +392,7 @@ class CareerUI:
         club = c.clubs[c.user]
         starters, bench = self.squad_rows(club)
         self.text("JOGADOR", 22, DIM, topleft=(60, 138))
-        for lab, x in (("POS", 360), ("OVR", 440), ("IDADE", 520), ("VALOR", 700)):
+        for lab, x in (("POS", 360), ("OVR", 430), ("IDADE", 494), ("G", 536), ("A", 572), ("VALOR", 700)):
             self.text(lab, 22, DIM, midright=(x, 148))
         for k, p in enumerate(starters + bench):
             y = 166 + k * 25
@@ -360,8 +405,10 @@ class CareerUI:
                 pygame.draw.rect(self.g.screen, GOLD, r, 2, border_radius=5)
             self.text(p["name"], 22, TEXT, midleft=(44, y + 12))
             self.text(C.POS_PT[p["pos"]], 22, DIM, midright=(360, y + 12))
-            self.text(str(p["ovr"]), 24, ovr_color(p["ovr"]), midright=(440, y + 12))
-            self.text(str(p["age"]), 22, TEXT, midright=(520, y + 12))
+            self.text(str(p["ovr"]), 24, ovr_color(p["ovr"]), midright=(430, y + 12))
+            self.text(str(p["age"]), 22, TEXT, midright=(494, y + 12))
+            self.text(str(p.get("sg", 0)), 22, GOLD if p.get("sg") else DIM, midright=(536, y + 12))
+            self.text(str(p.get("sa", 0)), 22, TEXT if p.get("sa") else DIM, midright=(572, y + 12))
             self.text(C.fmt_money(C.value(p)), 22, TEXT, midright=(700, y + 12))
             self.hit(r, lambda pid=p["id"]: self.pick_player(pid))
             if k == 4:
@@ -376,6 +423,9 @@ class CareerUI:
             self.text("%s   Overall %d   %d anos" % (C.POS_PT[p["pos"]], p["ovr"], p["age"]), 22, DIM,
                       topleft=(765, 258))
             self.text("Valor: " + C.fmt_money(C.value(p)), 24, TEXT, topleft=(765, 286))
+            self.text("Temp.: %dG %dA %d MVP   Total: %dG %dA %d MVP" % (
+                p.get("sg", 0), p.get("sa", 0), p.get("smvp", 0), p.get("tg", 0), p.get("ta", 0), p.get("tmvp", 0)),
+                20, GOLD, topleft=(765, 308))
         else:
             self.text("Clique num jogador", 24, DIM, topleft=(765, 240))
         is_st = bool(p) and p["id"] in club["lineup"]
@@ -473,12 +523,27 @@ class CareerUI:
 
     # ---- resultados da rodada
     def draw_round(self):
+        import stats_ui                                  # tarde: stats_ui importa as cores daqui
         c = self.career
         info = self.round_info
         res = info["res"]
         self.text("RODADA %d  -  RESULTADOS" % info["round"], 46, TEXT, center=(W // 2, 40), shadow=True)
+        st = info.get("stats")
+        if st:
+            self.btn((W // 2 + 146, 620, 250, 56), "RESUMO (TAB)" if self.stats_view else "ESTATÍSTICAS (TAB)",
+                     self.toggle_stats, color=(110, 80, 20) if self.stats_view else (60, 80, 130), size=24)
+        if self.stats_view and st:                       # TAB: cartao do MVP + ESTATISTICAS no lugar do resumo
+            stats_ui.draw_stats_view(self, (20, 75, 1060, 530), st)
+            self.btn((W // 2 - 130, 620, 260, 56), "CONTINUAR", self.after_round, size=34)
+            return
         ch, ca = c.clubs[res["h"]], c.clubs[res["a"]]
         self.panel((20, 75, 1060, 170))
+        mv = MS.mvp_row(st)
+        if mv is not None:
+            self.text(self.fit("MELHOR DO JOGO: %s (%s)  nota %s" % (stats_ui.player_name(mv),
+                                                                    st["teams"][mv["team"]]["name"],
+                                                                    stats_ui.fnota(mv["nota"])), 20, 700),
+                      20, GOLD, center=(W // 2, 92))
         self.text(ch["name"].upper(), 40, vis(ch["color"]), midright=(430, 130), shadow=True)
         self.text("%d x %d" % (res["hg"], res["ag"]), 68, TEXT, center=(W // 2, 130), shadow=True)
         self.text(ca["name"].upper(), 40, vis(ca["color"]), midleft=(670, 130), shadow=True)
@@ -535,6 +600,10 @@ class CareerUI:
         else:
             self.text("Manteve a divisão", 40, GOLD, center=(W // 2, 350))
         self.text("Premiação: " + C.fmt_money(i["prize"]), 30, GOLD, center=(W // 2, 410))
+        ts = i.get("top_scorer")
+        if ts:
+            self.text(self.fit("Artilheiro da divisão: %s (%s) - %d gols, %d assist." % (ts[0], ts[1], ts[3], ts[4]),
+                               22, 820), 22, TEXT, center=(W // 2, 222))
         self.text("Sobem: " + ", ".join(i["up"]), 22, GREEN, center=(W // 2, 450))
         self.text("Descem: " + ", ".join(i["down"]), 22, RED, center=(W // 2, 478))
         club = c.clubs[c.user]
