@@ -285,6 +285,25 @@ fracos as formações ficam perto da EQUILIBRADA; com robôs fortes RETRANCA, OF
 PRESSÃO melhora. Esse efeito entra na "Sua Força" e no SIMULAR. Detalhes em
 [docs/specs/formacoes.md](docs/specs/formacoes.md).
 
+### Estatísticas e MELHOR DO JOGO (todos os modos)
+No fim de toda partida assistida aparece a faixa **MELHOR DO JOGO** (retrato do robô, time, nota de 0 a 10 e os
+números dele) e a Cleide anuncia o craque no apito final. **TAB** abre o painel **ESTATÍSTICAS**: posse, chutes,
+no gol, passes certos/tentados, desarmes, dribles e defesas dos dois times e a tabela robô a robô (G, A, chutes,
+passes, desarmes, defesas, nota). No card do resumo (Modo Robôs, campanha, carreira) o botão **ESTATÍSTICAS
+(TAB)** troca GOLS/RECOMPENSAS/EXPERIÊNCIA pelo mesmo painel; os gols mostram a assistência. Partidas
+SIMULADAS ganham estatísticas estimadas (marcadas como tal) sem mudar placar nem prêmios.
+
+Acumulados: no Modo Robôs, **ARTILHARIA** da liga (top 5 de todos os times, botão no painel da tabela) e, na
+ficha do robô, gols/assistências/MVP da liga e da carreira; na campanha, os totais de cada robô e o artilheiro
+do torneio; na carreira, artilharia da divisão (aba TABELA > ARTILHARIA), G/A no elenco e o artilheiro da
+temporada. Definições (assistência, nota, MVP) em [docs/specs/estatisticas.md](docs/specs/estatisticas.md).
+
+| ![Melhor do jogo no fim da partida](docs/img/melhor-do-jogo.png) | ![Card do resumo com as estatísticas](docs/img/estatisticas-resumo.png) |
+|---|---|
+| **Fim da partida** - faixa MELHOR DO JOGO; TAB abre as estatísticas | **Resumo** - cartão do MVP e o painel ESTATÍSTICAS |
+
+![Artilharia da liga do Modo Robôs](docs/img/artilharia-liga.png)
+
 ### Controles (modos 1 e 2)
 | Ação | Modo 1 jogador | J1 | J2 |
 |---|---|---|---|
@@ -400,6 +419,7 @@ export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy
 .venv/bin/python tests/test_fireworks.py                # fogos do gol/vitória, modo demo, pisos do campo, nomes em caixa alta
 .venv/bin/python tests/test_camera.py                  # câmera de estádio: começa sempre em ESTÁDIO, C só na pausa, gol não troca, zero Surface
 .venv/bin/python tests/test_narration.py               # narrador/comentarista: catálogo, fila sem spam, nomes, faixa, zero Surface
+.venv/bin/python tests/test_match_stats.py             # estatísticas: assistência, gol contra, defesa, MVP, coleta não muda o jogo, SIMULAR, saves, telas
 .venv/bin/python tests/test_robot_art.py               # robôs: chassis, peças visíveis, cache, FX, local da torcida por modo
 .venv/bin/python tests/test_arena.py                   # modificadores de arena da Torre do Pó (desligados fora dela, efeito, zero Surface)
 CAMPAIGN_BAL_N=100 .venv/bin/python tests/test_campaign_balance.py   # balanço da campanha por simulação (lento, ver abaixo)
@@ -444,6 +464,8 @@ Utilitários do harness (`tests/sim_harness.py`): `golden`/`golden-new` com
 - `game/music.py`: trilhas chiptune (menu, partida, jingles de vitória/derrota) escritas como texto e sintetizadas compasso a compasso
 - `game/crowd.py`: torcida (locais, espectadores pré-renderizados, reações, confete/LED/telão "AO VIVO", LOD) e a geometria das câmeras PERTO/ESTÁDIO
 - `game/narration.py`: narrador (Tonho) e comentarista (Cleide): catálogo de falas, fila sem spam e a faixa de TV da partida
+- `game/match_stats.py`: estatísticas da partida (puro): contadores por robô, nota, MELHOR DO JOGO, estatísticas estimadas do SIMULAR e acumulados
+- `game/stats_ui.py`: cartão MELHOR DO JOGO, faixa do fim da partida e painel ESTATÍSTICAS (usados pelo motor e pelos cards de resumo)
 - `tools/normalizar_audio.sh`: deixa os áudios de `game/audio/` compactos e com o volume nivelado (ffmpeg; ver `docs/specs/som.md`)
 - `tools/versionar_build.sh`: versiona `game.apk`/`game.tar.gz` no `index.html` do build (`?v=<sha256 curto do game.apk>`; cache busting a cada deploy)
 - `tools/torcida_loop.sh`: gera `game/audio/torcida_loop.ogg` (torcida de fundo da partida, 24 s em loop sem emenda) a partir das 3 gravações de torcida

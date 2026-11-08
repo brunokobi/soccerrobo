@@ -206,7 +206,7 @@ def draw_stats_panel(ui, rect, summary, title=True):
     # ---- robo a robo (2 tabelas lado a lado)
     players = summary.get("players") or ()
     mvp = summary.get("mvp")
-    colw = (r.w - 36) // 2
+    colw = (r.w - 44) // 2                              # margem: a NOTA nao encosta na borda
     rows_h = max(18, min(26, (r.bottom - 10 - (y + 22)) // 5))
     for t in (0, 1):
         tx = r.x + 12 + t * (colw + 12)
